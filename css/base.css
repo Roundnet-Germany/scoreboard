@@ -545,41 +545,51 @@ html, body {
   opacity: 0;
 }
 
+.match_statistics.fade-out {
+  animation: fadeOutScaleOverlay .3s ease-in-out .1 both;
+}
+
 /* Animation classes for staggered entrance */
+
+.match_statistics.animate {
+  /* animation: fadeInScaleOverlay .5s cubic-bezier(0.40,0.00,0.29,1.25) .1s both; */
+  animation: fadeInScaleOverlay .7s cubic-bezier(.87,-.41,.19,1.44) 0s both;
+}
+
 .match_statistics.animate .statistics_header {
-  animation: slideInFromTop .3s ease .1s both;
+  animation: slideInFromTop .2s ease-out .3s both;
 }
 
 .match_statistics.animate .team_statistics > *:not(.spacer) {
-  animation: slideInFromLeft .3s ease-out 0.3s both;
+  animation: slideInFromLeft .3s ease-out 0s both;
 }
 
-.match_statistics.animate .team_statistics .spacer {
-  animation: fadeInScale .2s ease-out 0.5s both;
+.match_statistics.animate .team_statistics .team_stats:first-child,
+.match_statistics.animate .players_container .team:first-child,
+.match_statistics.animate .player_stats .player_stats_container.team_a {
+  animation: slideInFromTop .9s cubic-bezier(.87,-.41,.19,1.44) .2s both;
 }
 
-.match_statistics.animate .players_container .team:first-child {
-  animation: slideInFromLeft .2s ease-out 0.7s both;
+.match_statistics.animate .team_statistics .team_stats:last-child,
+.match_statistics.animate .players_container .team:last-child,
+.match_statistics.animate .player_stats .player_stats_container:last-child {
+  animation: slideInFromBottom .9s cubic-bezier(.87,-.41,.19,1.44) .2s both;
 }
 
-.match_statistics.animate .players_container .team:last-child {
-  animation: slideInFromLeft .2s ease-out 0.9s both;
+.match_statistics.animate .players_container .team {
+  animation-delay: .25s !important;
+}
+
+.match_statistics.animate .player_stats .player_stats_container {
+  animation-delay: .3s !important;
 }
 
 .match_statistics.animate .player_stats .col_label {
-  animation: slideInFromTop 0.6s ease-out 1.1s both;
-}
-
-.match_statistics.animate .player_stats .player_stats_container:first-child {
-  animation: slideInFromLeft 0.6s ease-out 1.3s both;
-}
-
-.match_statistics.animate .player_stats .player_stats_container:last-child {
-  animation: slideInFromRight 0.6s ease-out 1.5s both;
+  animation: slideInFromTop .8s cubic-bezier(.87,-.41,.19,1.44) .7s both;
 }
 
 .match_statistics.animate .score_history_in_stats .table_view {
-  animation: slideInFromBottom .3s ease-out 1s both;
+  animation: slideInFromBottom .8s cubic-bezier(.87,-.41,.19,1.44) .7s both;
 }
 
 /* Keyframe animations */
@@ -632,9 +642,32 @@ html, body {
     opacity: 0;
     transform: scale(0.8);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes fadeInScaleOverlay {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes fadeOutScaleOverlay {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
   }
 }
 

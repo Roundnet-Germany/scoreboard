@@ -1099,12 +1099,9 @@ export class Scoreboard {
                     this.$matchStatisticsContainer.addClass('show').removeClass('hidden');
                 }, 400);
             } else {
-                // Remove animation class and hide
-                this.$matchStatisticsContainer.removeClass('show').addClass('hidden');
-                
-                // Reset animation state after hiding
+                this.$matchStatisticsContainer.removeClass('animate');
                 setTimeout(() => {
-                    this.$matchStatisticsContainer.removeClass('animate');
+                    this.$matchStatisticsContainer.removeClass('animate show').addClass('hidden');
                 }, 300);
             }
         }
