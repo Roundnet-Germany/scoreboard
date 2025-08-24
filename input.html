@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en" type="input">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scoreboards</title>
+    <link rel="stylesheet" href="css/base.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script type="module" src="js/firebase_config.js"></script>
+    <script type="module" src="js/main.js"></script>
+
+    <!-- <link rel="stylesheet" href="css/style-v1.css"> -->
+    <link rel="stylesheet" href="css/style_input.css">
+
+</head>
+
+<body>
+
+    <div id="auth">
+        <div class="content">
+            <div class="inner">
+                <h3>Please Login</h3>
+                <form id="login">
+                    <label for="account">Username</label>
+                    <input type="text" name="username" id="username" placeholder="Username">
+                    <label for="password">Password</label>
+                    <input type="password" name="password" id="password" placeholder="Passwort">
+                    <button id="submit" type="submit">Login</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="info_banner" class="banner" style="display:none">
+        <div class="info">
+            <span class="icon">👍</span>
+            <p>Okay, du kannst deine Präferenz jederzeit rechts unten beim Cookie-Icon ändern.</p>
+        </div>
+        <svg class="progress-ring banner_close_button" width="32" height="32">
+            <circle class="progress-ring_circle" stroke-width="2" fill="transparent" r="10" cx="16" cy="16" />
+            <line stroke="#222222" stroke-width="2" stroke-linecap="round" x1="19" y1="13" x2="13" y2="19">
+            </line>
+            <line stroke="#222222" stroke-width="2" stroke-linecap="round" x1="13" y1="13" x2="19" y2="19">
+            </line>
+        </svg>
+    </div>
+
+
+    <div class="wrapper scoreboard">
+        <div class="inner">
+            <header>
+                <h1>Scoreboard</h1>
+                <div class="header_right">
+                    <div class="container">
+                        <div class="setting_entry input_container horizontal">
+                            <span>Channel:</span>
+                            <select id="channel">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="container">
+                        <div class="user">
+                            <!-- <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="40" height="40" rx="20" fill="var(--light-3)"/>
+                                <path d="M20 20C18.9 20 17.9583 19.6083 17.175 18.825C16.3917 18.0417 16 17.1 16 16C16 14.9 16.3917 13.9583 17.175 13.175C17.9583 12.3917 18.9 12 20 12C21.1 12 22.0417 12.3917 22.825 13.175C23.6083 13.9583 24 14.9 24 16C24 17.1 23.6083 18.0417 22.825 18.825C22.0417 19.6083 21.1 20 20 20ZM12 28V25.2C12 24.6333 12.1458 24.1125 12.4375 23.6375C12.7292 23.1625 13.1167 22.8 13.6 22.55C14.6333 22.0333 15.6833 21.6458 16.75 21.3875C17.8167 21.1292 18.9 21 20 21C21.1 21 22.1833 21.1292 23.25 21.3875C24.3167 21.6458 25.3667 22.0333 26.4 22.55C26.8833 22.8 27.2708 23.1625 27.5625 23.6375C27.8542 24.1125 28 24.6333 28 25.2V28H12ZM14 26H26V25.2C26 25.0167 25.9542 24.85 25.8625 24.7C25.7708 24.55 25.65 24.4333 25.5 24.35C24.6 23.9 23.6917 23.5625 22.775 23.3375C21.8583 23.1125 20.9333 23 20 23C19.0667 23 18.1417 23.1125 17.225 23.3375C16.3083 23.5625 15.4 23.9 14.5 24.35C14.35 24.4333 14.2292 24.55 14.1375 24.7C14.0458 24.85 14 25.0167 14 25.2V26ZM20 18C20.55 18 21.0208 17.8042 21.4125 17.4125C21.8042 17.0208 22 16.55 22 16C22 15.45 21.8042 14.9792 21.4125 14.5875C21.0208 14.1958 20.55 14 20 14C19.45 14 18.9792 14.1958 18.5875 14.5875C18.1958 14.9792 18 15.45 18 16C18 16.55 18.1958 17.0208 18.5875 17.4125C18.9792 17.8042 19.45 18 20 18Z" fill="#1C1B1F"/>
+                            </svg> -->
+                            <span id="username"></span>
+                        </div>
+                        <button id="logout" class="primary">Logout</button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="row_section top">
+                <div class="container game_details">
+                    <h3>Game Details</h3>
+                    <div class="inner">
+                        <div class="input_container">
+                            <label for="Occasion">Event Name</label>
+                            <input type="text" class="text" id="Occasion" value="Occasion" fb-data="tournament_name" placeholder="Event Name">
+                        </div>
+                        <div class="input_group">
+                            <div class="input_container">
+                                <label for="Game_Description">Game Description</label>
+                                <input type="text" class="text" id="Game_Description" value="" placeholder="e.g. Semifinal" fb-data="phase">
+                            </div>
+                            <div class="input_group">
+                                <div class="input_container">
+                                    <label for="Max_Sets">Game Mode</label>
+                                    <input type="text" id="Max_Sets" value="3" fb-data="game_settings.set_mode" placeholder="e.g. 1 Set, BO3">
+                                </div>
+                                <div class="input_container">
+                                    <label for="win_points">Win Score</label>
+                                    <input type="number" id="win_points" value="15" min="1" max="50" fb-data="game_settings.win_points">
+                                </div>
+                                <div class="input_container">
+                                    <label for="Hardcap">Hardcap</label>
+                                    <input type="number" id="Hardcap" value="21" min="1" max="100" fb-data="game_settings.hardcap">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="container data_import">
+                    <div class="heading_w_icon">
+                        <i class="material-symbols-rounded">place_item</i>
+                        <h3>Import Data (JSON)</h3>
+                    </div>
+                    <div class="inner">
+                        <div class="input_container">
+                            <label for="Occasion">Data from Playerzone</label>
+                            <textarea type="text" class="text" id="Data_Import" value="" placeholder="Paste data here..."></textarea>
+                        </div>
+                        <button id="import_data" class="primary">Import Data</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row_section">
+                <div class="container scores">
+                    <div class="header_row">
+                        <h3>Scores</h3>
+                        <div class="set_counter_container">
+                            <div class="input_container horizontal">
+                                <label for="Set_Count">Active Set:</label>
+                                <input type="number" id="Set_Count" class="small" min="1" max="7" fb-data="active_set">
+                            </div>
+                            <div class="set_controls_container">
+                                <button class="button small positive" change="+1">+1</button>
+                                <button class="button small negative" change="-1">-1</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="inner">
+                        <div class="scores_container">
+                            <div class="teams">
+                                <div class="team">
+                                    <input type="color" class="color-indicator a_color" fb-data="teams_info.team_a.color">
+                                    <div class="details input_container">
+                                        <input type="text" class="teamname small" id="A_Teamname" value="A Teamname" fb-data="teams_info.team_a.name">
+                                        <div class="names input_group">
+                                            <div class="input_container label_inside">
+                                                <label for="A_Player_1">A:</label>
+                                                <input type="text" class="player small" id="A_Player_1" value="Player 1" placeholder="Player A" fb-data="teams_info.team_a.player_1">
+                                            </div>
+                                            <div class="input_container label_inside">
+                                                <label for="A_Player_2">B:</label>
+                                                <input type="text" class="player small" id="A_Player_2" value="Player 2" placeholder="Player B" fb-data="teams_info.team_a.player_2">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="team">
+                                    <input type="color" class="color-indicator b_color" fb-data="teams_info.team_b.color">
+                                    <div class="details input_container">
+                                        <input type="text" class="teamname small" id="B_Teamname" value="B Teamname" fb-data="teams_info.team_b.name">
+                                        <div class="names input_group">
+                                            <div class="input_container label_inside">
+                                                <label for="B_Player_1">C:</label>
+                                                <input type="text" class="player small" id="B_Player_1" value="Player 1" placeholder="Player C" fb-data="teams_info.team_b.player_1">
+                                            </div>
+                                            <div class="input_container label_inside">
+                                                <label for="B_Player_2">D:</label>
+                                                <input type="text" class="player small" id="B_Player_2" value="Player 2" placeholder="Player D" fb-data="teams_info.team_b.player_2">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="points">
+                                <div class="group_score">
+                                    <input type="number" class="counter score" id="A_Score_Team" value="0" fb-data="score.squad_score.team_a_score">
+                                    <input type="number" class="counter score" id="B_Score_Team" value="0" fb-data="score.squad_score.team_b_score">
+                                </div>
+                                <div class="team_score set_group" score_a="0" score_b="0">
+                                    <div class="set active">
+                                        <input type="number" class="counter score" id="A_Score_1" value="0" fb-data="score.set_1.team_a_score">
+                                        <input type="number" class="counter score" id="B_Score_1" value="0" fb-data="score.set_1.team_b_score">
+                                    </div>
+                                    <div class="set">
+                                        <input type="number" class="counter score" id="A_Score_2" value="0" fb-data="score.set_2.team_a_score">
+                                        <input type="number" class="counter score" id="B_Score_2" value="0" fb-data="score.set_2.team_b_score">
+                                    </div>
+                                    <div class="set">
+                                        <input type="number" class="counter score" id="A_Score_3" value="0" fb-data="score.set_3.team_a_score">
+                                        <input type="number" class="counter score" id="B_Score_3" value="0" fb-data="score.set_3.team_b_score">
+                                    </div>
+                                    <div class="set">
+                                        <input type="number" class="counter score" id="A_Score_4" value="0" fb-data="score.set_4.team_a_score">
+                                        <input type="number" class="counter score" id="B_Score_4" value="0" fb-data="score.set_4.team_b_score">
+                                    </div>
+                                    <div class="set">
+                                        <input type="number" class="counter score" id="A_Score_5" value="0" fb-data="score.set_5.team_a_score">
+                                        <input type="number" class="counter score" id="B_Score_5" value="0" fb-data="score.set_5.team_b_score">
+                                    </div>
+                                    <div class="set">
+                                        <input type="number" class="counter score" id="A_Score_6" value="0" fb-data="score.set_6.team_a_score">
+                                        <input type="number" class="counter score" id="B_Score_6" value="0" fb-data="score.set_6.team_b_score">
+                                    </div>
+                                    <div class="set">
+                                        <input type="number" class="counter score" id="A_Score_7" value="0" fb-data="score.set_7.team_a_score">
+                                        <input type="number" class="counter score" id="B_Score_7" value="0" fb-data="score.set_7.team_b_score">
+                                    </div>
+                                </div>
+                                <div class="controls">
+                                    <div class="team_container">
+                                        <button class="button add team_a" id="add_point_a" team="a" change="+1">+1</button>
+                                        <button class="button remove team_a" id="remove_point_a" team="a" change="-1">-1</button>
+                                    </div>
+                                    <div class="team_container">
+                                        <button class="button add team_b" id="add_point_b" team="b" change="+1">+1</button>
+                                        <button class="button remove team_b" id="remove_point_b" team="b" change="-1">-1</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bottom">
+                            <div class="starting_players_container">
+                                <div class="starting_team_container">
+                                    <label>Starting Server:</label>
+                                    <div class="starting_team_sets">
+                                        <div class="starting_team_selector set">
+                                            <select class="small" id="starting_server_1" fb-data="score.set_1.starting_server">
+                                                <option value="a">A</option>
+                                                <option value="b">B</option>
+                                                <option value="c">C</option>
+                                                <option value="d">D</option>
+                                            </select>
+                                        </div>
+                                        <div class="starting_team_selector set">
+                                            <select class="small" id="starting_server_2" fb-data="score.set_2.starting_server">
+                                                <option value="a">A</option>
+                                                <option value="b">B</option>
+                                                <option value="c">C</option>
+                                                <option value="d">D</option>
+                                            </select>
+                                        </div>
+                                        <div class="starting_team_selector set">
+                                            <select class="small" id="starting_server_3" fb-data="score.set_3.starting_server">
+                                                <option value="a">A</option>
+                                                <option value="b">B</option>
+                                                <option value="c">C</option>
+                                                <option value="d">D</option>
+                                            </select>
+                                        </div>
+                                        <div class="starting_team_selector set">
+                                            <select class="small" id="starting_server_4" fb-data="score.set_4.starting_server">
+                                                <option value="a">A</option>
+                                                <option value="b">B</option>
+                                                <option value="c">C</option>
+                                                <option value="d">D</option>
+                                            </select>
+                                        </div>
+                                        <div class="starting_team_selector set">
+                                            <select class="small" id="starting_server_5" fb-data="score.set_5.starting_server">
+                                                <option value="a">A</option>
+                                                <option value="b">B</option>
+                                                <option value="c">C</option>
+                                                <option value="d">D</option>
+                                            </select>
+                                        </div>
+                                        <div class="starting_team_selector set">
+                                            <select class="small" id="starting_server_6" fb-data="score.set_6.starting_server">
+                                                <option value="a">A</option>
+                                                <option value="b">B</option>
+                                                <option value="c">C</option>
+                                                <option value="d">D</option>
+                                            </select>
+                                        </div>
+                                        <div class="starting_team_selector set">
+                                            <select class="small" id="starting_server_7" fb-data="score.set_7.starting_server">
+                                                <option value="a">A</option>
+                                                <option value="b">B</option>
+                                                <option value="c">C</option>
+                                                <option value="d">D</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="starting_team_container">
+                                    <label>Starting Receiver:</label>
+                                    <div class="starting_team_sets">
+                                        <div class="starting_team_selector set">
+                                            <select class="small" id="starting_receiver_1" fb-data="score.set_1.starting_receiver">
+                                                <option value="a">A</option>
+                                                <option value="b">B</option>
+                                                <option value="c">C</option>
+                                                <option value="d">D</option>
+                                            </select>
+                                        </div>
+                                        <div class="starting_team_selector set">
+                                            <select class="small" id="starting_receiver_2" fb-data="score.set_2.starting_receiver">
+                                                <option value="a">A</option>
+                                                <option value="b">B</option>
+                                                <option value="c">C</option>
+                                                <option value="d">D</option>
+                                            </select>
+                                        </div>
+                                        <div class="starting_team_selector set">
+                                            <select class="small" id="starting_receiver_3" fb-data="score.set_3.starting_receiver">
+                                                <option value="a">A</option>
+                                                <option value="b">B</option>
+                                                <option value="c">C</option>
+                                                <option value="d">D</option>
+                                            </select>
+                                        </div>
+                                        <div class="starting_team_selector set">
+                                            <select class="small" id="starting_receiver_4" fb-data="score.set_4.starting_receiver">
+                                                <option value="a">A</option>
+                                                <option value="b">B</option>
+                                                <option value="c">C</option>
+                                                <option value="d">D</option>
+                                            </select>
+                                        </div>
+                                        <div class="starting_team_selector set">
+                                            <select class="small" id="starting_receiver_5" fb-data="score.set_5.starting_receiver">
+                                                <option value="a">A</option>
+                                                <option value="b">B</option>
+                                                <option value="c">C</option>
+                                                <option value="d">D</option>
+                                            </select>
+                                        </div>
+                                        <div class="starting_team_selector set">
+                                            <select class="small" id="starting_receiver_6" fb-data="score.set_6.starting_receiver">
+                                                <option value="a">A</option>
+                                                <option value="b">B</option>
+                                                <option value="c">C</option>
+                                                <option value="d">D</option>
+                                            </select>
+                                        </div>
+                                        <div class="starting_team_selector set">
+                                            <select class="small" id="starting_receiver_7" fb-data="score.set_7.starting_receiver">
+                                                <option value="a">A</option>
+                                                <option value="b">B</option>
+                                                <option value="c">C</option>
+                                                <option value="d">D</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button id="reset_scores" class="small destructive">Reset Scores <br> & New Game</button>
+                        </div>
+                        
+                    </div>
+                </div>
+            </div>
+
+            <div class="row_section controls">
+                <div class="container display_options">
+                    <h3>Display Options</h3>
+                    <div class="inner">
+                        
+                        <div class="setting_entry boolean">
+                            <label>Colors:</label>
+                            <label class="toggle-switch" for="Show_Color">
+                                <input type="checkbox" id="Show_Color" fb-data="admin_settings.show_color">
+                            </label>
+                        </div>
+            
+                        <div class="setting_entry boolean">
+                            <label>Player Names:</label>
+                            <label class="toggle-switch" for="Show_Players">
+                                <input type="checkbox" id="Show_Players" fb-data="admin_settings.show_player_names">
+                            </label>
+                        </div>
+            
+                        <div class="setting_entry boolean">
+                            <label>Squad Score:</label>
+                            <label class="toggle-switch" for="Show_Team_Score">
+                                <input type="checkbox" id="Show_Team_Score" fb-data="admin_settings.show_group_score">
+                            </label>
+                        </div>
+            
+                        <div class="setting_entry boolean">
+                            <label>Serve Indicator:</label>
+                            <label class="toggle-switch" for="Show_Serve_Indicator">
+                                <input type="checkbox" id="Show_Serve_Indicator" fb-data="admin_settings.show_serve_indicator">
+                            </label>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="container extras">
+                    <h3>Extras</h3>
+                    <div class="inner">    
+                        <div class="setting_entry boolean">
+                            <label>Score History:</label>
+                            <label class="toggle-switch" for="Show_Score_History">
+                                <input type="checkbox" id="Show_Score_History" fb-data="admin_settings.show_score_history">
+                            </label>
+                        </div>
+        
+                        <div class="setting_entry boolean">
+                            <label>Score History Chart:</label>
+                            <label class="toggle-switch" for="Show_Score_History_Chart">
+                                <input type="checkbox" id="Show_Score_History_Chart" fb-data="admin_settings.show_score_history_chart">
+                            </label>
+                        </div>
+
+                        <div class="setting_entry boolean">
+                            <label>Match Statistics:</label>
+                            <label class="toggle-switch" for="Show_Match_Statistics">
+                                <input type="checkbox" id="Show_Match_Statistics" fb-data="admin_settings.show_match_statistics">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row_section output">
+                <div class="container output">
+                    <h3>Output</h3>
+                    <div class="input_group horizontal">
+                        <div class="setting_entry input_container">
+                            <label>Theme:</label>
+                            <select id="theme">
+                                <option value="full">Fullscreen</option>
+                                <option value="rg">RoundnetGermany</option>
+                                <option value="france">Roundnet France</option>
+                                <option value="tops">TopsRoundnet</option>
+                                <option value="eura">EURA</option>
+                                <option value="small">Secondary Board</option>
+                            </select>
+                        </div>
+        
+                        <div class="output_entry url input_container">
+                            <label>Output-URL:</label>
+                            <div class="url_output_container">
+                                <a class="url_output" href="" target="_blank"></a>
+                                <i class="material-symbols-rounded">content_copy</i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row_section player_extras">
+                <div class="container player_extras">
+                    <h3>Extras</h3>
+                    <div class="inner">
+                        <div class="input_group">
+                            <div class="input_container">
+                                <label for="Tournament_Logo">Tournament Logo URL</label>
+                                <input type="text" class="text" id="Tournament_Logo" value="" placeholder="https://example.com/tournament-logo.png" fb-data="tournament_logo">
+                            </div>
+                        </div>
+                        <div class="input_group">
+                            <div class="input_container">
+                                <label for="A_Player_1_Image">Player A Image URL</label>
+                                <input type="text" class="text" id="A_Player_1_Image" value="" placeholder="https://example.com/player-a.jpg" fb-data="teams_info.team_a.player_1_image">
+                            </div>
+                            <div class="input_container">
+                                <label for="A_Player_1_Club">Player A Club</label>
+                                <input type="text" class="text" id="A_Player_1_Club" value="" placeholder="e.g. Stuttgarter Stuten" fb-data="teams_info.team_a.player_1_club">
+                            </div>
+                            <div class="input_container">
+                                <label for="A_Player_1_Club_Logo">Player A Club Logo URL</label>
+                                <input type="text" class="text" id="A_Player_1_Club_Logo" value="" placeholder="https://example.com/club-logo.png" fb-data="teams_info.team_a.player_1_club_logo">
+                            </div>
+                        </div>
+                        <div class="input_group">
+                            <div class="input_container">
+                                <label for="A_Player_2_Image">Player B Image URL</label>
+                                <input type="text" class="text" id="A_Player_2_Image" value="" placeholder="https://example.com/player-b.jpg" fb-data="teams_info.team_a.player_2_image">
+                            </div>
+                            <div class="input_container">
+                                <label for="A_Player_2_Club">Player B Club</label>
+                                <input type="text" class="text" id="A_Player_2_Club" value="" placeholder="e.g. Stuttgarter Stuten" fb-data="teams_info.team_a.player_2_club">
+                            </div>
+                            <div class="input_container">
+                                <label for="A_Player_2_Club_Logo">Player B Club Logo URL</label>
+                                <input type="text" class="text" id="A_Player_2_Club_Logo" value="" placeholder="https://example.com/club-logo.png" fb-data="teams_info.team_a.player_2_club_logo">
+                            </div>
+                        </div>
+                        <div class="input_group">
+                            <div class="input_container">
+                                <label for="B_Player_1_Image">Player C Image URL</label>
+                                <input type="text" class="text" id="B_Player_1_Image" value="" placeholder="https://example.com/player-c.jpg" fb-data="teams_info.team_b.player_1_image">
+                            </div>
+                            <div class="input_container">
+                                <label for="B_Player_1_Club">Player C Club</label>
+                                <input type="text" class="text" id="B_Player_1_Club" value="" placeholder="e.g. Stuttgarter Stuten" fb-data="teams_info.team_b.player_1_club">
+                            </div>
+                            <div class="input_container">
+                                <label for="B_Player_1_Club_Logo">Player C Club Logo URL</label>
+                                <input type="text" class="text" id="B_Player_1_Club_Logo" value="" placeholder="https://example.com/club-logo.png" fb-data="teams_info.team_b.player_1_club_logo">
+                            </div>
+                        </div>
+                        <div class="input_group">
+                            <div class="input_container">
+                                <label for="B_Player_2_Image">Player D Image URL</label>
+                                <input type="text" class="text" id="B_Player_2_Image" value="" placeholder="https://example.com/player-d.jpg" fb-data="teams_info.team_b.player_2_image">
+                            </div>
+                            <div class="input_container">
+                                <label for="B_Player_2_Club">Player D Club</label>
+                                <input type="text" class="text" id="B_Player_2_Club" value="" placeholder="e.g. Stuttgarter Stuten" fb-data="teams_info.team_b.player_2_club">
+                            </div>
+                            <div class="input_container">
+                                <label for="B_Player_2_Club_Logo">Player D Club Logo URL</label>
+                                <input type="text" class="text" id="B_Player_2_Club_Logo" value="" placeholder="https://example.com/club-logo.png" fb-data="teams_info.team_b.player_2_club_logo">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    
+    
+
+
+
+
+
+
+
+
+
+
+
+    <!-- <div class="wrapper scoreboard">
+        <div class="board">
+            <div class="top">
+                <div class="content">
+                    <input type="text" class="text" id="Occasion" value="Occasion" fb-data="tournament_name"></input>
+                </div>
+                <div class="set_counter_container">
+                    <span>Set:</span>
+                    <input type="number" id="Set_Count" min="1" max="7" fb-data="active_set">
+                </div>
+                <div class="set_controls_container">
+                    <button class="button neutral" change="+1">+1</button>
+                    <button class="button neutral" change="-1">-1</button>
+                </div>
+            </div>
+            <div class="center">
+                <div class="teams">
+                    <div class="team">
+                        <input type="color" class="color-indicator a_color" fb-data="teams_info.team_a.color"></input>
+                        <div class="name">
+                            <input type="text" class="teamname" id="A_Teamname" value="A Teamname"
+                                fb-data="teams_info.team_a.name"></input>
+                            <input type="text" class="players" id="A_Players" value="A Players"
+                                fb-data="teams_info.team_a.player_names"></input>
+                        </div>
+                    </div>
+                    <div class="team">
+                        <input type="color" class="color-indicator b_color" fb-data="teams_info.team_b.color"></input>
+                        <div class="name">
+                            <input type="text" class="teamname" id="B_Teamname" value="B Teamname"
+                                fb-data="teams_info.team_b.name"></input>
+                            <input type="text" class="players" id="B_Players" value="B Players"
+                                fb-data="teams_info.team_b.player_names"></input>
+                        </div>
+                    </div>
+                </div>
+                <div class="scores">
+                    <div class="group_score">
+                        <div class="counter group">
+                            <input type="number" class="score" id="A_Score_Team" value="0"
+                                fb-data="score.squad_score.team_a_score"></input>
+                        </div>
+                        <div class="counter group">
+                            <input type="number" class="score" id="B_Score_Team" value="0"
+                                fb-data="score.squad_score.team_b_score"></input>
+                        </div>
+                    </div>
+                    <div class="team_score" score_a="0" score_b="0">
+                        <div class="set active">
+                            <div class="counter a_team">
+                                <input type="number" class="score" id="A_Score_1" value="0" fb-data="score.set_1.team_a_score">
+                            </div>
+                            <div class="counter b_team">
+                                <input type="number" class="score" id="B_Score_1" value="0" fb-data="score.set_1.team_b_score">
+                            </div>
+                            <div class="starting_team_selector">
+                                <select id="starting_team_1" fb-data="score.set_1.starting_team">
+                                    <option value="a">Team A</option>
+                                    <option value="b">Team B</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="set">
+                            <div class="counter a_team">
+                                <input type="number" class="score" id="A_Score_2" value="0" fb-data="score.set_2.team_a_score">
+                            </div>
+                            <div class="counter b_team">
+                                <input type="number" class="score" id="B_Score_2" value="0" fb-data="score.set_2.team_b_score">
+                            </div>
+                            <div class="starting_team_selector">
+                                <select id="starting_team_2" fb-data="score.set_2.starting_team">
+                                    <option value="a">Team A</option>
+                                    <option value="b">Team B</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="set">
+                            <div class="counter a_team">
+                                <input type="number" class="score" id="A_Score_3" value="0" fb-data="score.set_3.team_a_score">
+                            </div>
+                            <div class="counter b_team">
+                                <input type="number" class="score" id="B_Score_3" value="0" fb-data="score.set_3.team_b_score">
+                            </div>
+                            <div class="starting_team_selector">
+                                <select id="starting_team_3" fb-data="score.set_3.starting_team">
+                                    <option value="a">Team A</option>
+                                    <option value="b">Team B</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="set">
+                            <div class="counter a_team">
+                                <input type="number" class="score" id="A_Score_4" value="0" fb-data="score.set_4.team_a_score">
+                            </div>
+                            <div class="counter b_team">
+                                <input type="number" class="score" id="B_Score_4" value="0" fb-data="score.set_4.team_b_score">
+                            </div>
+                            <div class="starting_team_selector">
+                                <select id="starting_team_4" fb-data="score.set_4.starting_team">
+                                    <option value="a">Team A</option>
+                                    <option value="b">Team B</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="set">
+                            <div class="counter a_team">
+                                <input type="number" class="score" id="A_Score_5" value="0" fb-data="score.set_5.team_a_score">
+                            </div>
+                            <div class="counter b_team">
+                                <input type="number" class="score" id="B_Score_5" value="0" fb-data="score.set_5.team_b_score">
+                            </div>
+                            <div class="starting_team_selector">
+                                <select id="starting_team_5" fb-data="score.set_5.starting_team">
+                                    <option value="a">Team A</option>
+                                    <option value="b">Team B</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="set">
+                            <div class="counter a_team">
+                                <input type="number" class="score" id="A_Score_6" value="0" fb-data="score.set_6.team_a_score">
+                            </div>
+                            <div class="counter b_team">
+                                <input type="number" class="score" id="B_Score_6" value="0" fb-data="score.set_6.team_b_score">
+                            </div>
+                            <div class="starting_team_selector">
+                                <select id="starting_team_6" fb-data="score.set_6.starting_team">
+                                    <option value="a">Team A</option>
+                                    <option value="b">Team B</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="set">
+                            <div class="counter a_team">
+                                <input type="number" class="score" id="A_Score_7" value="0" fb-data="score.set_7.team_a_score">
+                            </div>
+                            <div class="counter b_team">
+                                <input type="number" class="score" id="B_Score_7" value="0" fb-data="score.set_7.team_b_score">
+                            </div>
+                            <div class="starting_team_selector">
+                                <select id="starting_team_7" fb-data="score.set_7.starting_team">
+                                    <option value="a">Team A</option>
+                                    <option value="b">Team B</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="controls">
+                    <div class="team_container">
+                        <button class="button add team_a" id="add_point_a" team="a" change="+1">+1</button>
+                        <button class="button remove team_a" id="remove_point_a" team="a" change="-1">-1</button>
+                    </div>
+                    <div class="team_container">
+                        <button class="button add team_b" id="add_point_b" team="b" change="+1">+1</button>
+                        <button class="button remove team_b" id="remove_point_b" team="b" change="-1">-1</button>
+                    </div>
+                </div>
+            </div>
+            <div class="bottom">
+                <div class="content">
+                    <input type="text" class="text" id="Game" value="" fb-data="phase"></input>
+                    <span class="divider"></span>
+                    <input type="text" class="text" id="Mode" value="" fb-data="format"></input>
+                </div>
+                <div class="winning_score_control">
+                    <label for="winning_score">Gewinnpunktstand:</label>
+                    <input type="number" id="winning_score" value="15" min="1" max="50" fb-data="game_settings.winning_score">
+                </div>
+                <button id="reset_scores" class="destructive">Reset Scores</button>
+            </div>
+        </div>
+
+    </div> -->
+
+    
+</body>
+
+</html>

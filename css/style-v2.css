@@ -1,0 +1,223 @@
+@import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&display=swap');
+
+
+* {
+  font-family: 'Oswald', sans-serif;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+:root {
+  --primary: #F2DB3F;
+  --background: #000000f1;
+  --top-height: 105px;
+  --text-primary: #ffffff;
+  --black: #000000;
+}
+
+.hidden {
+  opacity: 0;
+}
+
+.wrapper {
+  width: 100vw;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.board {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 5px;
+  margin: 15px;
+}
+
+.text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.top {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  height: var(--top-height);
+}
+
+.team {
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+
+.team .name {
+  height: 100%;
+  width: 450px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.team .name .content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0px;
+  max-width: 90%;
+}
+
+.team .score {
+  height: 100%;
+  width: 110px;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.team .name, .team .score {
+  box-sizing: border-box;
+  background-color: var(--background);
+  border: 5px solid var(--primary);
+}
+
+/* .team .name, .team .score {
+  box-sizing: border-box;
+  background-color: var(--primary);
+  border: 5px solid var(--background);
+} */
+
+.team .score p {
+  font-weight: 700;
+  font-size: 52px;
+  margin-top: -7px;
+}
+
+.team .teamname {
+  font-size: 36px;
+  font-weight: 500;
+  margin-top: -7px;
+  margin-bottom: -4px;
+}
+
+.team .player_names {
+  font-size: 16px;
+  font-weight: 300;
+  opacity: .8;
+}
+
+.team .player_names > * {
+  font-size: 16px;
+  font-weight: 300;
+}
+
+.left .score, .left .name {
+  transform: skew(16deg);
+}
+
+.left .score > *, .left .name > * {
+  transform: skew(-16deg);
+}
+
+.right .score, .right .name {
+  transform: skew(-16deg);
+}
+
+.right .score > *, .right .name > * {
+  transform: skew(16deg);
+}
+
+.game {
+  height: 85%;
+  width: 130px;
+  margin: 0 15px;
+  padding: 0 13px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  -webkit-perspective: 25px;
+  perspective: 25px;
+}
+
+.game:after {
+  box-sizing: border-box;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: var(--background);
+  border: 5px solid var(--primary);
+  border-top-width: 8px;
+  border-bottom-width: 3.5px;
+  content: '';
+  left: 0;
+  top: 10px;
+  z-index: -1;
+  -webkit-transform: rotateX(-186deg) rotateY(0deg);
+  transform: rotateX(-186deg) rotateY(0deg);
+}
+
+.game #Game {
+  font-size: 26px;
+  font-weight: 400;
+  margin-top: -4px;
+  margin-bottom: -2px;
+  /* color: var(--black); */
+}
+
+.game .sets_counter * {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--primary);
+  /* opacity: .7; */
+}
+
+.bottom {
+  width: calc(100% - 276px);
+  height: 0px;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  border-top: 30px solid var(--background);
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+}
+
+.bottom .content {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-top: -31.5px;
+}
+
+.bottom .content p {
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.bottom .content .divider {
+  display: block;
+  height: 16px;
+  width: 1px;
+  background-color: var(--primary);
+  margin: 1px 10px 0 10px;
+}
+
