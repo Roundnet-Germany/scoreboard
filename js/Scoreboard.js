@@ -120,7 +120,7 @@ export class Scoreboard {
         //     }
         // }
         
-        // Update hidden starting_server and starting_receiver fields in output.html to reflect current set
+        // Update hidden starting_server and starting_receiver fields in index.html to reflect current set
         // if (this.type === 'output') {
         //     this.$html_frame.find(`[fb-data*="score.set_"][fb-data*=".starting_server"]`).each((index, element) => {
         //         const $element = $(element);
@@ -1091,24 +1091,28 @@ export class Scoreboard {
             const isVisible = this.settings.show_match_statistics === 1;
         
             if (isVisible) {
-                this.$matchStatisticsContainer.addClass('show').removeClass('hidden');
-                if (this.type == 'output') {
-                    // this.$html_frame.addClass('hidden');
-                    // $('#score_history_individual').addClass('hidden');
-                }
+                // Add animation class first, then show
+                this.$matchStatisticsContainer.addClass('animate');
+                
+                // Small delay to ensure CSS is applied before showing
+                setTimeout(() => {
+                    this.$matchStatisticsContainer.addClass('show').removeClass('hidden');
+                }, 400);
             } else {
+                // Remove animation class and hide
                 this.$matchStatisticsContainer.removeClass('show').addClass('hidden');
-                if (this.type == 'output') {
-                    // this.$html_frame.removeClass('hidden');
-                    // $('#score_history_individual').removeClass('hidden');
-                }
+                
+                // Reset animation state after hiding
+                setTimeout(() => {
+                    this.$matchStatisticsContainer.removeClass('animate');
+                }, 300);
             }
         }
     }
 
     updateUrlOutput() {
         const baseUrl = window.location.origin + window.location.pathname;
-        const newUrl = baseUrl.replace("input.html", "output.html");
+        const newUrl = baseUrl.replace("input.html", "index.html");
         let urlOutput = `${newUrl}?channel=${this.channel}`;
 
         if (this.theme) {

@@ -545,6 +545,112 @@ html, body {
   opacity: 0;
 }
 
+/* Animation classes for staggered entrance */
+.match_statistics.animate .statistics_header {
+  animation: slideInFromTop .3s ease .1s both;
+}
+
+.match_statistics.animate .team_statistics > *:not(.spacer) {
+  animation: slideInFromLeft .3s ease-out 0.3s both;
+}
+
+.match_statistics.animate .team_statistics .spacer {
+  animation: fadeInScale .2s ease-out 0.5s both;
+}
+
+.match_statistics.animate .players_container .team:first-child {
+  animation: slideInFromLeft .2s ease-out 0.7s both;
+}
+
+.match_statistics.animate .players_container .team:last-child {
+  animation: slideInFromLeft .2s ease-out 0.9s both;
+}
+
+.match_statistics.animate .player_stats .col_label {
+  animation: slideInFromTop 0.6s ease-out 1.1s both;
+}
+
+.match_statistics.animate .player_stats .player_stats_container:first-child {
+  animation: slideInFromLeft 0.6s ease-out 1.3s both;
+}
+
+.match_statistics.animate .player_stats .player_stats_container:last-child {
+  animation: slideInFromRight 0.6s ease-out 1.5s both;
+}
+
+.match_statistics.animate .score_history_in_stats .table_view {
+  animation: slideInFromBottom .3s ease-out 1s both;
+}
+
+/* Keyframe animations */
+@keyframes slideInFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInFromBottom {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Ensure all animated elements start hidden */
+.match_statistics.animate .statistics_header,
+.match_statistics.animate .team_statistics > *:not(.spacer),
+.match_statistics.animate .team_statistics .spacer,
+.match_statistics.animate .players_container .team:first-child,
+.match_statistics.animate .players_container .team:last-child,
+.match_statistics.animate .player_stats .col_label,
+.match_statistics.animate .player_stats .player_stats_container:first-child,
+.match_statistics.animate .player_stats .player_stats_container:last-child,
+.match_statistics.animate .score_history_in_stats .table_view {
+  opacity: 0;
+}
+
 .match_statistics .statistics_header {
   display: flex;
   flex-direction: row;
