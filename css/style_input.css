@@ -777,7 +777,7 @@ select.small {
   overflow-x: hidden !important;
   text-overflow: ellipsis !important;
   background-color: #eeeeee;
-  padding: 4px 8px 6px 8px;
+  padding: 4px 30px 6px 8px;
   border-radius: 4px;
   text-decoration: none;
   font-size: 1.075rem;
@@ -835,4 +835,47 @@ select.small {
   .points .controls .team_container {
     width: 76px;
   }
+}
+
+/* Input with Trailing Icon Styles */
+.input-with-trailing-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-with-trailing-icon input,
+.input-with-trailing-icon a {
+    flex: 1;
+    padding-right: 40px; /* Make room for the trailing icon */
+}
+
+.input-with-trailing-icon .trailing-icon {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: #666;
+    font-size: 20px;
+    transition: color 0.2s ease;
+    user-select: none;
+}
+
+.input-with-trailing-icon .trailing-icon:hover {
+    color: #333;
+}
+
+/* Lock Icon specific styles */
+.lock-icon.locked {
+    color: #C55151;
+}
+
+.lock-icon.locked:hover {
+    color: #a04040;
+}
+
+/* Ensure the input container still works properly */
+.input_container .input-with-trailing-icon {
+    width: 100%;
 }

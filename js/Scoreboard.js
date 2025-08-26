@@ -226,7 +226,8 @@ export class Scoreboard {
         });
 
         // URL output container click handler
-        this.$urlOutputContainer.click(() => {
+        this.$urlOutputContainer.find('.trailing-icon').click((e) => {
+            e.preventDefault();
             const text = this.$urlOutput.attr('href');
             copyToClipboard(text);
             showToast('📋', 'Copied url to clipboard');
@@ -236,6 +237,9 @@ export class Scoreboard {
         $('#import_data').click(() => {
             this.importDataFromJson();
         });
+
+        // Initialize lock icons functionality
+        this.initializeLockIcons();
 
         // Score input handler with simplified logic
         this.$scoreboardInputs.filter('[fb-data*="score"]').on('input', (event) => {
@@ -500,7 +504,13 @@ export class Scoreboard {
                 // Handle elements with and without part attributes
                 $allElements.each((_, elem) => {
                     const $elem = $(elem);
-                    this.setElementValue($elem, value);
+                    
+                    // Check if this is a manual import and the field is locked
+                    if (isImport && this.isFieldLocked($elem)) {
+                        console.log(`Skipping locked field: ${$elem.attr('id') || $elem.attr('fb-data')}`);
+                    } else {
+                        this.setElementValue($elem, value);
+                    }                   
                 });
             }
         });
@@ -1785,6 +1795,39 @@ export class Scoreboard {
             return 'b';
         }
         return null;
+    }
+
+    /**
+     * Check if a field is locked (should not be overwritten during manual import)
+     * @param {jQuery} $elem - The element to check
+     * @returns {boolean} True if the field is locked
+     */
+    isFieldLocked($elem) {
+        // Find the lock icon that belongs to this input field
+        const $lockIcon = $elem.closest('.input-with-trailing-icon').find('.lock-icon');
+        return $lockIcon.hasClass('locked');
+    }
+
+    /**
+     * Initialize lock icon functionality
+     * Sets up click handlers for lock icons
+     */
+    initializeLockIcons() {
+        $('.lock-icon').off('click').on('click', (e) => {
+            e.preventDefault();
+            const $icon = $(e.currentTarget);
+            const $input = $icon.closest('.input-with-trailing-icon').find('input');
+            const fieldId = $input.attr('id');
+            
+            // Toggle lock state
+            if ($icon.hasClass('locked')) {
+                $icon.removeClass('locked').text('lock_open');
+                console.log(`Unlocked field: ${fieldId}`);
+            } else {
+                $icon.addClass('locked').text('lock');
+                console.log(`Locked field: ${fieldId}`);
+            }
+        });
     }
 }
 
