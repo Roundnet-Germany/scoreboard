@@ -1270,11 +1270,11 @@ export class Scoreboard {
                 pointsTillOvertime = this.gameSettings.win_points * 2 - 2;
                 steps = Math.floor(((((pointsTillOvertime + 1) / 2) % 4) + (pointIndex - pointsTillOvertime) % 4) % 4);
                 player = serveOrder[(startIndex + steps) % 4];
-                if (startingServer == 'a' || startingServer == 'b') {
-                    player = player == 'a' ? 'b' : player == 'b' ? 'a' : player;
-                } else if (startingServer == 'c' || startingServer == 'd') {
-                    player = player == 'c' ? 'd' : player == 'd' ? 'c' : player;
-                }
+                // if (startingServer == 'a' || startingServer == 'b') {
+                //     player = player == 'a' ? 'b' : player == 'b' ? 'a' : player;
+                // } else if (startingServer == 'c' || startingServer == 'd') {
+                //     player = player == 'c' ? 'd' : player == 'd' ? 'c' : player;
+                // }
                 // console.log(isOvertime, player, steps, pointsTillOvertime, pointIndex);
             }
             
@@ -1368,31 +1368,39 @@ export class Scoreboard {
         const startingReceiver = this.getStartingReceiver(set);
         const isOvertime = this.isInOvertime(set);
 
-        let receivingOrder, overtimeOrder;
+        let receivingOrder, overtimeOrder15, overtimeOrder21;
         if (startingServer == 'a' && startingReceiver == 'c') {
             receivingOrder = ['c', 'b', 'a', 'c', 'd', 'a', 'b', 'd'];
-            overtimeOrder = ['a', 'd', 'b', 'c'];
+            overtimeOrder15 = ['a', 'd', 'b', 'c'];
+            overtimeOrder21 = ['b', 'd', 'a', 'c'];
         } else if (startingServer == 'a' && startingReceiver == 'd') {
             receivingOrder = ['d', 'b', 'a', 'd', 'c', 'a', 'b', 'c'];
-            overtimeOrder = ['a', 'c', 'b', 'd'];
+            overtimeOrder15 = ['a', 'c', 'b', 'd'];
+            overtimeOrder21 = ['b', 'c', 'a', 'd'];
         } else if (startingServer == 'b' && startingReceiver == 'c') {
             receivingOrder = ['c', 'a', 'b', 'c', 'd', 'b', 'a', 'd'];
-            overtimeOrder = ['b', 'd', 'a', 'c'];
+            overtimeOrder15 = ['b', 'd', 'a', 'c'];
+            overtimeOrder21 = ['a', 'd', 'b', 'c'];
         } else if (startingServer == 'b' && startingReceiver == 'd') {
             receivingOrder = ['d', 'a', 'b', 'd', 'c', 'b', 'a', 'c'];
-            overtimeOrder = ['b', 'c', 'a', 'd'];
+            overtimeOrder15 = ['b', 'c', 'a', 'd'];
+            overtimeOrder21 = ['a', 'c', 'b', 'd'];
         } else if (startingServer == 'c' && startingReceiver == 'a') {
             receivingOrder = ['a', 'd', 'c', 'a', 'b', 'c', 'd', 'b'];
-            overtimeOrder = ['c', 'b', 'd', 'a'];
+            overtimeOrder15 = ['c', 'b', 'd', 'a'];
+            overtimeOrder21 = ['d', 'b', 'c', 'a'];
         } else if (startingServer == 'c' && startingReceiver == 'b') {
             receivingOrder = ['b', 'd', 'c', 'b', 'a', 'c', 'd', 'a'];
-            overtimeOrder = ['c', 'a', 'd', 'b'];
+            overtimeOrder15 = ['c', 'a', 'd', 'b'];
+            overtimeOrder21 = ['d', 'a', 'c', 'b'];
         } else if (startingServer == 'd' && startingReceiver == 'a') {
             receivingOrder = ['a', 'c', 'd', 'a', 'b', 'd', 'c', 'b'];
-            overtimeOrder = ['d', 'b', 'c', 'a'];
+            overtimeOrder15 = ['d', 'b', 'c', 'a'];
+            overtimeOrder21 = ['c', 'b', 'd', 'a'];
         } else if (startingServer == 'd' && startingReceiver == 'b') {
             receivingOrder = ['b', 'c', 'd', 'b', 'a', 'd', 'c', 'a'];
-            overtimeOrder = ['d', 'a', 'c', 'b'];
+            overtimeOrder15 = ['d', 'a', 'c', 'b'];
+            overtimeOrder21 = ['c', 'a', 'd', 'b'];
         }
 
         // receivingOrder = []
@@ -1410,8 +1418,11 @@ export class Scoreboard {
                 return receivingOrder[(startIndex + steps) % 8];
             } else {
                 steps = Math.floor((pointIndex - 1) % 4);
-                return overtimeOrder[(startIndex + steps) % 4];
-                
+                if (this.gameSettings.win_points == 15) {
+                    return overtimeOrder15[(startIndex + steps) % 4];
+                } else {
+                    return overtimeOrder21[(startIndex + steps) % 4];
+                }                
                 // pointsTillOvertime = this.gameSettings.win_points * 2 - 2;
                 // steps = Math.floor(((pointsTillOvertime) % 8) + (pointIndex - pointsTillOvertime));
             }
