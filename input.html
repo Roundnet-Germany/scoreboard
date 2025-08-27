@@ -229,131 +229,143 @@
                         </div>
 
                         <div class="bottom">
-                            <div class="starting_players_container">
-                                <div class="starting_team_container">
-                                    <label>Starting Server:</label>
-                                    <div class="starting_team_sets">
-                                        <div class="starting_team_selector set">
-                                            <select class="small" id="starting_server_1" fb-data="score.set_1.starting_server">
-                                                <option value="a">A</option>
-                                                <option value="b">B</option>
-                                                <option value="c">C</option>
-                                                <option value="d">D</option>
-                                            </select>
-                                        </div>
-                                        <div class="starting_team_selector set">
-                                            <select class="small" id="starting_server_2" fb-data="score.set_2.starting_server">
-                                                <option value="a">A</option>
-                                                <option value="b">B</option>
-                                                <option value="c">C</option>
-                                                <option value="d">D</option>
-                                            </select>
-                                        </div>
-                                        <div class="starting_team_selector set">
-                                            <select class="small" id="starting_server_3" fb-data="score.set_3.starting_server">
-                                                <option value="a">A</option>
-                                                <option value="b">B</option>
-                                                <option value="c">C</option>
-                                                <option value="d">D</option>
-                                            </select>
-                                        </div>
-                                        <div class="starting_team_selector set">
-                                            <select class="small" id="starting_server_4" fb-data="score.set_4.starting_server">
-                                                <option value="a">A</option>
-                                                <option value="b">B</option>
-                                                <option value="c">C</option>
-                                                <option value="d">D</option>
-                                            </select>
-                                        </div>
-                                        <div class="starting_team_selector set">
-                                            <select class="small" id="starting_server_5" fb-data="score.set_5.starting_server">
-                                                <option value="a">A</option>
-                                                <option value="b">B</option>
-                                                <option value="c">C</option>
-                                                <option value="d">D</option>
-                                            </select>
-                                        </div>
-                                        <div class="starting_team_selector set">
-                                            <select class="small" id="starting_server_6" fb-data="score.set_6.starting_server">
-                                                <option value="a">A</option>
-                                                <option value="b">B</option>
-                                                <option value="c">C</option>
-                                                <option value="d">D</option>
-                                            </select>
-                                        </div>
-                                        <div class="starting_team_selector set">
-                                            <select class="small" id="starting_server_7" fb-data="score.set_7.starting_server">
-                                                <option value="a">A</option>
-                                                <option value="b">B</option>
-                                                <option value="c">C</option>
-                                                <option value="d">D</option>
-                                            </select>
-                                        </div>
-                                    </div>
+                            <div class="current_players_info">
+                                <div class="current_server">
+                                    <span class="label">Current Server:</span>
+                                    <span class="player_name" id="current_server_name">-</span>
                                 </div>
-                                <div class="starting_team_container">
-                                    <label>Starting Receiver:</label>
-                                    <div class="starting_team_sets">
-                                        <div class="starting_team_selector set">
-                                            <select class="small" id="starting_receiver_1" fb-data="score.set_1.starting_receiver">
-                                                <option value="a">A</option>
-                                                <option value="b">B</option>
-                                                <option value="c">C</option>
-                                                <option value="d">D</option>
-                                            </select>
-                                        </div>
-                                        <div class="starting_team_selector set">
-                                            <select class="small" id="starting_receiver_2" fb-data="score.set_2.starting_receiver">
-                                                <option value="a">A</option>
-                                                <option value="b">B</option>
-                                                <option value="c">C</option>
-                                                <option value="d">D</option>
-                                            </select>
-                                        </div>
-                                        <div class="starting_team_selector set">
-                                            <select class="small" id="starting_receiver_3" fb-data="score.set_3.starting_receiver">
-                                                <option value="a">A</option>
-                                                <option value="b">B</option>
-                                                <option value="c">C</option>
-                                                <option value="d">D</option>
-                                            </select>
-                                        </div>
-                                        <div class="starting_team_selector set">
-                                            <select class="small" id="starting_receiver_4" fb-data="score.set_4.starting_receiver">
-                                                <option value="a">A</option>
-                                                <option value="b">B</option>
-                                                <option value="c">C</option>
-                                                <option value="d">D</option>
-                                            </select>
-                                        </div>
-                                        <div class="starting_team_selector set">
-                                            <select class="small" id="starting_receiver_5" fb-data="score.set_5.starting_receiver">
-                                                <option value="a">A</option>
-                                                <option value="b">B</option>
-                                                <option value="c">C</option>
-                                                <option value="d">D</option>
-                                            </select>
-                                        </div>
-                                        <div class="starting_team_selector set">
-                                            <select class="small" id="starting_receiver_6" fb-data="score.set_6.starting_receiver">
-                                                <option value="a">A</option>
-                                                <option value="b">B</option>
-                                                <option value="c">C</option>
-                                                <option value="d">D</option>
-                                            </select>
-                                        </div>
-                                        <div class="starting_team_selector set">
-                                            <select class="small" id="starting_receiver_7" fb-data="score.set_7.starting_receiver">
-                                                <option value="a">A</option>
-                                                <option value="b">B</option>
-                                                <option value="c">C</option>
-                                                <option value="d">D</option>
-                                            </select>
-                                        </div>
-                                    </div>
+                                <div class="current_receiver">
+                                    <span class="label">Current Receiver:</span>
+                                    <span class="player_name" id="current_receiver_name">-</span>
                                 </div>
                             </div>
-                            <button id="reset_scores" class="small destructive">Reset Scores <br> & New Game</button>
+                            <div class="right">
+                                <div class="starting_players_container">
+                                    <div class="starting_team_container">
+                                        <label>Starting Server:</label>
+                                        <div class="starting_team_sets">
+                                            <div class="starting_team_selector set">
+                                                <select class="small" id="starting_server_1" fb-data="score.set_1.starting_server">
+                                                    <option value="a">A</option>
+                                                    <option value="b">B</option>
+                                                    <option value="c">C</option>
+                                                    <option value="d">D</option>
+                                                </select>
+                                            </div>
+                                            <div class="starting_team_selector set">
+                                                <select class="small" id="starting_server_2" fb-data="score.set_2.starting_server">
+                                                    <option value="a">A</option>
+                                                    <option value="b">B</option>
+                                                    <option value="c">C</option>
+                                                    <option value="d">D</option>
+                                                </select>
+                                            </div>
+                                            <div class="starting_team_selector set">
+                                                <select class="small" id="starting_server_3" fb-data="score.set_3.starting_server">
+                                                    <option value="a">A</option>
+                                                    <option value="b">B</option>
+                                                    <option value="c">C</option>
+                                                    <option value="d">D</option>
+                                                </select>
+                                            </div>
+                                            <div class="starting_team_selector set">
+                                                <select class="small" id="starting_server_4" fb-data="score.set_4.starting_server">
+                                                    <option value="a">A</option>
+                                                    <option value="b">B</option>
+                                                    <option value="c">C</option>
+                                                    <option value="d">D</option>
+                                                </select>
+                                            </div>
+                                            <div class="starting_team_selector set">
+                                                <select class="small" id="starting_server_5" fb-data="score.set_5.starting_server">
+                                                    <option value="a">A</option>
+                                                    <option value="b">B</option>
+                                                    <option value="c">C</option>
+                                                    <option value="d">D</option>
+                                                </select>
+                                            </div>
+                                            <div class="starting_team_selector set">
+                                                <select class="small" id="starting_server_6" fb-data="score.set_6.starting_server">
+                                                    <option value="a">A</option>
+                                                    <option value="b">B</option>
+                                                    <option value="c">C</option>
+                                                    <option value="d">D</option>
+                                                </select>
+                                            </div>
+                                            <div class="starting_team_selector set">
+                                                <select class="small" id="starting_server_7" fb-data="score.set_7.starting_server">
+                                                    <option value="a">A</option>
+                                                    <option value="b">B</option>
+                                                    <option value="c">C</option>
+                                                    <option value="d">D</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="starting_team_container">
+                                        <label>Starting Receiver:</label>
+                                        <div class="starting_team_sets">
+                                            <div class="starting_team_selector set">
+                                                <select class="small" id="starting_receiver_1" fb-data="score.set_1.starting_receiver">
+                                                    <option value="a">A</option>
+                                                    <option value="b">B</option>
+                                                    <option value="c">C</option>
+                                                    <option value="d">D</option>
+                                                </select>
+                                            </div>
+                                            <div class="starting_team_selector set">
+                                                <select class="small" id="starting_receiver_2" fb-data="score.set_2.starting_receiver">
+                                                    <option value="a">A</option>
+                                                    <option value="b">B</option>
+                                                    <option value="c">C</option>
+                                                    <option value="d">D</option>
+                                                </select>
+                                            </div>
+                                            <div class="starting_team_selector set">
+                                                <select class="small" id="starting_receiver_3" fb-data="score.set_3.starting_receiver">
+                                                    <option value="a">A</option>
+                                                    <option value="b">B</option>
+                                                    <option value="c">C</option>
+                                                    <option value="d">D</option>
+                                                </select>
+                                            </div>
+                                            <div class="starting_team_selector set">
+                                                <select class="small" id="starting_receiver_4" fb-data="score.set_4.starting_receiver">
+                                                    <option value="a">A</option>
+                                                    <option value="b">B</option>
+                                                    <option value="c">C</option>
+                                                    <option value="d">D</option>
+                                                </select>
+                                            </div>
+                                            <div class="starting_team_selector set">
+                                                <select class="small" id="starting_receiver_5" fb-data="score.set_5.starting_receiver">
+                                                    <option value="a">A</option>
+                                                    <option value="b">B</option>
+                                                    <option value="c">C</option>
+                                                    <option value="d">D</option>
+                                                </select>
+                                            </div>
+                                            <div class="starting_team_selector set">
+                                                <select class="small" id="starting_receiver_6" fb-data="score.set_6.starting_receiver">
+                                                    <option value="a">A</option>
+                                                    <option value="b">B</option>
+                                                    <option value="c">C</option>
+                                                    <option value="d">D</option>
+                                                </select>
+                                            </div>
+                                            <div class="starting_team_selector set">
+                                                <select class="small" id="starting_receiver_7" fb-data="score.set_7.starting_receiver">
+                                                    <option value="a">A</option>
+                                                    <option value="b">B</option>
+                                                    <option value="c">C</option>
+                                                    <option value="d">D</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button id="reset_scores" class="small destructive">Reset Scores <br> & New Game</button>
+                            </div>
                         </div>
                         
                     </div>
@@ -414,10 +426,24 @@
                         </div>
 
                         <div class="setting_entry boolean">
-                            <label>Match Statistics:</label>
+                            <label>Statistics Overview:</label>
                             <label class="toggle-switch" for="Show_Match_Statistics">
                                 <input type="checkbox" id="Show_Match_Statistics" fb-data="admin_settings.show_match_statistics">
                             </label>
+                        </div>
+                        <div class="setting_entry boolean" id="match_stats_type_container">
+                            <label for="Match_Stats_Type">Statistics Context:</label>
+                            <select id="Match_Stats_Type" fb-data="admin_settings.match_stats_type">
+                                <option value="match">Match</option>
+                                <option value="active_set">Active Set</option>
+                                <option value="1">Set 1</option>
+                                <option value="2">Set 2</option>
+                                <option value="3">Set 3</option>
+                                <option value="4">Set 4</option>
+                                <option value="5">Set 5</option>
+                                <option value="6">Set 6</option>
+                                <option value="7">Set 7</option>
+                            </select>
                         </div>
                     </div>
                 </div>

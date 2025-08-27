@@ -576,6 +576,37 @@ select.small {
   gap: 16px;
 }
 
+.scores .current_players_info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 3px 0px;
+}
+
+.scores .current_players_info .current_server,
+.scores .current_players_info .current_receiver {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  align-items: baseline;
+  border: 1px solid #ddd;
+  padding: 1px 4px 2px 4px;
+  border-radius: 4px;
+}
+
+.scores .current_players_info .label {
+  font-size: 0.9rem;
+  font-weight: 300;
+  color: #555;
+}
+
+.scores .current_players_info .player_name {
+  font-size: .9rem;
+  font-weight: 400;
+  color: #333;
+}
+
 .scores .scores_container .teams {
   display: flex;
   flex-direction: column;
@@ -708,6 +739,13 @@ select.small {
 .scores .bottom {
   display: flex;
   flex-direction: row;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.scores .bottom .right {
+  display: flex;
+  flex-direction: row;
   justify-content: flex-end;
   gap: 4px;
 }
@@ -752,6 +790,11 @@ select.small {
 
 .setting_entry span {
   margin-bottom: 2px;
+}
+
+select#Match_Stats_Type {
+  height: auto;
+  padding: 0px 0px 3px 2px;
 }
 
 .controls .output .setting_entry {

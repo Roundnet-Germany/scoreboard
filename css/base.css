@@ -930,6 +930,10 @@ html, body {
   display: flex !important;
 }
 
+.match_statistics .team_stats_container .team_stats .set_stats .counter.set.hide {
+  display: none !important;
+}
+
 .match_statistics .team_stats_container .team_stats:first-child .set_stats .counter {
   border-radius: 3px 3px 0px 0px;
 }
@@ -1273,6 +1277,7 @@ html, body {
   justify-content: center;
   height: 32px;
   min-width: 15px;
+  max-width: 32px;
   flex: 1;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.15);

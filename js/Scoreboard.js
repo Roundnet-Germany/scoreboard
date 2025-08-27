@@ -50,6 +50,7 @@ export class Scoreboard {
             "show_score_history": 0,
             "show_score_history_chart": 0,
             "show_match_statistics": 0,
+            "match_stats_type": "match",
         };
         this.active_set = 1;
         this.ScoreHistoryChart = null;
@@ -81,7 +82,7 @@ export class Scoreboard {
         this.update_interval = setInterval(() => {
             this.updateUI();
         }, 300);
-        // TODO: reset this interval to 300
+        // TODO: reset this interval to 300, if higher
 
         // Simplified interval logic - removed redundant code
         // Input mode: slower updates (1500ms) since admin controls the data
@@ -147,6 +148,7 @@ export class Scoreboard {
         this.updateStartingTeamSelector();
         this.handleEventHistory();
         this.updateOldScoreInputCounter();
+        this.updateCurrentPlayersDisplay();
         
         // Only update score history for output type
         if (this.type === 'output') {
@@ -272,6 +274,7 @@ export class Scoreboard {
             }
 
             this.updateOldScoreInputCounter();
+            this.updateCurrentPlayersDisplay();
             this.uploadData([$target]);
         });
 
@@ -342,6 +345,14 @@ export class Scoreboard {
             this.settings[part] = value;
             this.updateSettings();
             this.uploadData([$checkbox]);
+        });
+        
+        // Match stats type selector handler
+        $('#Match_Stats_Type').change((event) => {
+            const value = $(event.target).val();
+            this.settings.match_stats_type = value;
+            this.updateSettings();
+            this.uploadData([$(event.target)]);
         });
 
         // Winning score handler
@@ -560,6 +571,11 @@ export class Scoreboard {
     async insertAdminSetting(path, value) {
         const part = path.split('.').pop();
         this.settings[part] = value;
+        
+        // Special handling for match statistics type
+        if (part === 'match_stats_type') {
+            $('#Match_Stats_Type').val(value);
+        }
     }
 
     /**
@@ -954,7 +970,7 @@ export class Scoreboard {
      */
     getStartingServer(set = this.active_set) {
         const startingServerData = this.$html_frame.find(`[fb-data="score.set_${set}.starting_server"]`).first();
-        return startingServerData.is('input') ? startingServerData.val() : startingServerData.text();
+        return startingServerData.is('select') ? startingServerData.val() : startingServerData.text();
     }
 
     /**
@@ -964,7 +980,7 @@ export class Scoreboard {
      */
     getStartingReceiver(set = this.active_set) {
         const startingReceiverData = this.$html_frame.find(`[fb-data="score.set_${set}.starting_receiver"]`).first();
-        return startingReceiverData.is('input') ? startingReceiverData.val() : startingReceiverData.text();
+        return startingReceiverData.is('select') ? startingReceiverData.val() : startingReceiverData.text();
     }
 
     /**
@@ -1408,26 +1424,83 @@ export class Scoreboard {
      * Shows score progression and active streaks for each team
      */
     updateScoreHistory() {
-        // Update main score history
-        $.each(this.$scoreHistoryContainer.find('.scores .team'), (i, container) => {
-            this.updateScoreHistoryForContainer($(container)), this.active_set;
-        });
-        
-        // Update score history in match statistics
-        $.each(this.$matchStatisticsContainer.find('.score_history_in_stats .scores .set'), (i, set_container) => {
-            $.each($(set_container).find('.team'), (j, container) => {
-                this.updateScoreHistoryForContainer($(container), i + 1);
+        if (this.settings.show_score_history == 1) {
+            // Update main score history
+            $.each(this.$scoreHistoryContainer.find('.scores .team'), (i, container) => {
+                this.updateScoreHistoryForContainer($(container)), this.active_set;
             });
-        });
+        };        
+        
+        if (this.settings.show_match_statistics == 1) {
+            // Update score history in match statistics based on selected type
+            if (this.settings.match_stats_type === 'match') {
 
-        // count score items in score_history_in_stats and set it as attribute to .scores
-        const score_items_count = this.$matchStatisticsContainer.find('.score_history_in_stats .scores .set .team_rows .score_item').length / 2;
-        this.$matchStatisticsContainer.find('.score_history_in_stats .scores').attr('score_items_count', score_items_count);
-        if (score_items_count >= 70) {
-            this.$matchStatisticsContainer.find('.score_history_in_stats .scores').addClass('full');
-        } else {
-            this.$matchStatisticsContainer.find('.score_history_in_stats .scores').removeClass('full');
-        }
+                let completedSetsCountArray;
+                if (this.settings.match_stats_type == 'match') {
+                    let completedSetsCount = this.getCompletedSetsCount();
+                    completedSetsCountArray = Array.from({length: completedSetsCount}, (_, i) => i);
+                    // const completedSetsCount = this.active_set;
+                    if (this.active_set != completedSetsCount && this.getScore(this.active_set, 'a') + this.getScore(this.active_set, 'b') > 0) {
+                        completedSetsCountArray.push(this.active_set - 1)
+                    }
+                } else {
+                    completedSetsCountArray = this.settings.match_stats_type === 'active_set' ? [this.active_set - 1] : [this.settings.match_stats_type - 1];
+                }
+
+                this.$matchStatisticsContainer.find('.score_history_in_stats .scores .set').hide();
+                $.each(this.$matchStatisticsContainer.find('.score_history_in_stats .scores .set'), (i, set_container) => {
+                    if (i in completedSetsCountArray) {
+                        $(set_container).show()
+                        $.each($(set_container).find('.team'), (j, container) => {
+                            this.updateScoreHistoryForContainer($(container), i + 1);
+                        });
+                    }
+                });
+            } else {
+                // Show only the selected set
+                let targetSet = 1;
+                if (this.settings.match_stats_type === 'active_set') {
+                    targetSet = this.active_set;
+                } else if (Number.isInteger(Number(this.settings.match_stats_type))) {
+                    targetSet = Number(this.settings.match_stats_type);
+                }
+                
+                // Hide all sets first
+                this.$matchStatisticsContainer.find('.score_history_in_stats .scores .set').hide();
+                
+                // Show only the target set
+                const $targetSet = this.$matchStatisticsContainer.find(`.score_history_in_stats .scores .set#set_${targetSet}`);
+                if ($targetSet.length) {
+                    $targetSet.show();
+                    $.each($targetSet.find('.team'), (j, container) => {
+                        this.updateScoreHistoryForContainer($(container), targetSet);
+                    });
+                }
+            }
+
+            // count score items in score_history_in_stats and set it as attribute to .scores
+            let score_items_count;
+            if (this.settings.match_stats_type === 'match') {
+                score_items_count = this.$matchStatisticsContainer.find('.score_history_in_stats .scores .set .team_rows .score_item').length / 2;
+            } else {
+                // For single set, only count visible set
+                let targetSet = 1;
+                if (this.settings.match_stats_type === 'active_set') {
+                    targetSet = this.active_set;
+                } else if (Number.isInteger(Number(this.settings.match_stats_type))) {
+                    targetSet = Number(this.settings.match_stats_type);
+                }
+                score_items_count = this.$matchStatisticsContainer.find(`.score_history_in_stats .scores .set#set_${targetSet} .team_rows .score_item`).length / 2;
+            }
+            
+            this.$matchStatisticsContainer.find('.score_history_in_stats .scores').attr('score_items_count', score_items_count);
+            if (score_items_count >= 72) {
+                this.$matchStatisticsContainer.find('.score_history_in_stats .scores').addClass('full');
+            } else {
+                this.$matchStatisticsContainer.find('.score_history_in_stats .scores').removeClass('full');
+            }
+        };
+        
 
         // let score_sum = this.getScore(this.active_set, 'a') + this.getScore(this.active_set, 'b');
         // console.log(this.getServingPlayerAtPoint(score_sum), this.getReceivingPlayerAtPoint(score_sum));
@@ -1562,18 +1635,34 @@ export class Scoreboard {
     updateMatchStatistics() {
         if (this.settings.show_match_statistics !== 1) return;
 
-        // Calculate overall statistics
-        const overallStats = this.calculateStatistics('game');
+        // Update the title based on selected type
+        this.updateMatchStatisticsTitle();
+
+        // Calculate statistics based on selected type
+        let stats;
+        let setNumber = null;
+        
+        if (this.settings.match_stats_type === 'match') {
+            stats = this.calculateStatistics('game');
+        } else if (this.settings.match_stats_type === 'active_set') {
+            stats = this.calculateStatistics('set', this.active_set);
+            setNumber = this.active_set;
+        } else if (Number.isInteger(Number(this.settings.match_stats_type))) {
+            setNumber = Number(this.settings.match_stats_type);
+            stats = this.calculateStatistics('set', setNumber);
+        }
+        
+        if (!stats) return;
         
         // Update team break percentages
-        const breakPercentageA = overallStats.teamA.breakPercentage;
-        const breakPercentageB = overallStats.teamB.breakPercentage;
+        const breakPercentageA = stats.teamA.breakPercentage;
+        const breakPercentageB = stats.teamB.breakPercentage;
         $('#team_a_break_percentage').text(`${breakPercentageA}`);
         $('#team_b_break_percentage').text(`${breakPercentageB}`);
         
         // Update team break absolute values
-        $('#team_a_break_absolute').text(`(${overallStats.teamA.breaks}/${overallStats.teamA.breakOpportunities})`);
-        $('#team_b_break_absolute').text(`(${overallStats.teamB.breaks}/${overallStats.teamB.breakOpportunities})`);
+        $('#team_a_break_absolute').text(`(${stats.teamA.breaks}/${stats.teamA.breakOpportunities})`);
+        $('#team_b_break_absolute').text(`(${stats.teamB.breaks}/${stats.teamB.breakOpportunities})`);
         // Remove 'best' class from both first
         $('#team_a_break_percentage').closest('.stat_item').removeClass('best');
         $('#team_b_break_percentage').closest('.stat_item').removeClass('best');
@@ -1585,11 +1674,42 @@ export class Scoreboard {
         }
         
         // Update player statistics
-        this.updatePlayerStatistics(overallStats);
+        this.updatePlayerStatistics(stats);
 
         this.updatePlayerSetStatistics();
         
+        // Update set scores display based on selected type
+        this.updateSetScoresDisplay(setNumber);
+        
         // Update score history within match statistics
+    }
+
+    updateMatchStatisticsTitle() {
+        let title = 'Match Statistics';
+        
+        if (this.settings.match_stats_type === 'active_set') {
+            title = `Set ${this.active_set} Statistics`;
+        } else if (Number.isInteger(Number(this.settings.match_stats_type))) {
+            const setNumber = Number(this.settings.match_stats_type);
+            title = `Set ${setNumber} Statistics`;
+        }
+        
+        this.$matchStatisticsContainer.find('.center h3').text(title);
+    }
+
+    updateSetScoresDisplay(setNumber) {
+        if (this.settings.match_stats_type === 'match') {
+            // Show all set scores
+            this.$matchStatisticsContainer.find('.set_stats .counter').removeClass('hide');
+        } else {            
+            if (setNumber && setNumber >= 1 && setNumber <= 7) {
+                this.$matchStatisticsContainer.find('.set_stats .counter').addClass('hide');
+                const $targetSet = this.$matchStatisticsContainer.find(`.set_stats .counter:nth-child(${setNumber})`);
+                if ($targetSet.length) {
+                    $targetSet.removeClass('hide');
+                }
+            }
+        }
     }
 
     getLastResetIndex(event_history = this.event_history) {
@@ -1725,29 +1845,46 @@ export class Scoreboard {
      * Update set-specific player statistics in the UI
      */
     updatePlayerSetStatistics() {
-        let completedSetsCount = this.getCompletedSetsCount();
-        // const completedSetsCount = this.active_set;
-        if (this.active_set != completedSetsCount && this.getScore(this.active_set, 'a') + this.getScore(this.active_set, 'b') > 0) {
-            completedSetsCount++;
+        let completedSetsCountArray;
+        if (this.settings.match_stats_type == 'match') {
+            let completedSetsCount = this.getCompletedSetsCount();
+            completedSetsCountArray = Array.from({length: completedSetsCount}, (_, i) => i);
+            // const completedSetsCount = this.active_set;
+            if (this.active_set != completedSetsCount && this.getScore(this.active_set, 'a') + this.getScore(this.active_set, 'b') > 0) {
+                completedSetsCountArray.push(this.active_set - 1)
+            }
+        } else {
+            completedSetsCountArray = this.settings.match_stats_type === 'active_set' ? [this.active_set - 1] : [this.settings.match_stats_type - 1];
         }
-        const setsStats = [];
-        $.each(Array(completedSetsCount), (i) => {
-            const setStats = this.calculateStatistics('set', i + 1);
-            setsStats.push(setStats);
+
+        // Build a map from set index to stats, so we can reference by set index directly
+        const setsStats = {};
+        $.each(completedSetsCountArray, (_, setIdx) => {
+            // setIdx is the set index (0-based)
+            const setNumber = setIdx + 1;
+            setsStats[setNumber] = this.calculateStatistics('set', setNumber);
         });
 
         const players = ['a', 'b', 'c', 'd'];
         players.forEach(player => {
-            const playerStats = setsStats.map(setStats => setStats.players[player]);
-            // console.log(playerStats);
-            // Find the max sideout percentage for this player across their sets
-            const maxSideout = Math.max(...playerStats.map(s => s.sideoutPercentage));
-            const maxBreak = Math.max(...playerStats.map(s => s.breakPercentage));
-            $.each(playerStats, function(setIndex, setPlayerStats) {
+            // playerStatsBySetNum: { [setNumber]: playerStats }
+            const playerStatsBySetNum = {};
+            Object.keys(setsStats).forEach(setNumber => {
+                playerStatsBySetNum[setNumber] = setsStats[setNumber].players[player];
+            });
+
+            // Find the max sideout/break percentage for this player across their sets
+            const allSideoutPercentages = Object.values(playerStatsBySetNum).map(s => s.sideoutPercentage);
+            const allBreakPercentages = Object.values(playerStatsBySetNum).map(s => s.breakPercentage);
+            const maxSideout = Math.max(...allSideoutPercentages);
+            const maxBreak = Math.max(...allBreakPercentages);
+
+            // For each setNumber, update the UI for that set
+            Object.entries(playerStatsBySetNum).forEach(([setNumber, setPlayerStats]) => {
                 const sideoutPercentage = setPlayerStats.sideoutPercentage;
                 const breakPercentage = setPlayerStats.breakPercentage;
-                const $sideoutElem = $(`#player_${player}_sideout_percentage_set_${setIndex + 1}`);
-                const $breakElem = $(`#player_${player}_break_percentage_set_${setIndex + 1}`);
+                const $sideoutElem = $(`#player_${player}_sideout_percentage_set_${setNumber}`);
+                const $breakElem = $(`#player_${player}_break_percentage_set_${setNumber}`);
                 $sideoutElem.text(`${sideoutPercentage}`);
                 $breakElem.text(`${breakPercentage}`);
                 // Set the width of the .fill inside the sibling .bar_stat according to the percentage
@@ -1764,19 +1901,18 @@ export class Scoreboard {
                 } else {
                     $breakElem.closest('.line_stat').removeClass('best');
                 }
-                
-
             });
 
+            // Show/hide .line_stat for each set according to completedSetsCountArray
             $(`[id^="player_${player}_sideout_percentage_set_"], [id^="player_${player}_break_percentage_set_"]`).each(function() {
                 const id = $(this).attr('id');
                 const match = id.match(/set_(\d+)$/);
                 if (match) {
                     const setNum = parseInt(match[1], 10);
-                    if (setNum > completedSetsCount) {
-                        $(this).closest('.line_stat').hide();
-                    } else {
+                    if (completedSetsCountArray.includes(setNum - 1)) {
                         $(this).closest('.line_stat').show();
+                    } else {
+                        $(this).closest('.line_stat').hide();
                     }
                 }
             });
@@ -1795,6 +1931,52 @@ export class Scoreboard {
             return 'b';
         }
         return null;
+    }
+
+
+    /**
+     * Get the player name by player identifier
+     * @param {string} playerId - Player identifier ('a', 'b', 'c', 'd')
+     * @returns {string} Player name or fallback
+     */
+    getPlayerName(playerId) {
+        const playerMap = {
+            'a': 'A_Player_1',
+            'b': 'A_Player_2', 
+            'c': 'B_Player_1',
+            'd': 'B_Player_2'
+        };
+        
+        const inputId = playerMap[playerId];
+        if (inputId) {
+            const $input = $(`#${inputId}`);
+            if ($input.length > 0) {
+                const value = $input.val();
+                return value && value.trim() !== '' ? value : `Player ${playerId.toUpperCase()}`;
+            }
+        }
+        
+        return `Player ${playerId.toUpperCase()}`;
+    }
+
+    /**
+     * Update the current server and receiver display
+     */
+    updateCurrentPlayersDisplay() {
+        // const { server, receiver } = this.getCurrentServerAndReceiver();
+        const totalPoints = this.getTotalPointsInSet(this.active_set)
+        const server = this.getServingPlayerAtPoint(totalPoints, this.active_set)
+        const receiver = this.getReceivingPlayerAtPoint(totalPoints, this.active_set)
+        
+        if (server && receiver) {
+            const serverName = this.getPlayerName(server);
+            const receiverName = this.getPlayerName(receiver);
+            $('#current_server_name').text(serverName);
+            $('#current_receiver_name').text(receiverName);
+        } else {
+            $('#current_server_name').text('-');
+            $('#current_receiver_name').text('-');
+        }
     }
 
     /**
