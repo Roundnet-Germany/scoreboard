@@ -1367,7 +1367,6 @@ export class Scoreboard {
         const startingServer = this.getStartingServer(set);
         const startingReceiver = this.getStartingReceiver(set);
         const isOvertime = this.isInOvertime(set, pointIndex + 1);
-        console.log(isOvertime)
 
         let receivingOrder, overtimeOrder15, overtimeOrder21;
         if (startingServer == 'a' && startingReceiver == 'c') {
