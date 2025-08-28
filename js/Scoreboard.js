@@ -676,7 +676,7 @@ export class Scoreboard {
         });
 
         writeData(newData);
-        console.log("uploaded data to firebase", newData);
+        // console.log("uploaded data to firebase", newData);
     }
 
     /**
@@ -924,7 +924,7 @@ export class Scoreboard {
         if (scoreA >= this.gameSettings.hardcap || scoreB >= this.gameSettings.hardcap) {
             return true;
         }
-        
+
         // Check if winning score is reached
         if (scoreA >= this.gameSettings.win_points || scoreB >= this.gameSettings.win_points) {
             // Check if 2-point margin is met
@@ -1233,7 +1233,7 @@ export class Scoreboard {
     getServingPlayerAtPoint(pointIndex, set = this.active_set) {
         const startingServer = this.getStartingServer(set);
         const startingReceiver = this.getStartingReceiver(set);
-        const isOvertime = this.isInOvertime(set, pointIndex);
+        const isOvertime = this.isInOvertime(set, pointIndex + 1);
 
         let serveOrder;
         if (startingServer == 'a' && startingReceiver == 'c') {
@@ -1366,7 +1366,8 @@ export class Scoreboard {
     getReceivingPlayerAtPoint(pointIndex, set) {
         const startingServer = this.getStartingServer(set);
         const startingReceiver = this.getStartingReceiver(set);
-        const isOvertime = this.isInOvertime(set);
+        const isOvertime = this.isInOvertime(set, pointIndex + 1);
+        console.log(isOvertime)
 
         let receivingOrder, overtimeOrder15, overtimeOrder21;
         if (startingServer == 'a' && startingReceiver == 'c') {
@@ -1418,6 +1419,37 @@ export class Scoreboard {
                 return receivingOrder[(startIndex + steps) % 8];
             } else {
                 steps = Math.floor((pointIndex - 1) % 4);
+                // pointsTillOvertime = this.gameSettings.win_points * 2 - 2;
+                // let lastReceiver = receivingOrder[(startIndex + Math.floor((pointsTillOvertime) % 8)) % 8];
+                // let preLastReceiver = receivingOrder[(startIndex + Math.floor((pointsTillOvertime - 1) % 8)) % 8]
+                // let prePreLastReceiver = receivingOrder[(startIndex + Math.floor((pointsTillOvertime - 2) % 8)) % 8]
+                // let lastReceiverTeam = this.getPlayerTeam(lastReceiver);
+                // let preLastReceiverTeam = this.getPlayerTeam(preLastReceiver);
+                // let prePreLastReceiverTeam = this.getPlayerTeam(prePreLastReceiver);
+
+                // let overtimeOrder = [];
+                // if (lastReceiverTeam == 'a' && preLastReceiverTeam == 'a') {
+                //     prePreLastReceiver == 'c' ? overtimeOrder.push('c') : overtimeOrder.push('d')
+                // } else if (lastReceiverTeam == 'b' && preLastReceiverTeam == 'b') {
+                //     prePreLastReceiver == 'a' ? overtimeOrder.push('a') : overtimeOrder.push('b')
+                // }
+                
+                // overtimeOrder.push(lastReceiver)
+                // if (this.getPlayerTeam(overtimeOrder[0]) == 'a') {
+                //     prePreLastReceiver == 'a' ? overtimeOrder.push('b') : overtimeOrder.push('a')
+                // } else if (this.getPlayerTeam(overtimeOrder[0]) == 'b') {
+                //     prePreLastReceiver == 'c' ? overtimeOrder.push('d') : overtimeOrder.push('c')
+                // }
+                // if (this.getPlayerTeam(overtimeOrder[1]) == 'a') {
+                //     this.getPlayerTeam(overtimeOrder[1]) == 'a' ? overtimeOrder.push('b') : overtimeOrder.push('a'); 
+                // } else if (this.getPlayerTeam(overtimeOrder[1]) == 'b') {
+                //     this.getPlayerTeam(overtimeOrder[1]) == 'c' ? overtimeOrder.push('d') : overtimeOrder.push('c'); 
+                // }
+
+                // console.log(pointIndex, pointsTillOvertime)
+                // console.log('last receivers: ', prePreLastReceiver, preLastReceiver, lastReceiver)
+                // console.log(overtimeOrder, overtimeOrder15, overtimeOrder21);
+
                 if (this.gameSettings.win_points == 15) {
                     return overtimeOrder15[(startIndex + steps) % 4];
                 } else {
