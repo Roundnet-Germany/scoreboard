@@ -38,6 +38,7 @@ export class Scoreboard {
         this.$logoutButton = $('#logout');
         this.$scoreHistoryContainer = $('.score_history');
         this.$matchStatisticsContainer = $('.match_statistics');
+        this.$matchPreviewContainer = $('.match_preview');
         
         // Stored variables
         this.channel = Number(channel);
@@ -50,6 +51,7 @@ export class Scoreboard {
             "show_score_history": 0,
             "show_score_history_chart": 0,
             "show_match_statistics": 0,
+            "show_match_preview": 0,
             "match_stats_type": "match",
         };
         this.active_set = 1;
@@ -83,11 +85,12 @@ export class Scoreboard {
             this.updateUI();
         }, 300);
         // TODO: reset this interval to 300, if higher
+        // TODO: and data interval to 1500 : 300
 
         // Simplified interval logic - removed redundant code
         // Input mode: slower updates (1500ms) since admin controls the data
         // Output mode: faster updates (300ms) for real-time display
-        const dataIntervalDelay = this.type === 'input' ? 1500 : 300;
+        const dataIntervalDelay = this.type === 'input' ? 1500 : 500;
         this.data_interval = setInterval(() => {
             this.insertLiveData();
         }, dataIntervalDelay);
@@ -155,6 +158,7 @@ export class Scoreboard {
             this.updateScoreHistory();
             this.updateScoreHistoryChart();
             this.updateMatchStatistics();
+            this.updateTeamRGX();
         }
     }
 
@@ -194,6 +198,7 @@ export class Scoreboard {
             // Simplified conditional logic
             $('.score_history').toggleClass('hidden', html_structure !== 'vertical_score');
             $('.match_statistics').toggleClass('hidden', html_structure !== 'vertical_score');
+            $('.match_preview').toggleClass('hidden', html_structure !== 'vertical_score');
         }
     }
 
@@ -336,14 +341,18 @@ export class Scoreboard {
             const $checkbox = $(event.target);
             const $toggleSwitch = $checkbox.closest('.toggle-switch');
             const value = $checkbox.prop('checked') ? 1 : 0;
-            const part = $checkbox.attr('fb-data').split('.').pop();
-            
+            const fbData = $checkbox.attr('fb-data') || '';
+            const isAdminSetting = fbData.startsWith('admin_settings.');
+
             // Update toggle switch appearance
             $toggleSwitch.toggleClass('active', $checkbox.prop('checked'));
-            
-            // Update settings
-            this.settings[part] = value;
-            this.updateSettings();
+
+            if (isAdminSetting) {
+                const part = fbData.split('.').pop();
+                this.settings[part] = value;
+                this.updateSettings();
+            }
+            // Always upload the changed checkbox
             this.uploadData([$checkbox]);
         });
         
@@ -511,6 +520,22 @@ export class Scoreboard {
                         $elem.text(value);
                     }
                 });
+            } else if (path.includes('_is_pro')) {
+                let $rgxElem = $(`[fb-data="${path.replace('_is_pro', '_rgx')}"]`)
+                $rgxElem.toggleClass('pro', value === 1 || value === true);
+                $rgxElem.closest('.rgx').toggleClass('pro', value === 1 || value === true);
+
+                $allElements.each((_, elem) => {
+                    const $elem = $(elem);
+                    
+                    // Check if this is a manual import and the field is locked
+                    if (isImport && this.isFieldLocked($elem)) {
+                        console.log(`Skipping locked field: ${$elem.attr('id') || $elem.attr('fb-data')}`);
+                    } else {
+                        this.setElementValue($elem, value);
+                    }                   
+                });
+                
             } else {
                 // Handle elements with and without part attributes
                 $allElements.each((_, elem) => {
@@ -524,7 +549,85 @@ export class Scoreboard {
                     }                   
                 });
             }
-        });
+        });        
+    }
+
+    /**
+     * Calculate and update team RGX values and pro classes
+     * This method is called after processing all data to ensure all player RGX and pro values are available
+     */
+    updateTeamRGX() {
+        // Get current data to calculate team values
+        const data = this.getCurrentRGXData();
+        
+        if (!data.teams_info) return;
+
+        // Process Team A
+        if (data.teams_info.team_a) {
+            const teamA = data.teams_info.team_a;
+            const player1RGX = parseInt(teamA.player_1_rgx) || 0;
+            const player2RGX = parseInt(teamA.player_2_rgx) || 0;
+            const player1Pro = teamA.player_1_is_pro === 1 || teamA.player_1_is_pro === true;
+            const player2Pro = teamA.player_2_is_pro === 1 || teamA.player_2_is_pro === true;
+            
+            const teamRGX = player1RGX + player2RGX;
+            const isTeamPro = player1Pro && player2Pro;
+            
+            // Update team RGX display
+            $(`[fb-data="teams_info.team_a.team_rgx"]`).each((_, elem) => {
+                const $elem = $(elem);
+                $elem.text(teamRGX);
+                $elem.closest('.rgx').toggleClass('pro', isTeamPro);
+            });
+        }
+        
+        // Process Team B
+        if (data.teams_info.team_b) {
+            const teamB = data.teams_info.team_b;
+            const player1RGX = parseInt(teamB.player_1_rgx) || 0;
+            const player2RGX = parseInt(teamB.player_2_rgx) || 0;
+            const player1Pro = teamB.player_1_is_pro === 1 || teamB.player_1_is_pro === true;
+            const player2Pro = teamB.player_2_is_pro === 1 || teamB.player_2_is_pro === true;
+            
+            const teamRGX = player1RGX + player2RGX;
+            const isTeamPro = player1Pro && player2Pro;
+            
+            // Update team RGX display
+            $(`[fb-data="teams_info.team_b.team_rgx"]`).each((_, elem) => {
+                const $elem = $(elem);
+                $elem.text(teamRGX);
+                $elem.closest('.rgx').toggleClass('pro', isTeamPro);
+            });
+        }
+    }
+
+    /**
+     * Get current data from the scoreboard
+     * @returns {Object} Current data object
+     */
+    getCurrentRGXData() {
+        // This method should return the current data being used by the scoreboard
+        // For now, we'll try to reconstruct it from the DOM elements
+        const data = {
+            teams_info: {
+                team_a: {},
+                team_b: {}
+            }
+        };
+        
+        // Extract team A data
+        data.teams_info.team_a.player_1_rgx = $('[fb-data="teams_info.team_a.player_1_rgx"]').first().text();
+        data.teams_info.team_a.player_2_rgx = $('[fb-data="teams_info.team_a.player_2_rgx"]').first().text();
+        data.teams_info.team_a.player_1_is_pro = $('[fb-data="teams_info.team_a.player_1_rgx"]').first().hasClass('pro');
+        data.teams_info.team_a.player_2_is_pro = $('[fb-data="teams_info.team_a.player_2_rgx"]').first().hasClass('pro');
+        
+        // Extract team B data
+        data.teams_info.team_b.player_1_rgx = $('[fb-data="teams_info.team_b.player_1_rgx"]').first().text();
+        data.teams_info.team_b.player_2_rgx = $('[fb-data="teams_info.team_b.player_2_rgx"]').first().text();
+        data.teams_info.team_b.player_1_is_pro = $('[fb-data="teams_info.team_b.player_1_rgx"]').first().hasClass('pro');
+        data.teams_info.team_b.player_2_is_pro = $('[fb-data="teams_info.team_b.player_2_rgx"]').first().hasClass('pro');
+        
+        return data;
     }
 
     /**
@@ -553,7 +656,13 @@ export class Scoreboard {
             $elem.attr('src', value || '');
             return;
         } else if ($elem.is('input[type="checkbox"]')) {
-            $elem.prop('checked', value === 1 || value === true);
+            const isChecked = value === 1 || value === true;
+            $elem.prop('checked', isChecked);
+            // Ensure toggle-switch visuals reflect state for any checkbox (admin or non-admin)
+            const $toggleSwitch = $elem.closest('.toggle-switch');
+            if ($toggleSwitch.length > 0) {
+                $toggleSwitch.toggleClass('active', isChecked);
+            }
         } else if ($elem.is('input[type="color"]')) {
             $elem.val(value);
         } else if ($elem.is('input') || $elem.is('select')) {
@@ -561,6 +670,9 @@ export class Scoreboard {
         } else {
             $elem.text(value);
         }
+
+        // Handle player RGX values for Match Preview overlay (similar to name splitting)
+        
     }
 
     /**
@@ -1072,6 +1184,7 @@ export class Scoreboard {
         this.updateScoreHistoryVisibility();
         this.updateScoreHistoryChartVisibility();
         this.updateMatchStatisticsVisibility();
+        this.updateMatchPreviewVisibility();
     }
 
     updateGroupScoreVisibility() {
@@ -1113,7 +1226,7 @@ export class Scoreboard {
     }
 
     updateMatchStatisticsVisibility() {
-        if (this.theme != 'full') {
+        if (this.theme != 'full' && this.theme != 'small') {
             const isVisible = this.settings.show_match_statistics === 1;
         
             if (isVisible) {
@@ -1128,6 +1241,23 @@ export class Scoreboard {
                 this.$matchStatisticsContainer.removeClass('animate');
                 setTimeout(() => {
                     this.$matchStatisticsContainer.removeClass('animate show').addClass('hidden');
+                }, 300);
+            }
+        }
+    }
+
+    updateMatchPreviewVisibility() {
+        if (this.theme != 'full' && this.theme != 'small') {
+            const isVisible = this.settings.show_match_preview === 1;
+            if (isVisible) {
+                this.$matchPreviewContainer.addClass('animate');
+                setTimeout(() => {
+                    this.$matchPreviewContainer.addClass('show').removeClass('hidden');
+                }, 400);
+            } else {
+                this.$matchPreviewContainer.removeClass('animate');
+                setTimeout(() => {
+                    this.$matchPreviewContainer.removeClass('animate show').addClass('hidden');
                 }, 300);
             }
         }
@@ -1233,7 +1363,7 @@ export class Scoreboard {
     getServingPlayerAtPoint(pointIndex, set = this.active_set) {
         const startingServer = this.getStartingServer(set);
         const startingReceiver = this.getStartingReceiver(set);
-        const isOvertime = this.isInOvertime(set, pointIndex + 1);
+        const isOvertime = this.isInOvertime(set, pointIndex);
 
         let serveOrder;
         if (startingServer == 'a' && startingReceiver == 'c') {
@@ -1366,7 +1496,7 @@ export class Scoreboard {
     getReceivingPlayerAtPoint(pointIndex, set) {
         const startingServer = this.getStartingServer(set);
         const startingReceiver = this.getStartingReceiver(set);
-        const isOvertime = this.isInOvertime(set, pointIndex + 1);
+        const isOvertime = this.isInOvertime(set, pointIndex);
 
         let receivingOrder, overtimeOrder15, overtimeOrder21;
         if (startingServer == 'a' && startingReceiver == 'c') {

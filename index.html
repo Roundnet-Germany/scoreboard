@@ -221,7 +221,7 @@
                 <div class="content">
                     <p class="text" id="Occasion" fb-data="tournament_name">Occasion</p>
                     <span class="divider"></span>
-                    <p class="text" id="Mode">span fb-data="game_settings.set_mode"></span> to <span fb-data="game_settings.win_points"></span> - HC<span fb-data="game_settings.hardcap"></span></p>
+                    <p class="text" id="Mode"><span fb-data="game_settings.set_mode"></span> to <span fb-data="game_settings.win_points"></span> - HC<span fb-data="game_settings.hardcap"></span></p>
                 </div>
             </div>
 
@@ -315,8 +315,8 @@
 
 
 
-    <div class="match_statistics">
-        <div class="statistics_header">
+    <div class="match_statistics overlay">
+        <div class="overlay_header">
             <div class="left">
                 <img id="tournament_logo" src="" alt="logo" fb-data="tournament_logo">
                 <p fb-data="tournament_name">Tournament Name</p>
@@ -334,8 +334,15 @@
             <div class="team_stats_container teams">
                 <div class="team_stats team_a">
                     <div class="team_header">
-                        <div class="color_indicator" fb-data="teams_info.team_a.color"></div>
-                        <h4 fb-data="teams_info.team_a.name">Team A</h4>
+                        <div class="left">
+                            <div class="color_indicator" fb-data="teams_info.team_a.color"></div>
+                            <h4 fb-data="teams_info.team_a.name">Team A</h4>
+                        </div>
+                        <div class="team_rgx rgx">
+                            <img id="normal" src="img/rgx_small.png" alt="">
+                            <img id="pro" src="img/rgxpro_small.png" alt="">
+                            <span id="RGX" fb-data="teams_info.team_a.team_rgx">0</span>
+                        </div>
                     </div>
                     <div class="team_overall_stats">
                         <div class="stat_item">
@@ -378,8 +385,15 @@
 
                 <div class="team_stats team_b">
                     <div class="team_header">
-                        <div class="color_indicator" fb-data="teams_info.team_b.color"></div>
-                        <h4 fb-data="teams_info.team_b.name">Team B</h4>
+                        <div class="left">
+                            <div class="color_indicator" fb-data="teams_info.team_b.color"></div>
+                            <h4 fb-data="teams_info.team_b.name">Team B</h4>
+                        </div>
+                        <div class="team_rgx rgx">
+                            <img id="normal" src="img/rgx_small.png" alt="">
+                            <img id="pro" src="img/rgxpro_small.png" alt="">
+                            <span id="RGX" fb-data="teams_info.team_b.team_rgx">0</span>
+                        </div>
                     </div>
                     <div class="team_overall_stats">
                         <div class="stat_item">
@@ -873,6 +887,132 @@
                 </div>
                 <!-- <div class="number_inside_container"><p class="number_inside">1</p></div> -->
                 
+            </div>
+        </div>
+    </div>
+
+    <div class="match_preview overlay hidden">
+        <div class="overlay_header">
+            <div class="left">
+                <img id="tournament_logo" src="" alt="logo" fb-data="tournament_logo">
+                <p fb-data="tournament_name">Tournament Name</p>
+            </div>
+            <div class="center">
+                <h3>Match Preview</h3>
+                <h4 fb-data="phase">Game Name</h4>
+            </div>
+            <div class="right">
+                <img src="img/rg_logo_white.png" alt="RG Logo">
+            </div>
+        </div>
+
+        <div class="players_container">
+            <div class="team team_a">
+                <div class="team_header">
+                    <!-- <div class="color_indicator" fb-data="teams_info.team_a.color"></div> -->
+                    <h4 fb-data="teams_info.team_a.name">Team A</h4>
+                    <div class="team_rgx rgx">
+                        <img id="normal" src="img/rgx_small.png" alt="">
+                        <img id="pro" src="img/rgxpro_small.png" alt="">
+                        <span id="RGX" fb-data="teams_info.team_a.team_rgx">0</span>
+                    </div>
+                </div>
+                <div class="players">
+                    <div class="player a">
+                        <img src="" alt="" fb-data="teams_info.team_a.player_1_image">
+                        <div class="details">
+                            <div class="name">
+                                <p fb-data="teams_info.team_a.player_1" part="prename">Carmen</p>
+                                <h5 fb-data="teams_info.team_a.player_1" part="surname">Radmacher</h5>                            
+                            </div>
+                            
+                            <div class="club">
+                                <img src="" alt="" class="club_logo" fb-data="teams_info.team_a.player_1_club_logo">
+                                <p fb-data="teams_info.team_a.player_1_club">Stuttgarter Stuten</p>
+                            </div>
+
+                            <div class="rgx">
+                                <img id="normal" src="img/rgx_small.png" alt="">
+                                <img id="pro" src="img/rgxpro_small.png" alt="">
+                                <span id="RGX" fb-data="teams_info.team_a.player_1_rgx">12345</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="player b">
+                        <img src="" alt="" fb-data="teams_info.team_a.player_2_image">
+                        <div class="details">
+                            <div class="name">
+                                <p fb-data="teams_info.team_a.player_2" part="prename">Carmen</p>
+                                <h5 fb-data="teams_info.team_a.player_2" part="surname">Radmacher</h5>                            
+                            </div>
+                            
+                            <div class="club">
+                                <img src="" alt="" class="club_logo" fb-data="teams_info.team_a.player_2_club_logo">
+                                <p fb-data="teams_info.team_a.player_2_club">Stuttgarter Stuten</p>
+                            </div>
+
+                            <div class="rgx">
+                                <img id="normal" src="img/rgx_small.png" alt="">
+                                <img id="pro" src="img/rgxpro_small.png" alt="">
+                                <span id="RGX" fb-data="teams_info.team_a.player_2_rgx">12345</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="team team_b">
+                <div class="team_header">
+                    <!-- <div class="color_indicator" fb-data="teams_info.team_b.color"></div> -->
+                    <h4 fb-data="teams_info.team_b.name">Team B</h4>
+                    <div class="team_rgx rgx">
+                        <img id="normal" src="img/rgx_small.png" alt="">
+                        <img id="pro" src="img/rgxpro_small.png" alt="">
+                        <span id="RGX" fb-data="teams_info.team_b.team_rgx">0</span>
+                    </div>
+                </div>
+                <div class="players">
+                    <div class="player c">
+                        <img src="" alt="" fb-data="teams_info.team_b.player_1_image">
+                        <div class="details">
+                            <div class="name">
+                                <p fb-data="teams_info.team_b.player_1" part="prename">Carmen</p>
+                                <h5 fb-data="teams_info.team_b.player_1" part="surname">Radmacher</h5>                            
+                            </div>
+                            
+                            <div class="club">
+                                <img src="" alt="" class="club_logo" fb-data="teams_info.team_b.player_1_club_logo">
+                                <p fb-data="teams_info.team_b.player_1_club">Stuttgarter Stuten</p>
+                            </div>
+
+                            <div class="rgx">
+                                <img id="normal" src="img/rgx_small.png" alt="">
+                                <img id="pro" src="img/rgxpro_small.png" alt="">
+                                <span id="RGX" fb-data="teams_info.team_b.player_1_rgx">12345</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="player d">
+                        <img src="" alt="" fb-data="teams_info.team_b.player_2_image">
+                        <div class="details">
+                            <div class="name">
+                                <p fb-data="teams_info.team_b.player_2" part="prename">Jessica</p>
+                                <h5 fb-data="teams_info.team_b.player_2" part="surname">RIEDELSHEIMER</h5>                            
+                            </div>
+                            
+                            <div class="club">
+                                <img src="" alt="" class="club_logo" fb-data="teams_info.team_b.player_2_club_logo">
+                                <p fb-data="teams_info.team_b.player_2_club">Stuttgarter Stuten</p>
+                            </div>
+
+                            <div class="rgx">
+                                <img id="normal" src="img/rgx_small.png" alt="">
+                                <img id="pro" src="img/rgxpro_small.png" alt="">
+                                <span id="RGX" fb-data="teams_info.team_b.player_2_rgx">12345</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

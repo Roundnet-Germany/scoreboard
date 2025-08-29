@@ -1,6 +1,3 @@
-
-
-
 :root {
   --primary: #fcc155;
   --secondary: #C55151;
@@ -788,6 +785,14 @@ select.small {
   width: 100%;
 }
 
+.setting_entry .right {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
 .setting_entry span {
   margin-bottom: 2px;
 }
@@ -922,3 +927,48 @@ select#Match_Stats_Type {
 .input_container .input-with-trailing-icon {
     width: 100%;
 }
+
+/* Player Extras layout */
+
+.container.player_extras .inner .players {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  row-gap: 26px;
+  padding-bottom: 20px;
+}
+
+.container.player_extras .inner .player_letter {
+  font-weight: 600;
+}
+
+.container.player_extras .inner .player_fields {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.container.player_extras .inner .input_group.player_row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.container.player_extras .inner .input_group {
+  flex-grow: 1;
+}
+
+.container.player_extras .inner .input_container.boolean {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 4px;
+}
+

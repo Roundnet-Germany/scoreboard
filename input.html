@@ -231,11 +231,11 @@
                         <div class="bottom">
                             <div class="current_players_info">
                                 <div class="current_server">
-                                    <span class="label">Current Server:</span>
+                                    <span class="label">Serve:</span>
                                     <span class="player_name" id="current_server_name">-</span>
                                 </div>
                                 <div class="current_receiver">
-                                    <span class="label">Current Receiver:</span>
+                                    <span class="label">Receive:</span>
                                     <span class="player_name" id="current_receiver_name">-</span>
                                 </div>
                             </div>
@@ -426,25 +426,32 @@
                         </div>
 
                         <div class="setting_entry boolean">
-                            <label>Statistics Overview:</label>
-                            <label class="toggle-switch" for="Show_Match_Statistics">
-                                <input type="checkbox" id="Show_Match_Statistics" fb-data="admin_settings.show_match_statistics">
+                            <label>Match Preview:</label>
+                            <label class="toggle-switch" for="Show_Match_Preview">
+                                <input type="checkbox" id="Show_Match_Preview" fb-data="admin_settings.show_match_preview">
                             </label>
                         </div>
-                        <div class="setting_entry boolean" id="match_stats_type_container">
-                            <label for="Match_Stats_Type">Statistics Context:</label>
-                            <select id="Match_Stats_Type" fb-data="admin_settings.match_stats_type">
-                                <option value="match">Match</option>
-                                <option value="active_set">Active Set</option>
-                                <option value="1">Set 1</option>
-                                <option value="2">Set 2</option>
-                                <option value="3">Set 3</option>
-                                <option value="4">Set 4</option>
-                                <option value="5">Set 5</option>
-                                <option value="6">Set 6</option>
-                                <option value="7">Set 7</option>
-                            </select>
+
+                        <div class="setting_entry boolean">
+                            <label>Statistics Overview:</label>
+                            <div class="right">
+                                <select id="Match_Stats_Type" fb-data="admin_settings.match_stats_type">
+                                    <option value="match">Match</option>
+                                    <option value="active_set">Active Set</option>
+                                    <option value="1">Set 1</option>
+                                    <option value="2">Set 2</option>
+                                    <option value="3">Set 3</option>
+                                    <option value="4">Set 4</option>
+                                    <option value="5">Set 5</option>
+                                    <option value="6">Set 6</option>
+                                    <option value="7">Set 7</option>
+                                </select>
+                                <label class="toggle-switch" for="Show_Match_Statistics">
+                                    <input type="checkbox" id="Show_Match_Statistics" fb-data="admin_settings.show_match_statistics">
+                                </label>
+                            </div>
                         </div>
+
                     </div>
                 </div>
             </div>
@@ -478,7 +485,7 @@
 
             <div class="row_section player_extras">
                 <div class="container player_extras">
-                    <h3>Extras</h3>
+                    <h3>Extra Data</h3>
                     <div class="inner">
                         <div class="input_group">
                             <div class="input_container">
@@ -489,95 +496,161 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="input_group">
-                            <div class="input_container">
-                                <label for="A_Player_1_Image">Player A Image URL</label>
-                                <div class="input-with-trailing-icon">
-                                    <input type="text" class="text" id="A_Player_1_Image" value="" placeholder="https://example.com/player-a.jpg" fb-data="teams_info.team_a.player_1_image">
-                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                        <div class="players">
+                            <div class="input_group player_row">
+                                <div class="player_letter" fb-data="teams_info.team_a.player_1">Player A</div>
+                                <div class="player_fields">
+                                    <div class="input_container">
+                                        <label for="A_Player_1_Image">Image URL</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="A_Player_1_Image" value="" placeholder="https://example.com/player-a.jpg" fb-data="teams_info.team_a.player_1_image">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container">
+                                        <label for="A_Player_1_Club">Club</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="A_Player_1_Club" value="" placeholder="e.g. Stuttgarter Stuten" fb-data="teams_info.team_a.player_1_club">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container">
+                                        <label for="A_Player_1_Club_Logo">Club Logo URL</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="A_Player_1_Club_Logo" value="" placeholder="https://example.com/club-logo.png" fb-data="teams_info.team_a.player_1_club_logo">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container">
+                                        <label for="A_Player_1_RGX">RGX</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="A_Player_1_RGX" value="" placeholder="z. B. 1465" fb-data="teams_info.team_a.player_1_rgx">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container boolean">
+                                        <label>Is Pro:</label>
+                                        <label class="toggle-switch" for="A_Player_1_Is_Pro">
+                                            <input type="checkbox" id="A_Player_1_Is_Pro" fb-data="teams_info.team_a.player_1_is_pro">
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="input_container">
-                                <label for="A_Player_1_Club">Player A Club</label>
-                                <div class="input-with-trailing-icon">
-                                    <input type="text" class="text" id="A_Player_1_Club" value="" placeholder="e.g. Stuttgarter Stuten" fb-data="teams_info.team_a.player_1_club">
-                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                            <div class="input_group player_row">
+                                <div class="player_letter" fb-data="teams_info.team_a.player_2">Player B</div>
+                                <div class="player_fields">
+                                    <div class="input_container">
+                                        <label for="A_Player_2_Image">Image URL</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="A_Player_2_Image" value="" placeholder="https://example.com/player-b.jpg" fb-data="teams_info.team_a.player_2_image">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container">
+                                        <label for="A_Player_2_Club">Club</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="A_Player_2_Club" value="" placeholder="e.g. Stuttgarter Stuten" fb-data="teams_info.team_a.player_2_club">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container">
+                                        <label for="A_Player_2_Club_Logo">Club Logo URL</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="A_Player_2_Club_Logo" value="" placeholder="https://example.com/club-logo.png" fb-data="teams_info.team_a.player_2_club_logo">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container">
+                                        <label for="A_Player_2_RGX">RGX</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="A_Player_2_RGX" value="" placeholder="z. B. 1465" fb-data="teams_info.team_a.player_2_rgx">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container boolean">
+                                        <label>Is Pro:</label>
+                                        <label class="toggle-switch" for="A_Player_2_Is_Pro">
+                                            <input type="checkbox" id="A_Player_2_Is_Pro" fb-data="teams_info.team_a.player_2_is_pro">
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="input_container">
-                                <label for="A_Player_1_Club_Logo">Player A Club Logo URL</label>
-                                <div class="input-with-trailing-icon">
-                                    <input type="text" class="text" id="A_Player_1_Club_Logo" value="" placeholder="https://example.com/club-logo.png" fb-data="teams_info.team_a.player_1_club_logo">
-                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                            <div class="input_group player_row">
+                                <div class="player_letter" fb-data="teams_info.team_b.player_1">Player C</div>
+                                <div class="player_fields">
+                                    <div class="input_container">
+                                        <label for="B_Player_1_Image">Image URL</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="B_Player_1_Image" value="" placeholder="https://example.com/player-c.jpg" fb-data="teams_info.team_b.player_1_image">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container">
+                                        <label for="B_Player_1_Club">Club</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="B_Player_1_Club" value="" placeholder="e.g. Stuttgarter Stuten" fb-data="teams_info.team_b.player_1_club">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container">
+                                        <label for="B_Player_1_Club_Logo">Club Logo URL</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="B_Player_1_Club_Logo" value="" placeholder="https://example.com/club-logo.png" fb-data="teams_info.team_b.player_1_club_logo">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container">
+                                        <label for="B_Player_1_RGX">RGX</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="B_Player_1_RGX" value="" placeholder="z. B. 1465" fb-data="teams_info.team_b.player_1_rgx">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container boolean">
+                                        <label>Is Pro:</label>
+                                        <label class="toggle-switch" for="B_Player_1_Is_Pro">
+                                            <input type="checkbox" id="B_Player_1_Is_Pro" fb-data="teams_info.team_b.player_1_is_pro">
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="input_group">
-                            <div class="input_container">
-                                <label for="A_Player_2_Image">Player B Image URL</label>
-                                <div class="input-with-trailing-icon">
-                                    <input type="text" class="text" id="A_Player_2_Image" value="" placeholder="https://example.com/player-b.jpg" fb-data="teams_info.team_a.player_2_image">
-                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
-                                </div>
-                            </div>
-                            <div class="input_container">
-                                <label for="A_Player_2_Club">Player B Club</label>
-                                <div class="input-with-trailing-icon">
-                                    <input type="text" class="text" id="A_Player_2_Club" value="" placeholder="e.g. Stuttgarter Stuten" fb-data="teams_info.team_a.player_2_club">
-                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
-                                </div>
-                            </div>
-                            <div class="input_container">
-                                <label for="A_Player_2_Club_Logo">Player B Club Logo URL</label>
-                                <div class="input-with-trailing-icon">
-                                    <input type="text" class="text" id="A_Player_2_Club_Logo" value="" placeholder="https://example.com/club-logo.png" fb-data="teams_info.team_a.player_2_club_logo">
-                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="input_group">
-                            <div class="input_container">
-                                <label for="B_Player_1_Image">Player C Image URL</label>
-                                <div class="input-with-trailing-icon">
-                                    <input type="text" class="text" id="B_Player_1_Image" value="" placeholder="https://example.com/player-c.jpg" fb-data="teams_info.team_b.player_1_image">
-                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
-                                </div>
-                            </div>
-                            <div class="input_container">
-                                <label for="B_Player_1_Club">Player C Club</label>
-                                <div class="input-with-trailing-icon">
-                                    <input type="text" class="text" id="B_Player_1_Club" value="" placeholder="e.g. Stuttgarter Stuten" fb-data="teams_info.team_b.player_1_club">
-                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
-                                </div>
-                            </div>
-                            <div class="input_container">
-                                <label for="B_Player_1_Club_Logo">Player C Club Logo URL</label>
-                                <div class="input-with-trailing-icon">
-                                    <input type="text" class="text" id="B_Player_1_Club_Logo" value="" placeholder="https://example.com/club-logo.png" fb-data="teams_info.team_b.player_1_club_logo">
-                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="input_group">
-                            <div class="input_container">
-                                <label for="B_Player_2_Image">Player D Image URL</label>
-                                <div class="input-with-trailing-icon">
-                                    <input type="text" class="text" id="B_Player_2_Image" value="" placeholder="https://example.com/player-d.jpg" fb-data="teams_info.team_b.player_2_image">
-                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
-                                </div>
-                            </div>
-                            <div class="input_container">
-                                <label for="B_Player_2_Club">Player D Club</label>
-                                <div class="input-with-trailing-icon">
-                                    <input type="text" class="text" id="B_Player_2_Club" value="" placeholder="e.g. Stuttgarter Stuten" fb-data="teams_info.team_b.player_2_club">
-                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
-                                </div>
-                            </div>
-                            <div class="input_container">
-                                <label for="B_Player_2_Club_Logo">Player D Club Logo URL</label>
-                                <div class="input-with-trailing-icon">
-                                    <input type="text" class="text" id="B_Player_2_Club_Logo" value="" placeholder="https://example.com/club-logo.png" fb-data="teams_info.team_b.player_2_club_logo">
-                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                            <div class="input_group player_row">
+                                <div class="player_letter" fb-data="teams_info.team_b.player_2">Player D</div>
+                                <div class="player_fields">
+                                    <div class="input_container">
+                                        <label for="B_Player_2_Image">Image URL</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="B_Player_2_Image" value="" placeholder="https://example.com/player-d.jpg" fb-data="teams_info.team_b.player_2_image">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container">
+                                        <label for="B_Player_2_Club">Club</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="B_Player_2_Club" value="" placeholder="e.g. Stuttgarter Stuten" fb-data="teams_info.team_b.player_2_club">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container">
+                                        <label for="B_Player_2_Club_Logo">Club Logo URL</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="B_Player_2_Club_Logo" value="" placeholder="https://example.com/club-logo.png" fb-data="teams_info.team_b.player_2_club_logo">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container">
+                                        <label for="B_Player_2_RGX">RGX</label>
+                                        <div class="input-with-trailing-icon">
+                                            <input type="text" class="text" id="B_Player_2_RGX" value="" placeholder="z. B. 1465" fb-data="teams_info.team_b.player_2_rgx">
+                                            <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                        </div>
+                                    </div>
+                                    <div class="input_container boolean">
+                                        <label>Is Pro:</label>
+                                        <label class="toggle-switch" for="B_Player_2_Is_Pro">
+                                            <input type="checkbox" id="B_Player_2_Is_Pro" fb-data="teams_info.team_b.player_2_is_pro">
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         </div>
