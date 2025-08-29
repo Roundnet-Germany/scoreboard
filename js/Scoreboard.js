@@ -1,18 +1,18 @@
 import { themes, readData, getPathsAndValues, getColorBrightness, rgb2hex, writeData, showToast, copyToClipboard } from "./main.js";
 
-/**
- * Scoreboard class manages the live scoreboard functionality for both input and output modes.
- * Handles real-time data synchronization, UI updates, event history, and theme management.
- */
+
+/* ==============================================================================
+* Scoreboard class manages the live scoreboard functionality for both input and output modes.
+* Handles real-time data synchronization, UI updates, event history, and theme management.
+* ============================================================================== */
 export class Scoreboard {
     /**
-     * Initialize the Scoreboard with configuration and DOM elements
      * @param {string} type - 'input' for admin interface, 'output' for display
      * @param {jQuery} $html_frame - Main scoreboard container
      * @param {number} channel - Channel number for data synchronization
      * @param {string} theme - Theme identifier for styling
      * @param {User|null} user - Authenticated user object (required for input mode)
-     */
+    */  
     constructor(type = 'input', $html_frame = $('.scoreboard'), channel, theme = 'rg', user = null) {
         this.type = type;
         this.user = user;
@@ -26,6 +26,7 @@ export class Scoreboard {
         this.$scoreboardInputs = this.$html_frame.find($('input:not([type=submit]), textarea'));
         this.$setCounter = $('#Set_Count');
         this.$winPoints = $('#win_points');
+        this.$hardcap = $('#Hardcap');
         this.$resetScoresButton = $('#reset_scores');
         this.$sets = $('.set');
         this.$setScoreCounterA = $('.a_sets_won');
@@ -39,6 +40,8 @@ export class Scoreboard {
         this.$scoreHistoryContainer = $('.score_history');
         this.$matchStatisticsContainer = $('.match_statistics');
         this.$matchPreviewContainer = $('.match_preview');
+        this.$lockIcons = $('.lock-icon');
+        this.$toggleSwitches = $('.toggle-switch input[type="checkbox"]')
         
         // Stored variables
         this.channel = Number(channel);
@@ -72,10 +75,11 @@ export class Scoreboard {
         this.init();
     }
 
-    /**
+
+    /* ==============================================================================
      * Initialize the scoreboard with event listeners and data synchronization
      * Sets up intervals for UI updates and data fetching based on board type
-     */
+     * ============================================================================== */
     init() {
         this.initEventListeners();
         this.insertLiveData();
@@ -84,13 +88,10 @@ export class Scoreboard {
         this.update_interval = setInterval(() => {
             this.updateUI();
         }, 300);
-        // TODO: reset this interval to 300, if higher
-        // TODO: and data interval to 1500 : 300
 
-        // Simplified interval logic - removed redundant code
-        // Input mode: slower updates (1500ms) since admin controls the data
-        // Output mode: faster updates (300ms) for real-time display
-        const dataIntervalDelay = this.type === 'input' ? 1500 : 500;
+        // Input mode: slower updates (2000ms) since admin controls the data
+        // Output mode: faster updates (500ms) for real-time display
+        const dataIntervalDelay = this.type === 'input' ? 2000 : 500;
         this.data_interval = setInterval(() => {
             this.insertLiveData();
         }, dataIntervalDelay);
@@ -101,56 +102,17 @@ export class Scoreboard {
         }
     }
 
-    /**
-     * Update the starting team selector to show the current set's starting team
-     */
-    updateStartingTeamSelector() {
-        // Update all starting server selectors for all sets
-        // for (let setNumber = 1; setNumber <= 7; setNumber++) {
-        //     const $serverSelector = this.$html_frame.find(`#starting_server_${setNumber}`);
-        //     if ($serverSelector.length > 0) {
-        //         const currentStartingServer = this.getStartingServer(setNumber);
-        //         if (currentStartingServer) {
-        //             $serverSelector.val(currentStartingServer);
-        //         }
-        //     }
-            
-        //     const $receiverSelector = this.$html_frame.find(`#starting_receiver_${setNumber}`);
-        //     if ($receiverSelector.length > 0) {
-        //         const currentStartingReceiver = this.getStartingReceiver(setNumber);
-        //         if (currentStartingReceiver) {
-        //             $receiverSelector.val(currentStartingReceiver);
-        //         }
-        //     }
-        // }
-        
-        // Update hidden starting_server and starting_receiver fields in index.html to reflect current set
-        // if (this.type === 'output') {
-        //     this.$html_frame.find(`[fb-data*="score.set_"][fb-data*=".starting_server"]`).each((index, element) => {
-        //         const $element = $(element);
-        //         $element.attr('fb-data', `score.set_${this.active_set}.starting_server`);
-        //     });
-            
-        //     this.$html_frame.find(`[fb-data*="score.set_"][fb-data*=".starting_receiver"]`).each((index, element) => {
-        //         const $element = $(element);
-        //         $element.attr('fb-data', `score.set_${this.active_set}.starting_receiver`);
-        //     });
-        // }
-    }
 
-    /**
+    /* ==============================================================================
      * Update all UI components in a single pass for performance
-     * Only updates score history for output mode to avoid unnecessary processing
-     */
+     * ============================================================================== */
     updateUI() {
         this.updateSets();
         this.updateSetScore();
         this.updateActiveScore();
         this.updateIndicators();
         this.updateSettings();
-        this.updateStartingTeamSelector();
         this.handleEventHistory();
-        this.updateOldScoreInputCounter();
         this.updateCurrentPlayersDisplay();
         
         // Only update score history for output type
@@ -162,19 +124,16 @@ export class Scoreboard {
         }
     }
 
-    /**
+
+    /** ==============================================================================     
      * Apply theme styling and HTML structure based on theme configuration
-     * @param {string} theme - Theme identifier from themes object
-     */
+     * ============================================================================== */
     setTheme(theme) {
-        // console.log("setting theme to ", theme);
         // Simplified fallback logic
         if (!(theme in themes)) {
             theme = this.type === 'output' ? 'full' : 'rg';
             this.theme = theme;
         }
-
-        // console.log("theme is ", theme);
 
         const css_path = themes[theme].css_path;
         const extensionIndex = css_path.lastIndexOf('.');
@@ -194,8 +153,7 @@ export class Scoreboard {
             const html_structure = themes[theme].html_structure;
             $('.scoreboard').hide();
             $(`.scoreboard[theme="${html_structure}"]`).show();
-            
-            // Simplified conditional logic
+
             $('.score_history').toggleClass('hidden', html_structure !== 'vertical_score');
             $('.match_statistics').toggleClass('hidden', html_structure !== 'vertical_score');
             $('.match_preview').toggleClass('hidden', html_structure !== 'vertical_score');
@@ -203,17 +161,11 @@ export class Scoreboard {
     }
 
 
-    /**
+    /** ==============================================================================  
      * Initialize all event listeners for user interactions
-     * Handles score changes, set navigation, settings updates, and data synchronization
-     */
+     * Handles score changes, set navigation, settings updates and more
+     * ============================================================================== */
     initEventListeners() {
-        // Theme input dropdown listener
-        this.$themeInput.change((event) => {
-            this.theme = $(event.target).val();
-            this.updateUrlOutput();
-        });
-
         // Channel input dropdown listener
         this.$channelInput.change((event) => {
             this.channel = $(event.target).val();
@@ -221,15 +173,21 @@ export class Scoreboard {
             this.updateUI();
         });
 
+        // Data import button handler
+        $('#import_data').click(() => {
+            this.importDataFromJson();
+        });
+
         // Starting team dropdown listener
         this.$html_frame.find('.starting_team_selector select').change((event) => {
             this.updateIndicators();
             this.uploadData([$(event.target)]);
-        });
-
-        // Update starting team selector when set changes
-        this.$setCounter.on('input', () => {
-            this.updateStartingTeamSelector();
+        });     
+        
+        // Output Theme input dropdown listener
+        this.$themeInput.change((event) => {
+            this.theme = $(event.target).val();
+            this.updateUrlOutput();
         });
 
         // URL output container click handler
@@ -240,45 +198,61 @@ export class Scoreboard {
             showToast('📋', 'Copied url to clipboard');
         });
 
-        // Data import button handler
-        $('#import_data').click(() => {
-            this.importDataFromJson();
+        // Initialize lock icons functionality
+        this.$lockIcons.off('click').on('click', (e) => {
+            e.preventDefault();
+            const $icon = $(e.currentTarget);
+            const $input = $icon.closest('.input-with-trailing-icon').find('input');
+            const fieldId = $input.attr('id');
+            
+            // Toggle lock state
+            if ($icon.hasClass('locked')) {
+                $icon.removeClass('locked').text('lock_open');
+                console.log(`Unlocked field: ${fieldId}`);
+            } else {
+                $icon.addClass('locked').text('lock');
+                console.log(`Locked field: ${fieldId}`);
+            }
         });
 
-        // Initialize lock icons functionality
-        this.initializeLockIcons();
-
-        // Score input handler with simplified logic
+        // Score input handler
         this.$scoreboardInputs.filter('[fb-data*="score"]').on('input', (event) => {
             const $target = $(event.target);
             const { team, set } = this.getScoreElemDetails($target);
             const newScore = Number($target.val()) || 0; // Default to 0 if NaN
-            const oldScore = Number(this.$html_frame.find('.team_score').attr(`score_${team}`)) || 0;
             const isSquadScore = $target.attr('fb-data').includes('squad_score');
+            const eventType = isSquadScore ? 'squad_score' : 'score';
 
-            // Only add to event history if we have valid scores
-            if (!isNaN(newScore) && !isNaN(oldScore)) {
-                // Handle score decrease (remove history events)
-                if (newScore < oldScore && !isSquadScore) {
-                    this.removeScoreHistoryEvents(team, newScore, set);
-                } else {
-                    // Add new event to history
-                    const eventData = {
-                        type: isSquadScore ? 'squad_score' : 'score',
-                        team: team,
-                        score: newScore,
-                    };
-                    
-                    if (!isSquadScore) {
-                        eventData.set = Number(set);
-                    }
-                    
-                    this.event_history.push(eventData);
-                    // console.log(this.event_history);
+            // Get oldScore from event history for this set and team
+            let oldScore = 0;
+            for (let i = this.event_history.length - 1; i >= 0; i--) {
+                const ev = this.event_history[i];
+                if (
+                    ev.type === eventType &&
+                    ev.team === team &&
+                    (isSquadScore || ev.set == set)
+                ) {
+                    oldScore = Number(ev.score) || 0;
+                    break;
                 }
             }
 
-            this.updateOldScoreInputCounter();
+            // Add or remove from event history
+            if (!isNaN(newScore) && !isNaN(oldScore)) {
+                // Handle score decrease (remove history events)
+                if (newScore < oldScore && !isSquadScore) {
+                    this.removeEventHistoryEvents(team, newScore, set);
+                } else { // Add new event to history
+                    const eventData = {
+                        type: eventType,
+                        team: team,
+                        score: newScore,
+                        set: isSquadScore ? 'squad' : Number(set)
+                    };
+                    this.event_history.push(eventData);
+                }
+            }
+
             this.updateCurrentPlayersDisplay();
             this.uploadData([$target]);
         });
@@ -337,7 +311,7 @@ export class Scoreboard {
         });
 
         // Toggle switch handler
-        $('.toggle-switch input[type="checkbox"]').change((event) => {
+        this.$toggleSwitches.change((event) => {
             const $checkbox = $(event.target);
             const $toggleSwitch = $checkbox.closest('.toggle-switch');
             const value = $checkbox.prop('checked') ? 1 : 0;
@@ -352,7 +326,7 @@ export class Scoreboard {
                 this.settings[part] = value;
                 this.updateSettings();
             }
-            // Always upload the changed checkbox
+
             this.uploadData([$checkbox]);
         });
         
@@ -368,7 +342,12 @@ export class Scoreboard {
         this.$winPoints.on('input', (event) => {
             const value = Number($(event.target).val());
             this.gameSettings.win_points = value;
-            this.uploadData([$(event.target)]);
+        });
+
+        // Hardcap score handler
+        this.$hardcap.on('input', (event) => {
+            const value = Number($(event.target).val());
+            this.gameSettings.hardcap = value;
         });
 
         // Reset scores button handler
@@ -387,10 +366,11 @@ export class Scoreboard {
         });
     }
 
-    /**
+
+    /* ==============================================================================
      * Import data from JSON format in the textarea
      * Parses JSON data and applies it to the form fields
-     */
+     * ============================================================================== */
     importDataFromJson() {
         const jsonText = $('#Data_Import').val().trim();
         
@@ -439,26 +419,11 @@ export class Scoreboard {
         }
     }
 
-    /**
-     * Remove score history events when score is decreased
-     * This maintains accurate event history for undo functionality
-     * @param {string} team - Team identifier ('a' or 'b')
-     * @param {number} newScore - The new score value
-     */
-    removeScoreHistoryEvents(team, newScore, set = this.active_set) {
-        const reversedHistory = this.event_history.slice().reverse();
-        $.each(reversedHistory, (index, event) => {
-            if (event.type === 'score' && event.team === team && event.score > newScore && event.set == set) {
-                this.event_history.splice(this.event_history.length - 1 - index, 1);
-                return false; // break the loop
-            }
-        });
-    }
 
-    /**
+    /** ==============================================================================
      * Fetch and process live data from Firebase
      * Handles different data types: event history, admin settings, team colors, and general values
-     */
+     * ============================================================================== */
     async insertLiveData() {
         console.log("inserting live data for channel ", this.channel);
 
@@ -467,12 +432,13 @@ export class Scoreboard {
         this.processDataAndUpdateFields(data);
     }
 
-    /**
+
+    /** ============================================================================== 
      * Process data object and update form fields
      * Common function used by both live data insertion and JSON import
      * @param {Object} data - Data object to process
      * @param {boolean} isImport - Whether this is an import operation (affects special handling)
-     */
+     * ============================================================================== */
     processDataAndUpdateFields(data, isImport = false) {
         const pathsAndValues = getPathsAndValues(data);
 
@@ -489,7 +455,6 @@ export class Scoreboard {
             } else if (path.includes('active_set')) {
                 this.active_set = value;
             } else if (path.includes('starting_server') || path.includes('starting_receiver')) {
-                // Handle starting team setting
                 $allElements.each((_, elem) => {
                     const $elem = $(elem);
                     if ($elem.is('input') || $elem.is('select')) {
@@ -502,12 +467,9 @@ export class Scoreboard {
                 // Handle game settings (winning score, set mode, hardcap, etc.)
                 const settingKey = path.split('.').pop();
                 
-                // Handle different data types for different settings
                 if (settingKey === 'set_mode') {
-                    // set_mode is a string, don't convert to number
                     this.gameSettings[settingKey] = value;
                 } else {
-                    // Other settings are numbers
                     this.gameSettings[settingKey] = Number(value);
                 }
 
@@ -552,89 +514,12 @@ export class Scoreboard {
         });        
     }
 
-    /**
-     * Calculate and update team RGX values and pro classes
-     * This method is called after processing all data to ensure all player RGX and pro values are available
-     */
-    updateTeamRGX() {
-        // Get current data to calculate team values
-        const data = this.getCurrentRGXData();
-        
-        if (!data.teams_info) return;
 
-        // Process Team A
-        if (data.teams_info.team_a) {
-            const teamA = data.teams_info.team_a;
-            const player1RGX = parseInt(teamA.player_1_rgx) || 0;
-            const player2RGX = parseInt(teamA.player_2_rgx) || 0;
-            const player1Pro = teamA.player_1_is_pro === 1 || teamA.player_1_is_pro === true;
-            const player2Pro = teamA.player_2_is_pro === 1 || teamA.player_2_is_pro === true;
-            
-            const teamRGX = player1RGX + player2RGX;
-            const isTeamPro = player1Pro && player2Pro;
-            
-            // Update team RGX display
-            $(`[fb-data="teams_info.team_a.team_rgx"]`).each((_, elem) => {
-                const $elem = $(elem);
-                $elem.text(teamRGX);
-                $elem.closest('.rgx').toggleClass('pro', isTeamPro);
-            });
-        }
-        
-        // Process Team B
-        if (data.teams_info.team_b) {
-            const teamB = data.teams_info.team_b;
-            const player1RGX = parseInt(teamB.player_1_rgx) || 0;
-            const player2RGX = parseInt(teamB.player_2_rgx) || 0;
-            const player1Pro = teamB.player_1_is_pro === 1 || teamB.player_1_is_pro === true;
-            const player2Pro = teamB.player_2_is_pro === 1 || teamB.player_2_is_pro === true;
-            
-            const teamRGX = player1RGX + player2RGX;
-            const isTeamPro = player1Pro && player2Pro;
-            
-            // Update team RGX display
-            $(`[fb-data="teams_info.team_b.team_rgx"]`).each((_, elem) => {
-                const $elem = $(elem);
-                $elem.text(teamRGX);
-                $elem.closest('.rgx').toggleClass('pro', isTeamPro);
-            });
-        }
-    }
-
-    /**
-     * Get current data from the scoreboard
-     * @returns {Object} Current data object
-     */
-    getCurrentRGXData() {
-        // This method should return the current data being used by the scoreboard
-        // For now, we'll try to reconstruct it from the DOM elements
-        const data = {
-            teams_info: {
-                team_a: {},
-                team_b: {}
-            }
-        };
-        
-        // Extract team A data
-        data.teams_info.team_a.player_1_rgx = $('[fb-data="teams_info.team_a.player_1_rgx"]').first().text();
-        data.teams_info.team_a.player_2_rgx = $('[fb-data="teams_info.team_a.player_2_rgx"]').first().text();
-        data.teams_info.team_a.player_1_is_pro = $('[fb-data="teams_info.team_a.player_1_rgx"]').first().hasClass('pro');
-        data.teams_info.team_a.player_2_is_pro = $('[fb-data="teams_info.team_a.player_2_rgx"]').first().hasClass('pro');
-        
-        // Extract team B data
-        data.teams_info.team_b.player_1_rgx = $('[fb-data="teams_info.team_b.player_1_rgx"]').first().text();
-        data.teams_info.team_b.player_2_rgx = $('[fb-data="teams_info.team_b.player_2_rgx"]').first().text();
-        data.teams_info.team_b.player_1_is_pro = $('[fb-data="teams_info.team_b.player_1_rgx"]').first().hasClass('pro');
-        data.teams_info.team_b.player_2_is_pro = $('[fb-data="teams_info.team_b.player_2_rgx"]').first().hasClass('pro');
-        
-        return data;
-    }
-
-    /**
+    /** ============================================================================== 
      * Set value on an element based on its type
      * @param {jQuery} $elem - Element to update
      * @param {*} value - Value to set
-     */
+     * ============================================================================== */
     setElementValue($elem, value) {
         // Check if element has a part attribute for name splitting
         const part = $elem.attr('part');
@@ -651,11 +536,10 @@ export class Scoreboard {
             return;
         }
 
-        // Handle image elements - set src attribute
-        if ($elem.is('img')) {
+        if ($elem.is('img')) { // Handle image elements - set src attribute
             $elem.attr('src', value || '');
             return;
-        } else if ($elem.is('input[type="checkbox"]')) {
+        } else if ($elem.is('input[type="checkbox"]')) { // Handle checkboxes
             const isChecked = value === 1 || value === true;
             $elem.prop('checked', isChecked);
             // Ensure toggle-switch visuals reflect state for any checkbox (admin or non-admin)
@@ -669,17 +553,15 @@ export class Scoreboard {
             $elem.val(value);
         } else {
             $elem.text(value);
-        }
-
-        // Handle player RGX values for Match Preview overlay (similar to name splitting)
-        
+        }        
     }
 
-    /**
+
+    /** ============================================================================== 
      * Insert admin setting value into local settings object
      * @param {string} path - Firebase path containing the setting
      * @param {*} value - Setting value to store
-     */
+     * ============================================================================== */
     async insertAdminSetting(path, value) {
         const part = path.split('.').pop();
         this.settings[part] = value;
@@ -690,13 +572,13 @@ export class Scoreboard {
         }
     }
 
-    /**
+    /** ==============================================================================
      * Process team color updates with brightness calculations
      * Applies CSS variables and light/dark class adjustments
      * @param {jQuery} $elem - Color input element
      * @param {string} path - Firebase path containing color data
      * @param {string} value - Color value (hex or rgb)
-     */
+     * ============================================================================== */
     async insertColor($elem, path, value) {
         var color = value;
         var brightness = getColorBrightness(rgb2hex(value));
@@ -732,11 +614,11 @@ export class Scoreboard {
         }
     }
 
-    /**
+    /** ==============================================================================
      * Upload data to Firebase with authentication checks
      * Processes element values and converts them to appropriate database format
      * @param {Array} elemList - List of jQuery elements to upload (optional, uploads all if undefined)
-     */
+     * ============================================================================== */
     async uploadData(elemList) {
         // Check if selected channel is allowed
         if (!this.user || !this.channel || !this.user.channels.includes(Number(this.channel))) {
@@ -788,13 +670,155 @@ export class Scoreboard {
         });
 
         writeData(newData);
-        // console.log("uploaded data to firebase", newData);
     }
 
-    /**
+    handleEventHistory() {
+        if (this.event_history.length > 200) {
+            this.event_history = this.event_history.slice(-200);
+        }
+    }
+
+    /** ==============================================================================
+     * Remove score history events when score is decreased
+     * This maintains accurate event history for undo functionality
+     * @param {string} team - Team identifier ('a' or 'b')
+     * @param {number} newScore - The new score value
+     * ============================================================================== */
+    removeEventHistoryEvents(team, newScore, set = this.active_set) {
+        const reversedHistory = this.event_history.slice().reverse();
+        $.each(reversedHistory, (index, event) => {
+            if (event.type === 'score' && event.team === team && event.score > newScore && event.set == set) {
+                this.event_history.splice(this.event_history.length - 1 - index, 1);
+                return false; // break the loop
+            }
+        });
+    }
+
+    /** ==============================================================================
+     * Get score history for a specific set, filtering from last reset event
+     * @param {number} set - Set number to get history for (defaults to active set)
+     * @returns {Array} Filtered array of score events
+     * ============================================================================== */
+    getScoreHistory(set = this.active_set) {
+        // Find the last reset event
+        let startIndex = this.getLastResetIndex();
+
+        const slicedEventHistory = this.event_history.slice(startIndex + 1);
+        return slicedEventHistory.filter(event => 
+            event.type === 'score' && 
+            event.set == set && 
+            event.team && 
+            typeof event.team === 'string' &&
+            event.score !== undefined
+        );
+    }
+
+    /** ==============================================================================
+     * Convert score history to team points list for chart visualization
+     * Maintains last known score for each team across all events
+     * @param {Array} slicedEventHistory - Filtered event history
+     * @param {string} team - Team identifier ('a' or 'b')
+     * @returns {Array} Array of score values for chart data
+     * ============================================================================== */
+    scoreHistoryToTeamPoints(slicedEventHistory, team) {
+        const teamPointsList = [];
+        let lastScore = 0;
+
+        $.each(slicedEventHistory, (i, event) => {
+            if (event.type === 'score' && event.team && typeof event.team === 'string') {
+                if (event.team.toLowerCase() === team.toLowerCase()) {
+                    lastScore = Number(event.score);
+                }
+                teamPointsList.push(lastScore);
+            }
+        });
+
+        return teamPointsList;
+    }
+
+
+    /** ==============================================================================
+     * Get current data from the scoreboard
+     * @returns {Object} Current data object
+     * ============================================================================== */
+    getCurrentRGXData() {
+        const data = {
+            teams_info: {
+                team_a: {},
+                team_b: {}
+            }
+        };
+        
+        // Extract team A data
+        data.teams_info.team_a.player_1_rgx = $('[fb-data="teams_info.team_a.player_1_rgx"]').first().text();
+        data.teams_info.team_a.player_2_rgx = $('[fb-data="teams_info.team_a.player_2_rgx"]').first().text();
+        data.teams_info.team_a.player_1_is_pro = $('[fb-data="teams_info.team_a.player_1_rgx"]').first().hasClass('pro');
+        data.teams_info.team_a.player_2_is_pro = $('[fb-data="teams_info.team_a.player_2_rgx"]').first().hasClass('pro');
+        
+        // Extract team B data
+        data.teams_info.team_b.player_1_rgx = $('[fb-data="teams_info.team_b.player_1_rgx"]').first().text();
+        data.teams_info.team_b.player_2_rgx = $('[fb-data="teams_info.team_b.player_2_rgx"]').first().text();
+        data.teams_info.team_b.player_1_is_pro = $('[fb-data="teams_info.team_b.player_1_rgx"]').first().hasClass('pro');
+        data.teams_info.team_b.player_2_is_pro = $('[fb-data="teams_info.team_b.player_2_rgx"]').first().hasClass('pro');
+        
+        return data;
+    }
+
+
+    /** ==============================================================================
+     * Calculate and update team RGX values and pro classes
+     * This method is called after processing all data to ensure all player RGX and pro values are available
+     * ============================================================================== */
+    updateTeamRGX() {
+        // Get current data to calculate team values
+        const data = this.getCurrentRGXData();
+        
+        if (!data.teams_info) return;
+
+        // Process Team A
+        if (data.teams_info.team_a) {
+            const teamA = data.teams_info.team_a;
+            const player1RGX = parseInt(teamA.player_1_rgx) || 0;
+            const player2RGX = parseInt(teamA.player_2_rgx) || 0;
+            const player1Pro = teamA.player_1_is_pro === 1 || teamA.player_1_is_pro === true;
+            const player2Pro = teamA.player_2_is_pro === 1 || teamA.player_2_is_pro === true;
+            
+            const teamRGX = player1RGX + player2RGX;
+            const isTeamPro = player1Pro && player2Pro;
+            
+            // Update team RGX display
+            $(`[fb-data="teams_info.team_a.team_rgx"]`).each((_, elem) => {
+                const $elem = $(elem);
+                $elem.text(teamRGX);
+                $elem.closest('.rgx').toggleClass('pro', isTeamPro);
+            });
+        }
+        
+        // Process Team B
+        if (data.teams_info.team_b) {
+            const teamB = data.teams_info.team_b;
+            const player1RGX = parseInt(teamB.player_1_rgx) || 0;
+            const player2RGX = parseInt(teamB.player_2_rgx) || 0;
+            const player1Pro = teamB.player_1_is_pro === 1 || teamB.player_1_is_pro === true;
+            const player2Pro = teamB.player_2_is_pro === 1 || teamB.player_2_is_pro === true;
+            
+            const teamRGX = player1RGX + player2RGX;
+            const isTeamPro = player1Pro && player2Pro;
+            
+            // Update team RGX display
+            $(`[fb-data="teams_info.team_b.team_rgx"]`).each((_, elem) => {
+                const $elem = $(elem);
+                $elem.text(teamRGX);
+                $elem.closest('.rgx').toggleClass('pro', isTeamPro);
+            });
+        }
+    }
+
+
+    /** ==============================================================================
      * Get all played sets (sets before the current active set)
      * @returns {Array} Array of jQuery set elements
-     */
+     * ============================================================================== */
     getPlayedSets() {
         const playedSets = [];
         $.each(this.$sets, (i, set) => {
@@ -805,21 +829,23 @@ export class Scoreboard {
         return playedSets;
     }
 
-    /**
+
+    /** ==============================================================================
      * Get score element for a specific set and team
      * @param {number} set - Set number (1-7)
      * @param {string} team - Team identifier ('a' or 'b')
      * @returns {jQuery} Score element
-     */
+     * ============================================================================== */
     getScoreElem(set, team) {
         return $(this.$sets[set - 1]).find(`[fb-data*="score"][fb-data*="team_${team}"]`);
     }
 
-    /**
+
+    /** ==============================================================================
      * Extract team and set information from score element
      * @param {jQuery} $score_elem - Score element to analyze
      * @returns {Object|null} Object with team and set properties, or null if invalid
-     */
+     * ============================================================================== */
     getScoreElemDetails($score_elem) {
         const fbDataAttr = $score_elem.attr('fb-data');
 
@@ -837,24 +863,25 @@ export class Scoreboard {
         return { team, set };
     }
 
-    /**
+    /** ==============================================================================
      * Get current score for a specific set and team
      * @param {number} set - Set number (1-7)
      * @param {string} team - Team identifier ('a' or 'b')
      * @returns {number} Current score
-     */
+     * ============================================================================== */
     getScore(set, team) {
         const $scoreElem = this.getScoreElem(set, team);
         return Number($scoreElem.is('input') ? $scoreElem.val() : $scoreElem.text());
     }
 
-    /**
+
+    /** ==============================================================================
      * Get the score for a specific team at a given point index in a set
      * @param {number} set - Set number (1-7)
      * @param {string} team - Team identifier ('a' or 'b')
      * @param {number} pointIndex - Point index (0-based)
      * @returns {number} Score at the specified point index
-     */
+     * ============================================================================== */
     getScoreAtPointIndex(set, team, pointIndex) {
         const scoreHistory = this.getScoreHistory(set);
         const teamPointsList = this.scoreHistoryToTeamPoints(scoreHistory, team);
@@ -867,12 +894,13 @@ export class Scoreboard {
         // Return the score at the specified point index
         return teamPointsList[pointIndex] || 0;
     }
+    
 
-    /**
+    /** ==============================================================================
      * Calculate total sets won by a team
      * @param {string} team - Team identifier ('a' or 'b')
      * @returns {number} Number of sets won
-     */
+     * ============================================================================== */
     getSetScore(team) {
         let setScore = 0;
         const playedSets = this.getPlayedSets();
@@ -893,9 +921,6 @@ export class Scoreboard {
     }
 
     updateSetsVisibility() {
-        // The counter (setNumber) should be local to each group of set elements,
-        // i.e., for each parent element containing a group of .set elements, the counter restarts.
-        // We'll iterate over each parent group, then over its .set children.
 
         // Find all unique parent elements that contain .set elements
         const setGroups = [];
@@ -967,13 +992,182 @@ export class Scoreboard {
         this.$activeScoreCounterB.text(this.getScore(this.active_set, 'b'));
     }
 
-    /**
+    getCompletedSetsCount() {
+        const setGroups = [];
+        this.$sets.each(function () {
+            const parent = $(this).parent()[0];
+            if (parent && !setGroups.includes(parent)) {
+                setGroups.push(parent);
+            }
+        });
+        const completedCount = $(setGroups[0]).find('.set.completed').length;
+        return completedCount;
+    }
+
+    /** ==============================================================================
+     * Check if a set is won by a team
+     * Takes into account overtime rules (2-point margin required or hardcap reached)
+     * @param {number} set - Set number to check (defaults to active set)
+     * @returns {string|null} Team identifier ('a', 'b') or null if set not won
+     * ============================================================================== */
+    setWinner(set = this.active_set) {
+        const scoreA = this.getScore(set, 'a');
+        const scoreB = this.getScore(set, 'b');
+        
+        // Check if hardcap is reached by either team
+        if (scoreA >= this.gameSettings.hardcap || scoreB >= this.gameSettings.hardcap) {
+            return scoreA > scoreB ? 'a' : 'b';
+        }
+        
+        // Check if winning score is reached
+        if (scoreA >= this.gameSettings.win_points || scoreB >= this.gameSettings.win_points) {
+            const scoreDifference = Math.abs(scoreA - scoreB);
+            
+            // Check if 2-point margin is met
+            if (scoreDifference >= this.gameSettings.min_win_margin) {
+                return scoreA > scoreB ? 'a' : 'b';
+            }
+        }
+        
+        return null;
+    }
+
+
+    /** ==============================================================================
+     * Get the team that a player belongs to
+     * @param {string} player - Player identifier ('a', 'b', 'c', 'd')
+     * @returns {string|null} Team identifier ('a' or 'b') or null
+     * ============================================================================== */
+    getPlayerTeam(player) {
+        if (player === 'a' || player === 'b') {
+            return 'a';
+        } else if (player === 'c' || player === 'd') {
+            return 'b';
+        }
+        return null;
+    }
+
+
+    /** ==============================================================================
+     * Get the player name by player identifier
+     * @param {string} playerId - Player identifier ('a', 'b', 'c', 'd')
+     * @returns {string} Player name or fallback
+     * ============================================================================== */
+    getPlayerName(playerId) {
+        const playerMap = {
+            'a': 'A_Player_1',
+            'b': 'A_Player_2', 
+            'c': 'B_Player_1',
+            'd': 'B_Player_2'
+        };
+        
+        const inputId = playerMap[playerId];
+        if (inputId) {
+            const $input = $(`#${inputId}`);
+            if ($input.length > 0) {
+                const value = $input.val();
+                return value && value.trim() !== '' ? value : `Player ${playerId.toUpperCase()}`;
+            }
+        }
+        
+        return `Player ${playerId.toUpperCase()}`;
+    }
+
+
+    playerLocationTransformation(input, inputType, set) {
+        const startingServer = this.getStartingServer(set);
+        const startingReceiver = this.getStartingReceiver(set);
+        
+        let list;
+        if (startingServer == 'a' && startingReceiver == 'c') {
+            list = {
+                a: 'b',
+                b: 'a',
+                c: 'd',
+                d: 'c'
+            }
+        } else if (startingServer == 'a' && startingReceiver == 'd') {
+            list = {
+                a: 'b',
+                b: 'a',
+                c: 'c',
+                d: 'd'
+            }
+        } else if (startingServer == 'b' && startingReceiver == 'c') {
+            list = {
+                a: 'a',
+                b: 'b',
+                c: 'd',
+                d: 'c'
+            }
+        } else if (startingServer == 'b' && startingReceiver == 'd') {
+            list = {
+                a: 'a',
+                b: 'b',
+                c: 'c',
+                d: 'd'
+            }
+        } else if (startingServer == 'c' && startingReceiver == 'a') {
+            list = {
+                a: 'd',
+                b: 'c',
+                c: 'b',
+                d: 'a'
+            }
+        } else if (startingServer == 'c' && startingReceiver == 'b') {
+            list = {
+                a: 'c',
+                b: 'd',
+                c: 'b',
+                d: 'a'
+            }
+        } else if (startingServer == 'd' && startingReceiver == 'a') {
+            list = {
+                a: 'd',
+                b: 'c',
+                c: 'a',
+                d: 'b'
+            }
+        } else if (startingServer == 'd' && startingReceiver == 'b') {
+            list = {
+                a: 'c',
+                b: 'd',
+                c: 'a',
+                d: 'b'
+            }
+        }
+        
+        if (inputType == 'player') {
+            for (const [key, value] of Object.entries(list)) {
+                if (value === input) {
+                    return String(key);
+                }
+            }
+        } else if (inputType == 'location') {
+            return list[input];
+        }
+    }
+    
+
+    /** ==============================================================================
+     * Check if a field is locked (should not be overwritten during manual import)
+     * @param {jQuery} $elem - The element to check
+     * @returns {boolean} True if the field is locked
+     * ============================================================================== */
+    isFieldLocked($elem) {
+        // Find the lock icon that belongs to this input field
+        const $lockIcon = $elem.closest('.input-with-trailing-icon').find('.lock-icon');
+        return $lockIcon.hasClass('locked');
+    }
+
+
+    /** ==============================================================================
      * Get the team that should be serving based on new rules
      * Serve alternates every 2 serves regardless of point outcome
      * In overtime mode (when winning score is reached but 2-point margin not met), serve changes after every point
      * @returns {Object|null} Object with team and serve number, or null if no serve data
-     */
-    getServingTeam() {
+     * ============================================================================== */
+    getServeInfo() {
         // Get the starting team for this set from database
         const startingTeam = this.getStartingTeam(this.active_set);
         if (!startingTeam) return null;
@@ -992,35 +1186,35 @@ export class Scoreboard {
                 serveNumber: 1, // Always single serve in overtime
                 isOvertime: true
             };
-        }
-        
-        // Normal rules: first serve is single, then alternates every 2 points
-        let servingTeam, serveNumber;
-        if (totalPoints === 0) {
-            servingTeam = startingTeam;
-            serveNumber = 1;
         } else {
-            const servesAfterFirst = totalPoints - 1;
-            const serveGroup = Math.floor(servesAfterFirst / 2);
-            const isStartingTeamServe = serveGroup % 2 === 0;
-            servingTeam = isStartingTeamServe ? (startingTeam === 'a' ? 'b' : 'a') : startingTeam;
-            serveNumber = (servesAfterFirst % 2) + 1;
-        }
-        
-        return {
-            team: servingTeam,
-            serveNumber: serveNumber,
-            isOvertime: false
-        };
+            // Normal rules: first serve is single, then alternates every 2 points
+            let servingTeam, serveNumber;
+            if (totalPoints === 0) {
+                servingTeam = startingTeam;
+                serveNumber = 1;
+            } else {
+                const servesAfterFirst = totalPoints - 1;
+                const serveGroup = Math.floor(servesAfterFirst / 2);
+                const isStartingTeamServe = serveGroup % 2 === 0;
+                servingTeam = isStartingTeamServe ? (startingTeam === 'a' ? 'b' : 'a') : startingTeam;
+                serveNumber = (servesAfterFirst % 2) + 1;
+            }
+
+            return {
+                team: servingTeam,
+                serveNumber: serveNumber,
+                isOvertime: false
+            };
+        }        
     }
 
-    /**
+    /** ==============================================================================
      * Check if a set is in overtime mode
      * Overtime occurs when winning score is reached but 2-point margin is not met
      * OR when hardcap is reached by either team
      * @param {number} set - Set number to check (defaults to active set)
      * @returns {boolean} True if set is in overtime
-     */
+     * ============================================================================== */
     isInOvertime(set = this.active_set, pointIndex = null) {
         let scoreA, scoreB;
         if (pointIndex == null) {
@@ -1047,59 +1241,32 @@ export class Scoreboard {
         return false;
     }
 
-    /**
-     * Check if a set is won by a team
-     * Takes into account overtime rules (2-point margin required or hardcap reached)
-     * @param {number} set - Set number to check (defaults to active set)
-     * @returns {string|null} Team identifier ('a', 'b') or null if set not won
-     */
-    setWinner(set = this.active_set) {
-        const scoreA = this.getScore(set, 'a');
-        const scoreB = this.getScore(set, 'b');
-        
-        // Check if hardcap is reached by either team
-        if (scoreA >= this.gameSettings.hardcap || scoreB >= this.gameSettings.hardcap) {
-            return scoreA > scoreB ? 'a' : 'b';
-        }
-        
-        // Check if winning score is reached
-        if (scoreA >= this.gameSettings.win_points || scoreB >= this.gameSettings.win_points) {
-            const scoreDifference = Math.abs(scoreA - scoreB);
-            
-            // Check if 2-point margin is met
-            if (scoreDifference >= this.gameSettings.min_win_margin) {
-                return scoreA > scoreB ? 'a' : 'b';
-            }
-        }
-        
-        return null;
-    }
 
-    /**
+    /** ==============================================================================
      * Get the starting server for a specific set
      * @param {number} set - Set number (1-7), defaults to active set
      * @returns {string|null} Player identifier ('a', 'b', 'c', 'd') or null if not set
-     */
+     * ============================================================================== */
     getStartingServer(set = this.active_set) {
         const startingServerData = this.$html_frame.find(`[fb-data="score.set_${set}.starting_server"]`).first();
         return startingServerData.is('select') ? startingServerData.val() : startingServerData.text();
     }
 
-    /**
+    /** ==============================================================================
      * Get the starting receiver for a specific set
      * @param {number} set - Set number (1-7), defaults to active set
      * @returns {string|null} Player identifier ('a', 'b', 'c', 'd') or null if not set
-     */
+     * ============================================================================== */
     getStartingReceiver(set = this.active_set) {
         const startingReceiverData = this.$html_frame.find(`[fb-data="score.set_${set}.starting_receiver"]`).first();
         return startingReceiverData.is('select') ? startingReceiverData.val() : startingReceiverData.text();
     }
 
-    /**
+    /** ==============================================================================
      * Get the team that has the starting serve for a specific set
      * @param {number} set - Set number (1-7), defaults to active set
      * @returns {string|null} Team identifier ('a' or 'b') or null if not set
-     */
+     * ============================================================================== */
     getStartingTeam(set = this.active_set) {
         const startingServer = this.getStartingServer(set);
         if (startingServer) {
@@ -1109,11 +1276,11 @@ export class Scoreboard {
         return null;
     }
 
-    /**
+    /** ==============================================================================
      * Count total points in a specific set
      * @param {number} set - Set number (1-7), defaults to active set
      * @returns {number} Total number of points
-     */
+     * ============================================================================== */
     getTotalPointsInSet(set = this.active_set) {
         const scoreA = this.getScore(set, 'a');
         const scoreB = this.getScore(set, 'b');
@@ -1125,7 +1292,7 @@ export class Scoreboard {
     }
 
     updateServeIndicator() {
-        const serveInfo = this.getServingTeam();
+        const serveInfo = this.getServeInfo();
         const $serverIndicators = $('.serve_indicator');
         
         // Check if set is already won - if so, hide all serve indicators
@@ -1300,66 +1467,33 @@ export class Scoreboard {
         }
     }
 
-    updateOldScoreInputCounter() {
-        this.$html_frame.find('.team_score')
-            .attr('score_a', this.getScore(this.active_set, 'a'))
-            .attr('score_b', this.getScore(this.active_set, 'b'));
-    }
-
-    handleEventHistory() {
-        if (this.event_history.length > 200) {
-            this.event_history = this.event_history.slice(-200);
+    
+    /** ==============================================================================
+     * Update the current server and receiver display
+     * ============================================================================== */
+    updateCurrentPlayersDisplay() {
+        const totalPoints = this.getTotalPointsInSet(this.active_set)
+        const server = this.getServingPlayerAtPoint(totalPoints, this.active_set)
+        const receiver = this.getReceivingPlayerAtPoint(totalPoints, this.active_set)
+        
+        if (server && receiver) {
+            const serverName = this.getPlayerName(server);
+            const receiverName = this.getPlayerName(receiver);
+            $('#current_server_name').text(serverName);
+            $('#current_receiver_name').text(receiverName);
+        } else {
+            $('#current_server_name').text('-');
+            $('#current_receiver_name').text('-');
         }
     }
 
-    /**
-     * Get score history for a specific set, filtering from last reset event
-     * @param {number} set - Set number to get history for (defaults to active set)
-     * @returns {Array} Filtered array of score events
-     */
-    getScoreHistory(set = this.active_set) {
-        // Find the last reset event
-        let startIndex = this.getLastResetIndex();
 
-        const slicedEventHistory = this.event_history.slice(startIndex + 1);
-        return slicedEventHistory.filter(event => 
-            event.type === 'score' && 
-            event.set == set && 
-            event.team && 
-            typeof event.team === 'string' &&
-            event.score !== undefined
-        );
-    }
-
-    /**
-     * Convert score history to team points list for chart visualization
-     * Maintains last known score for each team across all events
-     * @param {Array} slicedEventHistory - Filtered event history
-     * @param {string} team - Team identifier ('a' or 'b')
-     * @returns {Array} Array of score values for chart data
-     */
-    scoreHistoryToTeamPoints(slicedEventHistory, team) {
-        const teamPointsList = [];
-        let lastScore = 0;
-
-        $.each(slicedEventHistory, (i, event) => {
-            if (event.type === 'score' && event.team && typeof event.team === 'string') {
-                if (event.team.toLowerCase() === team.toLowerCase()) {
-                    lastScore = Number(event.score);
-                }
-                teamPointsList.push(lastScore);
-            }
-        });
-
-        return teamPointsList;
-    }
-
-    /**
+    /** ==============================================================================
      * Get the player that was serving at a specific point in the score history
      * @param {number} pointIndex - Index of the point (0-based)
      * @param {number} set - Set number (defaults to active set)
      * @returns {string|null} Player identifier ('a', 'b', 'c', 'd') or null if not available
-     */
+     * ============================================================================== */
     getServingPlayerAtPoint(pointIndex, set = this.active_set) {
         const startingServer = this.getStartingServer(set);
         const startingReceiver = this.getStartingReceiver(set);
@@ -1382,10 +1516,7 @@ export class Scoreboard {
             serveOrder = ['d', 'b', 'c', 'a'];
         } else if (startingServer == 'd' && startingReceiver == 'b') {
             serveOrder = ['d', 'a', 'c', 'b'];
-        }
-        // let serveOrder = ['b', 'c', 'a', 'd'];
-        // let serveOrderOvertime = ['d', 'a', 'c', 'b'];
-        
+        }        
         
         const startIndex = serveOrder.indexOf(startingServer);
         // const startIndex = serveOrder.indexOf(this.playerLocationTransformation(startingServer, 'player', set));
@@ -1400,12 +1531,6 @@ export class Scoreboard {
                 pointsTillOvertime = this.gameSettings.win_points * 2 - 2;
                 steps = Math.floor(((((pointsTillOvertime + 1) / 2) % 4) + (pointIndex - pointsTillOvertime) % 4) % 4);
                 player = serveOrder[(startIndex + steps) % 4];
-                // if (startingServer == 'a' || startingServer == 'b') {
-                //     player = player == 'a' ? 'b' : player == 'b' ? 'a' : player;
-                // } else if (startingServer == 'c' || startingServer == 'd') {
-                //     player = player == 'c' ? 'd' : player == 'd' ? 'c' : player;
-                // }
-                // console.log(isOvertime, player, steps, pointsTillOvertime, pointIndex);
             }
             
             return player;
@@ -1413,86 +1538,13 @@ export class Scoreboard {
         }
     }
 
-    playerLocationTransformation(input, inputType, set) {
-        const startingServer = this.getStartingServer(set);
-        const startingReceiver = this.getStartingReceiver(set);
-        
-        let list;
-        if (startingServer == 'a' && startingReceiver == 'c') {
-            list = {
-                a: 'b',
-                b: 'a',
-                c: 'd',
-                d: 'c'
-            }
-        } else if (startingServer == 'a' && startingReceiver == 'd') {
-            list = {
-                a: 'b',
-                b: 'a',
-                c: 'c',
-                d: 'd'
-            }
-        } else if (startingServer == 'b' && startingReceiver == 'c') {
-            list = {
-                a: 'a',
-                b: 'b',
-                c: 'd',
-                d: 'c'
-            }
-        } else if (startingServer == 'b' && startingReceiver == 'd') {
-            list = {
-                a: 'a',
-                b: 'b',
-                c: 'c',
-                d: 'd'
-            }
-        } else if (startingServer == 'c' && startingReceiver == 'a') {
-            list = {
-                a: 'd',
-                b: 'c',
-                c: 'b',
-                d: 'a'
-            }
-        } else if (startingServer == 'c' && startingReceiver == 'b') {
-            list = {
-                a: 'c',
-                b: 'd',
-                c: 'b',
-                d: 'a'
-            }
-        } else if (startingServer == 'd' && startingReceiver == 'a') {
-            list = {
-                a: 'd',
-                b: 'c',
-                c: 'a',
-                d: 'b'
-            }
-        } else if (startingServer == 'd' && startingReceiver == 'b') {
-            list = {
-                a: 'c',
-                b: 'd',
-                c: 'a',
-                d: 'b'
-            }
-        }
-        
-        if (inputType == 'player') {
-            for (const [key, value] of Object.entries(list)) {
-                if (value === input) {
-                    return String(key);
-                }
-            }
-        } else if (inputType == 'location') {
-            return list[input];
-        }
-    }
 
-    /**
+    /** ==============================================================================
      * Get the receiving player at a specific point in a set
      * @param {number} pointIndex - Point index (0-based)
      * @param {number} set - Set number
      * @returns {string|null} Player identifier ('a', 'b', 'c', 'd') or null
-     */
+     * ============================================================================== */
     getReceivingPlayerAtPoint(pointIndex, set) {
         const startingServer = this.getStartingServer(set);
         const startingReceiver = this.getStartingReceiver(set);
@@ -1532,10 +1584,6 @@ export class Scoreboard {
             overtimeOrder15 = ['d', 'a', 'c', 'b'];
             overtimeOrder21 = ['c', 'a', 'd', 'b'];
         }
-
-        // receivingOrder = []
-        // receivingOrder.push(startingReceiver);
-        // receivingOrder.push(this.getPlayerTeam(startingReceiver) == 'a' ? '' : 'd');
 
         // TODO: fix overtime
         const startIndex = receivingOrder.indexOf(startingReceiver);
@@ -1583,18 +1631,16 @@ export class Scoreboard {
                     return overtimeOrder15[(startIndex + steps) % 4];
                 } else {
                     return overtimeOrder21[(startIndex + steps) % 4];
-                }                
-                // pointsTillOvertime = this.gameSettings.win_points * 2 - 2;
-                // steps = Math.floor(((pointsTillOvertime) % 8) + (pointIndex - pointsTillOvertime));
+                }
             }
             
         }
     }
 
-    /**
+    /** ==============================================================================
      * Update score history display with visual indicators
      * Shows score progression and active streaks for each team
-     */
+     * ============================================================================== */
     updateScoreHistory() {
         if (this.settings.show_score_history == 1) {
             // Update main score history
@@ -1678,10 +1724,10 @@ export class Scoreboard {
         // console.log(this.getServingPlayerAtPoint(score_sum), this.getReceivingPlayerAtPoint(score_sum));
     }
 
-    /**
+    /** ==============================================================================
      * Update score history for a specific container
      * @param {jQuery} $container - Container element to update
-     */
+     * ============================================================================== */
     updateScoreHistoryForContainer($container, set = this.active_set) {
         const team = $container.attr('team');
         let scoresList;
@@ -1709,11 +1755,11 @@ export class Scoreboard {
         });
     }
 
-    /**
+    /** ==============================================================================
      * Update Chart.js visualization of score progression
      * Creates line chart showing both teams' score progression over time
      * Uses team colors and provides visual feedback for score changes
-     */
+     * ============================================================================== */
     updateScoreHistoryChart() {
         const scoresTeamA = this.scoreHistoryToTeamPoints(this.getScoreHistory(), 'a');
         const scoresTeamB = this.scoreHistoryToTeamPoints(this.getScoreHistory(), 'b');
@@ -1788,22 +1834,11 @@ export class Scoreboard {
         this.scoreChart.update();
     }
 
-    getCompletedSetsCount() {
-        const setGroups = [];
-        this.$sets.each(function () {
-            const parent = $(this).parent()[0];
-            if (parent && !setGroups.includes(parent)) {
-                setGroups.push(parent);
-            }
-        });
-        const completedCount = $(setGroups[0]).find('.set.completed').length;
-        return completedCount;
-    }
 
-    /**
+    /** ==============================================================================
      * Update match statistics overlay with calculated statistics
      * Shows break percentages, sideout percentages, and player-specific stats
-     */
+     * ============================================================================== */
     updateMatchStatistics() {
         if (this.settings.show_match_statistics !== 1) return;
 
@@ -1845,15 +1880,9 @@ export class Scoreboard {
             $('#team_b_break_percentage').closest('.stat_item').addClass('best');
         }
         
-        // Update player statistics
         this.updatePlayerStatistics(stats);
-
         this.updatePlayerSetStatistics();
-        
-        // Update set scores display based on selected type
         this.updateSetScoresDisplay(setNumber);
-        
-        // Update score history within match statistics
     }
 
     updateMatchStatisticsTitle() {
@@ -1895,10 +1924,10 @@ export class Scoreboard {
         return startIndex;
     }
 
-    /**
+    /** ==============================================================================
      * Calculate overall match statistics from event history
      * @returns {Object} Object containing team and player statistics
-     */
+     * ============================================================================== */
     calculateStatistics(type = 'game', set = this.active_set) {
         const stats = {
             teamA: { breaks: 0, breakOpportunities: 0, breakPercentage: 0 },
@@ -1971,10 +2000,10 @@ export class Scoreboard {
         return stats;
     }
 
-    /**
+    /** ==============================================================================
      * Update player statistics in the UI
      * @param {Object} stats - Overall statistics object
-     */
+     * ============================================================================== */
     updatePlayerStatistics(stats) {
         const players = ['a', 'b', 'c', 'd'];
         
@@ -2013,9 +2042,9 @@ export class Scoreboard {
         });
     }
 
-    /**
+    /** ==============================================================================
      * Update set-specific player statistics in the UI
-     */
+     * ============================================================================== */
     updatePlayerSetStatistics() {
         let completedSetsCountArray;
         if (this.settings.match_stats_type == 'match') {
@@ -2090,98 +2119,7 @@ export class Scoreboard {
             });
         });
     }
-
-    /**
-     * Get the team that a player belongs to
-     * @param {string} player - Player identifier ('a', 'b', 'c', 'd')
-     * @returns {string|null} Team identifier ('a' or 'b') or null
-     */
-    getPlayerTeam(player) {
-        if (player === 'a' || player === 'b') {
-            return 'a';
-        } else if (player === 'c' || player === 'd') {
-            return 'b';
-        }
-        return null;
-    }
-
-
-    /**
-     * Get the player name by player identifier
-     * @param {string} playerId - Player identifier ('a', 'b', 'c', 'd')
-     * @returns {string} Player name or fallback
-     */
-    getPlayerName(playerId) {
-        const playerMap = {
-            'a': 'A_Player_1',
-            'b': 'A_Player_2', 
-            'c': 'B_Player_1',
-            'd': 'B_Player_2'
-        };
-        
-        const inputId = playerMap[playerId];
-        if (inputId) {
-            const $input = $(`#${inputId}`);
-            if ($input.length > 0) {
-                const value = $input.val();
-                return value && value.trim() !== '' ? value : `Player ${playerId.toUpperCase()}`;
-            }
-        }
-        
-        return `Player ${playerId.toUpperCase()}`;
-    }
-
-    /**
-     * Update the current server and receiver display
-     */
-    updateCurrentPlayersDisplay() {
-        // const { server, receiver } = this.getCurrentServerAndReceiver();
-        const totalPoints = this.getTotalPointsInSet(this.active_set)
-        const server = this.getServingPlayerAtPoint(totalPoints, this.active_set)
-        const receiver = this.getReceivingPlayerAtPoint(totalPoints, this.active_set)
-        
-        if (server && receiver) {
-            const serverName = this.getPlayerName(server);
-            const receiverName = this.getPlayerName(receiver);
-            $('#current_server_name').text(serverName);
-            $('#current_receiver_name').text(receiverName);
-        } else {
-            $('#current_server_name').text('-');
-            $('#current_receiver_name').text('-');
-        }
-    }
-
-    /**
-     * Check if a field is locked (should not be overwritten during manual import)
-     * @param {jQuery} $elem - The element to check
-     * @returns {boolean} True if the field is locked
-     */
-    isFieldLocked($elem) {
-        // Find the lock icon that belongs to this input field
-        const $lockIcon = $elem.closest('.input-with-trailing-icon').find('.lock-icon');
-        return $lockIcon.hasClass('locked');
-    }
-
-    /**
-     * Initialize lock icon functionality
-     * Sets up click handlers for lock icons
-     */
-    initializeLockIcons() {
-        $('.lock-icon').off('click').on('click', (e) => {
-            e.preventDefault();
-            const $icon = $(e.currentTarget);
-            const $input = $icon.closest('.input-with-trailing-icon').find('input');
-            const fieldId = $input.attr('id');
-            
-            // Toggle lock state
-            if ($icon.hasClass('locked')) {
-                $icon.removeClass('locked').text('lock_open');
-                console.log(`Unlocked field: ${fieldId}`);
-            } else {
-                $icon.addClass('locked').text('lock');
-                console.log(`Locked field: ${fieldId}`);
-            }
-        });
-    }
+    
 }
+
 
