@@ -139,7 +139,7 @@
 }
 
 .teams .team .color-indicator {
-  width: 6px;
+  min-width: 6px;
   height: 77%;
   border-radius: 2px;
   margin-top: 5px;
@@ -164,7 +164,7 @@
   width: 5px;
 }
 
-.teams .team p {
+.teams .team p.teamname {
   font-size: 23px;
   font-weight: 500;
   max-width: 100%;
