@@ -154,11 +154,11 @@
                                         <div class="names input_group">
                                             <div class="input_container label_inside">
                                                 <label for="A_Player_1">A:</label>
-                                                <input type="text" class="player small" id="A_Player_1" value="Player 1" placeholder="Player A" fb-data="teams_info.team_a.player_1">
+                                                <input type="text" class="player small" id="A_Player_1" placeholder="Player A" fb-data="teams_info.team_a.player_1">
                                             </div>
                                             <div class="input_container label_inside">
                                                 <label for="A_Player_2">B:</label>
-                                                <input type="text" class="player small" id="A_Player_2" value="Player 2" placeholder="Player B" fb-data="teams_info.team_a.player_2">
+                                                <input type="text" class="player small" id="A_Player_2" placeholder="Player B" fb-data="teams_info.team_a.player_2">
                                             </div>
                                         </div>
                                     </div>
@@ -170,11 +170,11 @@
                                         <div class="names input_group">
                                             <div class="input_container label_inside">
                                                 <label for="B_Player_1">C:</label>
-                                                <input type="text" class="player small" id="B_Player_1" value="Player 1" placeholder="Player C" fb-data="teams_info.team_b.player_1">
+                                                <input type="text" class="player small" id="B_Player_1" placeholder="Player C" fb-data="teams_info.team_b.player_1">
                                             </div>
                                             <div class="input_container label_inside">
                                                 <label for="B_Player_2">D:</label>
-                                                <input type="text" class="player small" id="B_Player_2" value="Player 2" placeholder="Player D" fb-data="teams_info.team_b.player_2">
+                                                <input type="text" class="player small" id="B_Player_2" placeholder="Player D" fb-data="teams_info.team_b.player_2">
                                             </div>
                                         </div>
                                     </div>
@@ -498,7 +498,7 @@
                         </div>
                         <div class="players">
                             <div class="input_group player_row">
-                                <div class="player_letter" fb-data="teams_info.team_a.player_1">Player A</div>
+                                <div class="player_letter" fb-data="teams_info.team_a.player_1" db-read-only>Player A</div>
                                 <div class="player_fields">
                                     <div class="input_container">
                                         <label for="A_Player_1_Image">Image URL</label>
@@ -537,7 +537,7 @@
                                 </div>
                             </div>
                             <div class="input_group player_row">
-                                <div class="player_letter" fb-data="teams_info.team_a.player_2">Player B</div>
+                                <div class="player_letter" fb-data="teams_info.team_a.player_2" db-read-only>Player B</div>
                                 <div class="player_fields">
                                     <div class="input_container">
                                         <label for="A_Player_2_Image">Image URL</label>
@@ -576,7 +576,7 @@
                                 </div>
                             </div>
                             <div class="input_group player_row">
-                                <div class="player_letter" fb-data="teams_info.team_b.player_1">Player C</div>
+                                <div class="player_letter" fb-data="teams_info.team_b.player_1" db-read-only>Player C</div>
                                 <div class="player_fields">
                                     <div class="input_container">
                                         <label for="B_Player_1_Image">Image URL</label>
@@ -615,7 +615,7 @@
                                 </div>
                             </div>
                             <div class="input_group player_row">
-                                <div class="player_letter" fb-data="teams_info.team_b.player_2">Player D</div>
+                                <div class="player_letter" fb-data="teams_info.team_b.player_2" db-read-only>Player D</div>
                                 <div class="player_fields">
                                     <div class="input_container">
                                         <label for="B_Player_2_Image">Image URL</label>
