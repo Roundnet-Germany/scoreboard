@@ -352,11 +352,9 @@ export class Scoreboard {
 
         // Reset scores button handler
         this.$resetScoresButton.click(() => {
-            let $elems = $('[fb-data*="score"]:not(select)');
-            $elems.val(0);
+            $('[fb-data*="score"]:not(select)').val(0);
             this.active_set = 1;
             this.updateSets();
-            this.event_history = [];
             this.event_history.push({ type: 'reset' });
             this.uploadData();
         });
@@ -632,7 +630,7 @@ export class Scoreboard {
 
         // Upload all if there are no specific elements
         if (typeof elemList === 'undefined') {
-            elemList = $("*[fb-data]:not([db-read-only])");
+            elemList = $("*[fb-data]");
         }
 
         // Prepare data for upload
@@ -672,7 +670,6 @@ export class Scoreboard {
         });
 
         writeData(newData);
-        // console.log(newData)
     }
 
     handleEventHistory() {
@@ -2122,7 +2119,7 @@ export class Scoreboard {
             });
         });
     }
-
+    
 }
 
 
