@@ -1747,7 +1747,7 @@ export class Scoreboard {
             // Calculate if this was a break point
             let breakAttribute = '';
             if (isActive) {
-                const servingPlayer = this.getServingPlayerAtPoint(i);
+                const servingPlayer = this.getServingPlayerAtPoint(i, set);
                 const servingTeam = this.getPlayerTeam(servingPlayer);
                 const isBreak = servingTeam == team;
                 breakAttribute = isBreak ? ' break' : '';
@@ -1955,21 +1955,41 @@ export class Scoreboard {
             console.error('No set or game type specified');
             return;
         }
-        
-        // Process each score event
-        scoreEvents.forEach((event, index) => {
-            if (!event.team || !event.set) return;
-            
+
+        // Optimiert: Nur die Event-Liste je nach Typ unterschiedlich erzeugen, die Auswertung ist identisch
+        let eventsToProcess = [];
+        if (type === 'game') {
+            // Gruppiere die Score-Events nach Satz und füge sie mit setIndex hinzu
+            const eventsBySet = {};
+            scoreEvents.forEach(event => {
+                if (!event.set) return;
+                if (!eventsBySet[event.set]) eventsBySet[event.set] = [];
+                eventsBySet[event.set].push(event);
+            });
+            Object.keys(eventsBySet).forEach(setKey => {
+                const setEvents = eventsBySet[setKey];
+                setEvents.forEach((event, setIndex) => {
+                    // Wir merken uns den Index innerhalb des Satzes
+                    eventsToProcess.push({ event, index: setIndex, set: event.set });
+                });
+            });
+        } else {
+            // Einzelner Satz: Index ist einfach der Array-Index
+            scoreEvents.forEach((event, index) => {
+                eventsToProcess.push({ event, index, set: event.set });
+            });
+        }
+
+        // Gemeinsame Auswertung
+        eventsToProcess.forEach(({ event, index, set }) => {
+            if (!event.team || !set) return;
+
             const team = event.team.toLowerCase();
-            const set = event.set;
-            
-            // Determine who was serving at this point and if it was a break
+
             const servingPlayer = this.getServingPlayerAtPoint(index, set);
             const receivingPlayer = this.getReceivingPlayerAtPoint(index, set);
             const servingTeam = this.getPlayerTeam(servingPlayer);
             const isBreak = (team == servingTeam);
-
-            // console.log(servingPlayer, receivingPlayer, isBreak);
 
             // set break opportunities and sideout opportunities for team and player
             stats[`team${servingTeam.toUpperCase()}`].breakOpportunities++;
