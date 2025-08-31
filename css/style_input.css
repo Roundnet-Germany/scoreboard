@@ -579,7 +579,6 @@ select.small {
   align-items: flex-start;
   gap: 6px;
   padding: 3px 0px;
-  overflow: hidden;
 }
 
 .scores .current_players_info .current_server,
@@ -603,9 +602,6 @@ select.small {
   font-size: .9rem;
   font-weight: 400;
   color: #333;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .scores .scores_container .teams {
@@ -741,7 +737,7 @@ select.small {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
-  gap: 12px;
+  gap: 4px;
 }
 
 .scores .bottom .right {
