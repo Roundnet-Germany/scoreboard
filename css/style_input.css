@@ -373,7 +373,6 @@ header .header_right .user #username {
   display: flex;
   flex-direction: row;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .container {
