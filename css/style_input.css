@@ -822,7 +822,7 @@ select#Match_Stats_Type {
 .output .url_output_container a {
   width: 100%;
   text-wrap: nowrap !important;
-  overflow: hidden !important;
+  overflow-x: hidden !important;
   text-overflow: ellipsis !important;
   background-color: #eeeeee;
   padding: 4px 30px 6px 8px;
@@ -830,11 +830,6 @@ select#Match_Stats_Type {
   text-decoration: none;
   font-size: 1.075rem;
   color: #000000aa;
-  display: -webkit-box;
-  -webkit-line-clamp: 1; /* number of lines to show */
-          line-clamp: 1; 
-  -webkit-box-orient: vertical;
-  line-height: 140%;
 }
 
 @media only screen and (max-width: 900px) and (pointer: coarse) {
