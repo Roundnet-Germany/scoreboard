@@ -8,13 +8,19 @@
 }
 
 :root {
-  --primary: #F2C650;
+  --primary: #fcc155;
   --secondary: #C55151;
   --special: #3C5B96;
   --white: #ffffff;
   --text-primary: #000000;
-  --light-2: #FDF8E9;
-  --light-3: #FBF2D8;
+  --text-secondary: #00000044;
+  --light-2: hsl(39, 94%, 95%);
+  --light-3: hsl(39, 92%, 90%);
+  --light-4: hsl(39, 89%, 87%);
+  --light-5: hsl(39, 84%, 80%);
+  --light-6: hsl(39, 79%, 75%);
+  --light-7: hsl(39, 74%, 70%);
+  --light-8: hsl(39, 69%, 65%);
   --secondary-1: rgba(197, 81, 81, 0.2);
 }
 
@@ -131,7 +137,7 @@
   align-items: center;
   padding-bottom: 1px;
   max-width: 100%;
-  gap: 9px;
+  gap: 8px;
 }
 
 .teams .team:last-child {
@@ -142,7 +148,7 @@
   min-width: 6px;
   height: 77%;
   border-radius: 2px;
-  margin-top: 5px;
+  margin-top: 3px;
   background-color: var(--text-primary);
   border: 0px;
   box-sizing: border-box;
@@ -159,7 +165,6 @@
 
 .teams .team .color-indicator.light {
   border: 1px solid #bbbbbb;
-  box-sizing: content-box;
   margin-left: -1px;
   width: 5px;
 }
@@ -187,6 +192,10 @@
   /* font-family: 'Barlow', sans-serif; */
 }
 
+.player_names {
+  display: none !important;
+}
+
 .counter {
   font-size: 23px;
   font-weight: 600;
@@ -200,10 +209,6 @@
   flex-grow: 1;
 }
 
-body[players='show'] .counter {
-  font-size: 34px;
-}
-
 .counter:not(.group) {
   width: 36px;
   background-color: var(--light-3);
@@ -214,7 +219,7 @@ body[players='show'] .counter {
   background-color: var(--secondary-1);
 }
 
-.active .counter {
+.active:not(.completed) .counter {
   border: 2px solid var(--primary);
 }
 
@@ -307,3 +312,20 @@ body[players='show'] .counter {
   transform: scale(.95);
 }
 
+.indicators {
+  padding-right: 14px;
+}
+
+.serve_indicator {
+  width: 9px;
+  height: 9px;
+  margin-top: 14px;
+}
+
+
+.serve_indicator.serve_1::before,
+.serve_indicator.serve_2::before {
+  width: 9px;
+  height: 9px;
+  bottom: 13px;
+}
