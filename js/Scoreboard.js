@@ -528,12 +528,21 @@ export class Scoreboard {
         if (part && (part === 'prename' || part === 'surname')) {
             // Split the full name at the first space
             const nameParts = String(value).split(' ');
-            if (part === 'prename') {
-                // Set the first part (everything before the first space)
-                $elem.text(nameParts[0] || '');
-            } else if (part === 'surname') {
-                // Set everything after the first space (join remaining parts)
-                $elem.text(nameParts.slice(1).join(' ') || '');
+            if (nameParts.length === 1) {
+                // Only one name part: set only surname, leave prename empty
+                if (part === 'prename') {
+                    $elem.text('');
+                } else if (part === 'surname') {
+                    $elem.text(nameParts[0] || '');
+                }
+            } else {
+                if (part === 'prename') {
+                    // Set the first part (everything before the first space)
+                    $elem.text(nameParts[0] || '');
+                } else if (part === 'surname') {
+                    // Set everything after the first space (join remaining parts)
+                    $elem.text(nameParts.slice(1).join(' ') || '');
+                }
             }
             return;
         }
