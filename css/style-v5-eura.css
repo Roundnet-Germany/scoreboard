@@ -106,7 +106,7 @@
   margin-top: 5px;
 }
 
-.center {
+.board .center {
   display: flex;
   flex-direction: row;
   align-items: stretch;
@@ -118,7 +118,7 @@
   margin-bottom: -1px;
 }
 
-.center * {
+.board  .center * {
   font-family: 'Oswald';
   /* font-weight: 400 !important; */
 }

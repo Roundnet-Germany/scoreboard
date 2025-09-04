@@ -926,6 +926,10 @@ html, body {
   object-fit: contain;
 }
 
+.overlay .player img[src=""] {
+  display: none;
+}
+
 .overlay.match_preview .players_container .player .details .rgx {
   margin-top: 8px;
 }
@@ -1046,7 +1050,7 @@ html, body {
   justify-content: space-between;
   align-items: stretch;
   gap: 50px;
-  padding: 60px 30px 70px 30px;
+  padding: 62px 30px 70px 30px;
 }
 
 .match_statistics .team_statistics > *:not(.spacer) {
@@ -1155,10 +1159,11 @@ html, body {
 }
 
 .match_statistics .team_stats_container .team_stats .team_overall_stats .stat_item .stat_label {
-  font-size: .8rem;
-  font-weight: 300;
+  font-size: 1.3rem;
+  font-weight: 400;
   text-transform: uppercase;
   font-family: 'Barlow Condensed', sans-serif;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .match_statistics .team_stats_container .team_stats .set_stats {
@@ -1317,15 +1322,16 @@ html, body {
 
 .match_statistics .player_stats .col_label {
   position: absolute;
-  top: -38px;
+  top: -40px;
   width: 100%;
   text-align: center;
 }
 
-.match_statistics .player_stats .col_label p{
-  font-size: 1rem;
+.match_statistics .player_stats .col_label p {
+  font-size: 1.4rem;
   font-weight: 400;
   text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .match_statistics .player_stats .player_stats_container {
