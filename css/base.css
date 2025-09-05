@@ -1227,7 +1227,7 @@ html, body {
 .match_statistics .players_container .team {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: space-around;
   align-items: stretch;
   gap: 16px;
   padding-bottom: 28px;
