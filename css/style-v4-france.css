@@ -284,3 +284,7 @@
   transform: scale(.95);
 }
 
+.overlay {
+  border-radius: 8px;
+}
+

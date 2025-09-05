@@ -91,31 +91,52 @@ html, body {
   gap: 1.5vh;
 }
 
-.team_a .name, .team_a .active_card {
+.team_a .name,
+.team_a .active_card {
   background-color: var(--A_Color);
 }
+
 .team_a .sets_card {
   border: 1vw solid var(--A_Color);
 }
-.team_a p.teamname, .team_a .active_card p {
+
+.team_a p.teamname,
+.team_a .active_card p {
   color: var(--text-primary);
 }
-.team_a.light p.teamname,.team_a.light .active_card p {
+
+/* .team .name .player_names {
+  display: flex !important;
+} */
+
+.team.light p.teamname,
+.team.light .player_names *,
+.team.light .active_card p {
   color: var(--text-dark);
 }
 
-.team_b .name, .team_b .active_card {
+.team .name .player_names * {
+  font-size: 3.9vh;
+}
+
+.team_b .name,
+.team_b .active_card {
   background-color: var(--B_Color);
 }
+
 .team_b .sets_card {
   border: 1vw solid var(--B_Color);
 }
-.team_b p.teamname, .team_b .active_card p {
+
+.team_b p.teamname,
+.team_b .active_card p {
   color: var(--text-primary);
 }
-.team_b.light p.teamname, .team_b.light .active_card p {
+
+/* .team_b.light p.teamname,
+.team_b.light .active_card p {
   color: var(--text-dark);
-}
+} */
 
 /* .serve_indicator {
   margin-right: 14px;
@@ -169,15 +190,24 @@ html, body {
 .team .name {
   display: flex;
   flex-direction: row;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
-  padding: 1vh 2vh;
-  height: calc(17% - 2vh);
+  padding: 1vh 4vh;
+  height: calc(27% - 2vh);
 }
 
-.team .name p {
+.team .name .right {
+  max-width: 90%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.team .name p.teamname {
   font-size: 6.3vh;
-  padding-bottom: 1%;
+  padding-bottom: 0;
+  margin-top: -1.5vh;
+  margin-bottom: -1.4vh;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -188,7 +218,7 @@ html, body {
   flex-direction: row;
   justify-content: space-between;
   align-items: flex-start;
-  height: 83%;
+  height: 73%;
   gap: 1.2vw;
 }
 
@@ -281,10 +311,11 @@ html, body {
   }
 
   .team .name {
-    min-height: 62px;
+    min-height: 56px;
+    padding: 1vh;
   }
 
-  .team .name p {
+  .team .name p.teamname {
     font-size: 4.1vw;
     line-height: 1.3;
     white-space: normal;
@@ -294,6 +325,12 @@ html, body {
     -ms-hyphens: auto;
     hyphens: auto;
     text-align: center;
+    margin-bottom: -.2vh;
+    margin-top: 0vh;
+  }
+
+  .team .name .player_names * {
+    font-size: 1.5vh;
   }
 
   .team .score {

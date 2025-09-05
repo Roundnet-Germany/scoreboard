@@ -167,6 +167,7 @@
   border: 1px solid #bbbbbb;
   margin-left: -1px;
   width: 5px;
+  min-width: 5px;
 }
 
 .teams .team p.teamname {
