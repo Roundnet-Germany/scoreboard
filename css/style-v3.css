@@ -105,9 +105,10 @@ html, body {
   color: var(--text-primary);
 }
 
-/* .team .name .player_names {
-  display: flex !important;
-} */
+.team .name .player_names {
+  /* display: flex !important; */
+  gap: 1.2vh;
+}
 
 .team.light p.teamname,
 .team.light .player_names *,
@@ -327,6 +328,10 @@ html, body {
     text-align: center;
     margin-bottom: -.2vh;
     margin-top: 0vh;
+  }
+
+  .team .name .player_names {
+    gap: .4vh
   }
 
   .team .name .player_names * {
