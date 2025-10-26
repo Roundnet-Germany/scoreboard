@@ -135,6 +135,7 @@ export class Scoreboard {
             this.theme = theme;
         }
 
+        const html_structure = themes[theme].html_structure;
         const css_path = themes[theme].css_path;
         const extensionIndex = css_path.lastIndexOf('.');
         const css_path_input = css_path.slice(0, extensionIndex) + "_input" + css_path.slice(extensionIndex);
@@ -144,13 +145,13 @@ export class Scoreboard {
 
         // Add relevant stylesheets
         $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('href', '../css/base.css').appendTo('head');
+        $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('href', '../css/style-output.css').appendTo('head');
         $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('href', css_path).appendTo('head');
         
         if (this.type === 'input') {
             $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('href', css_path_input).appendTo('head');
         } else if (this.type === 'output') {
             // Set corresponding html
-            const html_structure = themes[theme].html_structure;
             $('.scoreboard').hide();
             $(`.scoreboard[theme="${html_structure}"]`).show();
 
@@ -1528,7 +1529,7 @@ export class Scoreboard {
             serveOrder = ['d', 'b', 'c', 'a'];
         } else if (startingServer == 'd' && startingReceiver == 'b') {
             serveOrder = ['d', 'a', 'c', 'b'];
-        }        
+        }
         
         const startIndex = serveOrder.indexOf(startingServer);
         // const startIndex = serveOrder.indexOf(this.playerLocationTransformation(startingServer, 'player', set));
