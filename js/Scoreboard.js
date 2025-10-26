@@ -1574,11 +1574,11 @@ export class Scoreboard {
             overtimeOrder21 = ['b', 'c', 'a', 'd'];
         } else if (startingServer == 'b' && startingReceiver == 'c') {
             receivingOrder = ['c', 'a', 'b', 'c', 'd', 'b', 'a', 'd'];
-            overtimeOrder15 = ['b', 'd', 'a', 'c'];
+            overtimeOrder15 = ['b', 'c', 'a', 'd'];
             overtimeOrder21 = ['a', 'd', 'b', 'c'];
         } else if (startingServer == 'b' && startingReceiver == 'd') {
             receivingOrder = ['d', 'a', 'b', 'd', 'c', 'b', 'a', 'c'];
-            overtimeOrder15 = ['b', 'c', 'a', 'd'];
+            overtimeOrder15 = ['b', 'd', 'a', 'c'];
             overtimeOrder21 = ['a', 'c', 'b', 'd'];
         } else if (startingServer == 'c' && startingReceiver == 'a') {
             receivingOrder = ['a', 'd', 'c', 'a', 'b', 'c', 'd', 'b'];
