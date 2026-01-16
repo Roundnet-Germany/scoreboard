@@ -53,7 +53,7 @@
   height: var(--top-height);
 }
 
-.team {
+.scoreboard .team {
   height: 100%;
   display: flex;
   flex-direction: row;
@@ -62,7 +62,7 @@
   gap: 6px;
 }
 
-.team .name {
+.scoreboard .team .name {
   height: 100%;
   width: 450px;
   display: flex;
@@ -71,7 +71,7 @@
   align-items: center;
 }
 
-.team .name .content {
+.scoreboard .team .name .content {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -80,7 +80,7 @@
   max-width: 90%;
 }
 
-.team .score {
+.scoreboard .team .score {
   height: 100%;
   width: 110px;
   display: flex;
@@ -89,7 +89,8 @@
   align-items: center;
 }
 
-.team .name, .team .score {
+.scoreboard .team .name,
+.scoreboard .team .score {
   box-sizing: border-box;
   background-color: var(--background);
   border: 5px solid var(--primary);
@@ -101,43 +102,47 @@
   border: 5px solid var(--background);
 } */
 
-.team .score p {
+.scoreboard .team .score p {
   font-weight: 700;
   font-size: 52px;
   margin-top: -7px;
 }
 
-.team .teamname {
+.scoreboard .team .teamname {
   font-size: 36px;
   font-weight: 500;
   margin-top: -7px;
   margin-bottom: -4px;
 }
 
-.team .player_names {
+.scoreboard .team .player_names {
   font-size: 16px;
   font-weight: 300;
   opacity: .8;
 }
 
-.team .player_names > * {
+.scoreboard .team .player_names > * {
   font-size: 16px;
   font-weight: 300;
 }
 
-.left .score, .left .name {
+.scoreboard .left .score,
+.scoreboard .left .name {
   transform: skew(16deg);
 }
 
-.left .score > *, .left .name > * {
+.scoreboard .left .score > *,
+.scoreboard .left .name > * {
   transform: skew(-16deg);
 }
 
-.right .score, .right .name {
+.scoreboard .right .score,
+.scoreboard .right .name {
   transform: skew(-16deg);
 }
 
-.right .score > *, .right .name > * {
+.scoreboard .right .score > *,
+.scoreboard .right .name > * {
   transform: skew(16deg);
 }
 
@@ -207,7 +212,8 @@
   margin-top: -31.5px;
 }
 
-.bottom .content p {
+.bottom .content p,
+.bottom .content span {
   color: var(--primary);
   font-size: 14px;
   font-weight: 400;
@@ -221,3 +227,7 @@
   margin: 1px 10px 0 10px;
 }
 
+.overlay .team_rgx:not(.pro) span,
+.overlay .rgx:not(.pro) span {
+  color: #000000;
+}
