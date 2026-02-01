@@ -95,6 +95,29 @@ html, body {
   color: #ffffff;
 }
 
+#auth #submit.is-loading {
+  pointer-events: none;
+}
+
+#auth #submit.is-loading::before {
+  content: "";
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 0.5em;
+  vertical-align: middle;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: auth-spinner 0.7s linear infinite;
+}
+
+@keyframes auth-spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .banner {
   position: fixed;
   z-index: 100;

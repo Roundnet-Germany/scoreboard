@@ -79,27 +79,44 @@ export class Scoreboard {
     /* ==============================================================================
      * Initialize the scoreboard with event listeners and data synchronization
      * Sets up intervals for UI updates and data fetching based on board type
+     * Input: Daten-Polling erst nach Login (startDataSync()), um Permission denied zu vermeiden
      * ============================================================================== */
     init() {
         this.initEventListeners();
-        this.insertLiveData();
-        
+
         // Update UI every 300ms for smooth real-time updates
         this.update_interval = setInterval(() => {
             this.updateUI();
         }, 300);
 
-        // Input mode: slower updates (2000ms) since admin controls the data
-        // Output mode: faster updates (500ms) for real-time display
-        const dataIntervalDelay = this.type === 'input' ? 2000 : 500;
-        this.data_interval = setInterval(() => {
+        if (this.type === 'input') {
+            // Input: Daten-Polling erst nach Login starten (main.js ruft startDataSync() auf)
+            // Kein insertLiveData() und kein data_interval hier – sonst Permission denied auf dem Login-Screen
+        } else {
+            // Output: sofort Daten laden und Intervall starten
             this.insertLiveData();
-        }, dataIntervalDelay);
+            this.data_interval = setInterval(() => {
+                this.insertLiveData();
+            }, 500);
+        }
 
         // Set theme for output type
         if (this.type === 'output') {
             this.setTheme(this.theme);
         }
+    }
+
+    /**
+     * Startet das Daten-Polling für Input-Modus (nach erfolgreichem Login).
+     * Wird von main.js aufgerufen, sobald der User eingeloggt ist.
+     */
+    startDataSync() {
+        if (this.type !== 'input' || this.data_interval !== null) return;
+        if (window.AUTH_DEBUG) console.log("[Scoreboard] startDataSync aufgerufen");
+        this.insertLiveData();
+        this.data_interval = setInterval(() => {
+            this.insertLiveData();
+        }, 2000);
     }
 
 
@@ -196,7 +213,7 @@ export class Scoreboard {
             e.preventDefault();
             const text = this.$urlOutput.attr('href');
             copyToClipboard(text);
-            showToast('📋', 'Copied url to clipboard');
+            showToast('📋', 'URL copied to clipboard');
         });
 
         // Initialize lock icons functionality
@@ -362,10 +379,14 @@ export class Scoreboard {
             this.uploadData();
         });
 
-        // Logout button handler
+        // Logout button handler (nutzt User.logout() für Firebase signOut)
         this.$logoutButton.click(() => {
-            localStorage.clear();
-            location.reload();
+            if (this.user && typeof this.user.logout === 'function') {
+                this.user.logout();
+            } else {
+                localStorage.clear();
+                location.reload();
+            }
         });
     }
 
@@ -428,11 +449,15 @@ export class Scoreboard {
      * Handles different data types: event history, admin settings, team colors, and general values
      * ============================================================================== */
     async insertLiveData() {
-        console.log("inserting live data for channel ", this.channel);
-
-        // Receive data from firebase
-        const data = await readData(this.channel);
-        this.processDataAndUpdateFields(data);
+        if (window.AUTH_DEBUG) console.log("[Scoreboard] insertLiveData start, channel=" + this.channel + ", type=" + this.type);
+        try {
+            const data = await readData(this.channel);
+            this.processDataAndUpdateFields(data);
+            if (window.AUTH_DEBUG) console.log("[Scoreboard] insertLiveData ok, channel=" + this.channel);
+        } catch (err) {
+            if (window.AUTH_DEBUG) console.warn("[Scoreboard] insertLiveData error, channel=" + this.channel, err?.code || err?.message, err);
+            throw err;
+        }
     }
 
 

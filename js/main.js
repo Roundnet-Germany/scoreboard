@@ -1,6 +1,6 @@
 // import firebase config
-import {get, ref, update, set} from "https://www.gstatic.com/firebasejs/10.5.2/firebase-database.js";
-import {db} from "./firebase_config.js";
+import { get, ref, update, set } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-database.js";
+import { db, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase_config.js";
 
 import { User } from "./User.js";
 import { Scoreboard } from "./Scoreboard.js";
@@ -32,10 +32,16 @@ export const themes = {
     },
 }
 
+// Debug: auf true setzen für Console-Logs (Auth/Daten-Flow); wird auch für Scoreboard exponiert
+const AUTH_DEBUG = true;
+if (typeof window !== 'undefined') window.AUTH_DEBUG = AUTH_DEBUG;
+
 // Initialize variables for global usage
 let loggedInUser;
 let scoreboard;
 let $banner, $logoutButton, $userString;
+/** Wird beim Form-Login gesetzt, damit onAuthStateChanged nicht doppelt startDataSync() auslöst. */
+let loginInProgressFromForm = false;
 
 // =========================================== Page Load ======================================= //
 
@@ -73,14 +79,39 @@ $(document).ready(async function () {
 // ========================================= Data Functions ===================================== //
 
 export async function readData(channel) {
-    const matchRef = ref(db, `match-${channel}`);
-    const matchData = await get(matchRef);
-    return matchData.val();
+    if (AUTH_DEBUG) console.log("[Data] readData start, channel:", channel);
+    try {
+        const matchRef = ref(db, `match-${channel}`);
+        const matchData = await get(matchRef);
+        if (AUTH_DEBUG) console.log("[Data] readData ok, channel:", channel);
+        return matchData.val();
+    } catch (err) {
+        if (AUTH_DEBUG) console.warn("[Data] readData error, channel:", channel, err?.code || err?.message, err);
+        throw err;
+    }
 }
 
-async function getUsers() {
+// Kurzer Cache für users – vermeidet mehrfache langsame Reads und nutzt Preload
+const USERS_CACHE_TTL_MS = 60_000; // 1 Minute
+let _usersCache = { data: null, timestamp: 0 };
+
+async function getUsers(useCache = true) {
+    const now = Date.now();
+    if (useCache && _usersCache.data !== null && now - _usersCache.timestamp < USERS_CACHE_TTL_MS) {
+        if (AUTH_DEBUG) console.log("[Auth] getUsers aus Cache");
+        return _usersCache.data;
+    }
+    if (AUTH_DEBUG) console.log("[Auth] getUsers start (Netzwerk)");
     const usersData = await get(ref(db, 'users'));
-    return usersData.val();
+    const val = usersData.val();
+    _usersCache = { data: val, timestamp: Date.now() };
+    if (AUTH_DEBUG) console.log("[Auth] getUsers ok");
+    return val;
+}
+
+/** Users im Hintergrund laden (z. B. wenn Login-Formular erscheint), damit der erste echte getUsers() schnell ist. */
+function preloadUsers() {
+    getUsers(false).catch(() => {});
 }
 
 export async function writeData(newData) {
@@ -95,44 +126,90 @@ export async function writeData(newData) {
 // ========================================= Global Functions ===================================== //
 
 async function handleAuthentication(scoreboard) {
-    return new Promise(async (resolve) => {
-        const storedUser = localStorage.getItem('currentUser');
+    preloadUsers(); // Sofort starten, damit getUsers() später oft aus dem Cache kommt
+    return new Promise((resolve) => {
+        onAuthStateChanged(auth, async (firebaseUser) => {
+            if (AUTH_DEBUG) console.log("[Auth] onAuthStateChanged", firebaseUser ? "user=" + firebaseUser.email : "user=null", "loginInProgressFromForm=" + loginInProgressFromForm);
 
-        if (storedUser) {
-            // Check if user is stored in localStorage
-            const userData = JSON.parse(storedUser);
-            loggedInUser = await login(userData.username, userData.password || "");
-
-            if (loggedInUser) {
-                // User successfully authenticated, assign to scoreboard
-                scoreboard.user = loggedInUser;
-                scoreboard.updateAvailableChannels();
-                resolve(loggedInUser);
-            }
-        }
-
-        // If no user in localStorage or login failed
-        if (!loggedInUser) {
-            $('#auth').show();
-
-            // Login form for user authentication
-            $('form#login').on('submit', async function (e) {
-                e.preventDefault();
-                const username = $('#auth #username').val();
-                const password = $('#auth #password').val();
-                
-                loggedInUser = await login(username, password);
-
-                if (loggedInUser) {
-                    $('#auth').hide();
-                    // Set user and update scoreboard
+            if (firebaseUser) {
+                // Wenn gerade Form-Login läuft: UI-Update und startDataSync macht der Form-Handler (vermeidet Race + doppelte Aufrufe)
+                if (loginInProgressFromForm) {
+                    if (AUTH_DEBUG) console.log("[Auth] onAuthStateChanged: skip (Form-Login übernimmt)");
+                    return;
+                }
+                if (AUTH_DEBUG) console.log("[Auth] onAuthStateChanged: Session vorhanden, lade User-Daten…");
+                const users = await getUsers();
+                const dbUser = findUserByAccountMail(users, firebaseUser.email);
+                if (dbUser) {
+                    const authChannels = typeof dbUser.channels === 'string'
+                        ? dbUser.channels.split(',') : dbUser.channels;
+                    loggedInUser = new User(dbUser.key, authChannels, dbUser.display_name);
                     scoreboard.user = loggedInUser;
                     scoreboard.updateAvailableChannels();
+                    scoreboard.startDataSync();
+                    $('#auth').hide();
+                    $userString.html(dbUser.display_name);
+                    $logoutButton.html('Logout');
+                    if (AUTH_DEBUG) console.log("[Auth] onAuthStateChanged: eingeloggt (Session), startDataSync aufgerufen");
                     resolve(loggedInUser);
+                } else {
+                    showToast("⚠️", "No account found for this email.");
+                    signOut(auth);
                 }
-            });
-        }
+            } else {
+                loggedInUser = null;
+                loginInProgressFromForm = false;
+                $('#auth').show();
+                preloadUsers(); // Users im Hintergrund laden, damit getUsers() beim Klick auf Login oft aus dem Cache kommt
+                if (AUTH_DEBUG) console.log("[Auth] onAuthStateChanged: kein User, Login-Formular angezeigt");
+
+                $('form#login').off('submit').on('submit', async function (e) {
+                    e.preventDefault();
+                    const $submitBtn = $('#auth #submit');
+                    const originalText = $submitBtn.text();
+                    $submitBtn.prop('disabled', true).addClass('is-loading').text('Signing in…');
+                    loginInProgressFromForm = true;
+                    if (AUTH_DEBUG) console.log("[Auth] Form Submit: Login start…");
+
+                    try {
+                        const usernameOrEmail = $('#auth #username').val().trim();
+                        const password = $('#auth #password').val();
+                        loggedInUser = await login(usernameOrEmail, password);
+
+                        if (loggedInUser) {
+                            $('#auth').hide();
+                            scoreboard.user = loggedInUser;
+                            scoreboard.updateAvailableChannels();
+                            scoreboard.startDataSync();
+                            $userString.html(loggedInUser.displayName);
+                            $logoutButton.html('Logout');
+                            if (AUTH_DEBUG) console.log("[Auth] Form Submit: Login OK, startDataSync aufgerufen");
+                            showToast("✅", `Signed in as ${loggedInUser.displayName}`, 2000);
+                            resolve(loggedInUser);
+                        }
+                    } finally {
+                        loginInProgressFromForm = false;
+                        $submitBtn.prop('disabled', false).removeClass('is-loading').text(originalText);
+                        if (AUTH_DEBUG) console.log("[Auth] Form Submit: Ende (loginInProgressFromForm=false)");
+                    }
+                });
+            }
+        });
     });
+}
+
+/** Findet den DB-User anhand der Firebase-Auth-E-Mail (account_mail). */
+function findUserByAccountMail(users, email) {
+    if (!users || !email) return null;
+    for (const [key, val] of Object.entries(users)) {
+        if (val.account_mail === email)
+            return {
+                key,
+                channels: val.channels,
+                display_name: val.display_name || key
+            };
+    }
+    return null;
 }
 
 async function signUp(email, password) {
@@ -155,30 +232,66 @@ async function signUp(email, password) {
     }
 }
 
-async function login(username, inputPassword) {
-    const users = await getUsers();
+/** Max. Wartezeit für Firebase Auth (danach Abbruch mit Timeout-Meldung). */
+const AUTH_TIMEOUT_MS = 10_000;
 
-    if (users && users[username]) {
-        const user = users[username];
-        if (inputPassword === user.password) {
-            console.log(`${username} is now logged in.`);
-            const authChannels = users[username].channels.split(',');
-            loggedInUser = new User(username, user.password, authChannels);
-            $('#auth').hide();
-            $userString.html(`${users[username].display_name}`);
-            $logoutButton.html(`Logout`);           
-            showToast("✅", `Successfully logged in as ${users[username].display_name}`, 2000);
-        } else {
-            showToast("❌", "The entered credentials are wrong, please try it again");
+function withTimeout(promise, ms, timeoutMessage = 'Zeitüberschreitung') {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) =>
+            setTimeout(() => reject(Object.assign(new Error(timeoutMessage), { code: 'auth/timeout' })), ms)
+        )
+    ]);
+}
+
+/**
+ * Login per Firebase Auth (E-Mail + Passwort).
+ * usernameOrEmail: E-Mail oder Username (DB-Key); bei Username wird account_mail aus der DB verwendet.
+ */
+async function login(usernameOrEmail, password) {
+    const users = await getUsers();
+    let email;
+
+    if (usernameOrEmail.includes('@')) {
+        email = usernameOrEmail.trim();
+    } else {
+        const dbEntry = users && users[usernameOrEmail];
+        if (!dbEntry || !dbEntry.account_mail) {
+            showToast("❌", "User not found. Try your email address instead.");
             return null;
         }
-    } else {
-        // User doesn't exist, prompt for registration
-        showToast("🆕", `User not found. You first have to register`);
+        email = dbEntry.account_mail.trim();
+    }
+
+    if (AUTH_DEBUG) console.log("[Auth] login: signInWithEmailAndPassword start, email=" + email);
+    try {
+        await withTimeout(
+            signInWithEmailAndPassword(auth, email, password),
+            AUTH_TIMEOUT_MS,
+            'Sign-in is taking too long.'
+        );
+        if (AUTH_DEBUG) console.log("[Auth] login: signInWithEmailAndPassword ok");
+    } catch (err) {
+        if (AUTH_DEBUG) console.warn("[Auth] login: signInWithEmailAndPassword error", err?.code, err?.message);
+        if (err.code === 'auth/timeout') {
+            showToast("⏱️", "Sign-in is taking too long. Please try again.");
+        } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+            showToast("❌", "Wrong email or password. Please try again.");
+        } else {
+            showToast("❌", err.message || "Sign-in failed.");
+        }
         return null;
     }
 
-    return loggedInUser || null;
+    const dbUser = findUserByAccountMail(users, email);
+    if (!dbUser) {
+        showToast("⚠️", "No account found for this email.");
+        signOut(auth);
+        return null;
+    }
+
+    const authChannels = typeof dbUser.channels === 'string' ? dbUser.channels.split(',') : dbUser.channels;
+    return new User(dbUser.key, authChannels, dbUser.display_name);
 }
 
 export function showToast(emoji, message, duration) {

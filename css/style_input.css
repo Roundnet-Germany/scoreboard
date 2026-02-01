@@ -584,8 +584,8 @@ select.small {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
-  padding: 3px 0px;
+  gap: 4px;
+  padding: 2px 0px;
   overflow: hidden;
 }
 
@@ -596,7 +596,7 @@ select.small {
   gap: 4px;
   align-items: baseline;
   border: 1px solid #ddd;
-  padding: 1px 4px 2px 4px;
+  padding: 0px 4px 2px 4px;
   border-radius: 4px;
 }
 
