@@ -1,34 +1,34 @@
 // import firebase config
 import { get, ref, update, set } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-database.js";
-import { db, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase_config.js";
+import { db, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase_config.js?v=3";
 
-import { User } from "./User.js";
-import { Scoreboard } from "./Scoreboard.js";
+import { User } from "./User.js?v=3";
+import { Scoreboard } from "./Scoreboard.js?v=3";
 
 export const themes = {
     'full': {
         'html_structure': 'full',
-        'css_path': 'css/style-v3.css'
+        'css_path': 'css/style-v3.css?v=3'
     },
     'small': {
         'html_structure': 'vertical_score',
-        'css_path': 'css/style-v5.css'
+        'css_path': 'css/style-v5.css?v=3'
     },
     'rg': {
         'html_structure': 'vertical_score',
-        'css_path': 'css/style-v1.css'
+        'css_path': 'css/style-v1.css?v=3'
     },
     'tops': {
         'html_structure': 'horizontal_score',
-        'css_path': 'css/style-v2.css'
+        'css_path': 'css/style-v2.css?v=3'
     },
     'france': {
         'html_structure': 'vertical_score',
-        'css_path': 'css/style-v4-france.css'
+        'css_path': 'css/style-v4-france.css?v=3'
     },
     'eura': {
         'html_structure': 'vertical_score',
-        'css_path': 'css/style-v5-eura.css'
+        'css_path': 'css/style-v5-eura.css?v=3'
     },
 }
 

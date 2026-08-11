@@ -6,16 +6,16 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scoreboards</title>
-    <link rel="stylesheet" href="css/base.css">
-    <link rel="stylesheet" href="css/style-output.css">
+    <link rel="stylesheet" href="css/base.css?v=3">
+    <link rel="stylesheet" href="css/style-output.css?v=3">
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.14.1/jquery-ui.min.js" integrity="sha512-MSOo1aY+3pXCOCdGAYoBZ6YGI0aragoQsg1mKKBHXCYPIWxamwOE7Drh+N5CPgGI5SA9IEKJiPjdfqWFWmZtRA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <script type="module" src="js/firebase_config.js"></script>
+    <script type="module" src="js/firebase_config.js?v=3"></script>
 
-    <link rel="stylesheet" href="css/style-v1.css">
+    <link rel="stylesheet" href="css/style-v1.css?v=3">
 
 </head>
 
@@ -33,6 +33,7 @@
                 <div class="teams">
                     <div class="team">
                         <div class="color-indicator" fb-data="teams_info.team_a.color"></div>
+                        <img class="flag-indicator team_a" width="28" height="21" alt="">
                         <div class="name">
                             <p class="teamname" fb-data="teams_info.team_a.name">A Teamname</p>
                             <div class="player_names">
@@ -44,6 +45,7 @@
                     </div>
                     <div class="team">
                         <div class="color-indicator" fb-data="teams_info.team_b.color"></div>
+                        <img class="flag-indicator team_b" width="28" height="21" alt="">
                         <div class="name">
                             <p class="teamname" fb-data="teams_info.team_b.name">B Teamname</p>
                             <div class="player_names">
@@ -304,12 +306,14 @@
             <div class="teams_info">
                 <div class="team">
                     <div class="color-indicator" fb-data="teams_info.team_a.color"></div>
+                    <img class="flag-indicator team_a" width="28" height="21" alt="">
                     <div class="name">
                         <p class="teamname" fb-data="teams_info.team_a.name">A Teamname</p>
                     </div>
                 </div>
                 <div class="team">
                     <div class="color-indicator" fb-data="teams_info.team_b.color"></div>
+                    <img class="flag-indicator team_b" width="28" height="21" alt="">
                     <div class="name">
                         <p class="teamname" fb-data="teams_info.team_b.name">B Teamname</p>
                     </div>
@@ -870,12 +874,14 @@
                 <div class="teams_info">
                     <div class="team">
                         <div class="color-indicator" fb-data="teams_info.team_a.color"></div>
+                        <img class="flag-indicator team_a" width="28" height="21" alt="">
                         <div class="name">
                             <p class="teamname" fb-data="teams_info.team_a.name">A Teamname</p>
                         </div>
                     </div>
                     <div class="team">
                         <div class="color-indicator" fb-data="teams_info.team_b.color"></div>
+                        <img class="flag-indicator team_b" width="28" height="21" alt="">
                         <div class="name">
                             <p class="teamname" fb-data="teams_info.team_b.name">B Teamname</p>
                         </div>
@@ -1034,7 +1040,7 @@
     </div>
     
 
-    <script type="module" src="js/main.js"></script>
+    <script type="module" src="js/main.js?v=3"></script>
 
 </body>
 

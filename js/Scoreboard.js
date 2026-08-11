@@ -1,4 +1,5 @@
-import { themes, readData, getPathsAndValues, getColorBrightness, rgb2hex, writeData, showToast, copyToClipboard } from "./main.js";
+import { themes, readData, getPathsAndValues, getColorBrightness, rgb2hex, writeData, showToast, copyToClipboard } from "./main.js?v=3";
+import { resolveFlag, getCountryList } from "./flags.js?v=3";
 
 
 /* ==============================================================================
@@ -49,6 +50,7 @@ export class Scoreboard {
         this.settings = {
             "show_player_names": 1,
             "show_color": 1,
+            "show_flag": 0,
             "show_group_score": 0,
             "show_serve_indicator": 0,
             "show_score_history": 0,
@@ -57,6 +59,12 @@ export class Scoreboard {
             "show_match_preview": 0,
             "match_stats_type": "match",
         };
+        // Raw teams_info.team_x.name/flag as last received from Firebase -
+        // kept independently of the DOM so applyFlag() can fall back to
+        // resolveFlag(name) whenever an explicit flag code isn't set,
+        // regardless of which of the two paths arrives first on a given poll.
+        this.teamNames = { a: '', b: '' };
+        this.teamFlags = { a: '', b: '' };
         this.active_set = 1;
         this.ScoreHistoryChart = null;
         this.event_history = [];
@@ -83,6 +91,7 @@ export class Scoreboard {
      * ============================================================================== */
     init() {
         this.initEventListeners();
+        this.populateFlagSelects();
 
         // Update UI every 300ms for smooth real-time updates
         this.update_interval = setInterval(() => {
@@ -157,14 +166,19 @@ export class Scoreboard {
         const extensionIndex = css_path.lastIndexOf('.');
         const css_path_input = css_path.slice(0, extensionIndex) + "_input" + css_path.slice(extensionIndex);
 
-        // Remove all stylesheets
-        $('link[rel="stylesheet"]').remove();
-
-        // Add relevant stylesheets
-        $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('href', '../css/base.css').appendTo('head');
-        $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('href', '../css/style-output.css').appendTo('head');
+        // Only swap the theme-specific stylesheet(s) - base.css and
+        // style-output.css are already correctly loaded from the page's own
+        // <head> and never change between themes, so they're left alone.
+        // This used to remove every stylesheet <link> (including those two)
+        // and re-add them via '../css/...' - a relative path inconsistent
+        // with css_path's own 'css/...' (no '../'), which 404s depending on
+        // how the page is actually served, and even when it doesn't 404,
+        // forces a re-fetch of CSS that was already loaded, briefly leaving
+        // the page unstyled (raw HTML, in normal flow, no opacity:0/
+        // position:fixed on .overlay) while the new links load.
+        $('link[rel="stylesheet"][href*="css/style-v"]').remove();
         $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('href', css_path).appendTo('head');
-        
+
         if (this.type === 'input') {
             $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('href', css_path_input).appendTo('head');
         } else if (this.type === 'output') {
@@ -222,6 +236,20 @@ export class Scoreboard {
 
             this.updateIndicators();
             this.uploadData(uploadTargets);
+        });
+
+        // Flag country picker listener (input.html only - see populateFlagSelects())
+        this.$html_frame.find('.flag-select').change((event) => {
+            const $select = $(event.target);
+            const fbData = $select.attr('fb-data') || '';
+            const team = fbData.includes('team_a') ? 'a' : fbData.includes('team_b') ? 'b' : null;
+
+            if (team) {
+                this.teamFlags[team] = $select.val() || '';
+                this.applyFlag(team); // instant preview - harmless if flags mode is currently off, see applyFlag()
+            }
+
+            this.uploadData([$select]);
         });
 
         // Output Theme input dropdown listener
@@ -357,17 +385,32 @@ export class Scoreboard {
             const value = $checkbox.prop('checked') ? 1 : 0;
             const fbData = $checkbox.attr('fb-data') || '';
             const isAdminSetting = fbData.startsWith('admin_settings.');
+            const part = fbData.split('.').pop();
+            const uploadTargets = [$checkbox];
 
             // Update toggle switch appearance
             $toggleSwitch.toggleClass('active', $checkbox.prop('checked'));
 
+            // Colors and flags are mutually exclusive - turning one on turns
+            // the other off, rather than just picking a display-time priority,
+            // so the stored settings themselves never disagree with what's shown.
+            if (isAdminSetting && value === 1 && (part === 'show_color' || part === 'show_flag')) {
+                const otherPart = part === 'show_color' ? 'show_flag' : 'show_color';
+                const $other = $(`.toggle-switch input[fb-data="admin_settings.${otherPart}"]`);
+                if ($other.length && $other.prop('checked')) {
+                    $other.prop('checked', false);
+                    $other.closest('.toggle-switch').removeClass('active');
+                    this.settings[otherPart] = 0;
+                    uploadTargets.push($other);
+                }
+            }
+
             if (isAdminSetting) {
-                const part = fbData.split('.').pop();
                 this.settings[part] = value;
                 this.updateSettings();
             }
 
-            this.uploadData([$checkbox]);
+            this.uploadData(uploadTargets);
         });
         
         // Match stats type selector handler
@@ -504,6 +547,27 @@ export class Scoreboard {
                 this.insertAdminSetting(path, value);
             } else if (path.includes('teams_info') && path.includes('color')) {
                 this.insertColor($allElements.first(), path, value);
+            } else if (path.includes('teams_info') && path.endsWith('.flag')) {
+                // Only cache the raw code here - do NOT touch .flag-indicator
+                // visibility/src from the data-poll path (every 500ms-2s on
+                // output/input alike). That used to make the flag flash
+                // visible on every poll regardless of "Show as Flags", since
+                // it raced against updateColorIndicatorVisibility()'s own
+                // 300ms cycle re-hiding it. applyFlag() is now only ever
+                // called from there, which is also the sole owner of visibility.
+                const team = path.includes('team_a') ? 'a' : path.includes('team_b') ? 'b' : null;
+                if (team) this.teamFlags[team] = value || '';
+                $allElements.each((_, elem) => {
+                    const $elem = $(elem);
+                    if (!(isImport && this.isFieldLocked($elem))) this.setElementValue($elem, value);
+                });
+            } else if (path.includes('teams_info') && path.endsWith('.name')) {
+                const team = path.includes('team_a') ? 'a' : path.includes('team_b') ? 'b' : null;
+                if (team) this.teamNames[team] = value || '';
+                $allElements.each((_, elem) => {
+                    const $elem = $(elem);
+                    if (!(isImport && this.isFieldLocked($elem))) this.setElementValue($elem, value);
+                });
             } else if (path.includes('active_set')) {
                 this.active_set = value;
             } else if (path.includes('starting_server') || path.includes('starting_receiver')) {
@@ -631,6 +695,107 @@ export class Scoreboard {
         if (part === 'match_stats_type') {
             $('#Match_Stats_Type').val(value);
         }
+    }
+
+    /** ==============================================================================
+     * Resolve and render a team's flag: prefers an explicit teams_info.team_x.flag
+     * ISO2 code (written by the Fwango bridge, or set manually on the input page)
+     * and falls back to deriving one from the team name via the same resolveFlag()
+     * tiers TournamentLiveScores uses, so both tools show the same flag for the
+     * same team. Only paints .flag-indicator elements - visibility (colors vs
+     * flags) is handled separately by updateColorIndicatorVisibility().
+     *
+     * On input.html, a fallback-derived code also gets written back to
+     * teams_info.team_x.flag, so it becomes the same kind of explicit fact a
+     * manual pick would be - other consumers of that field (index.html, a
+     * second admin's browser, TournamentLiveScores/Fwango) then see it
+     * directly instead of each re-deriving their own guess from the name,
+     * and the country <select> picks it up as its selected option on the
+     * next poll instead of sitting on "Auto-detect" forever. Not done on
+     * output.html: it has no write auth, so writeData() there would just
+     * fail silently against Firebase's own rules (there are none here, so it
+     * would actually succeed, but a read-only display page has no business
+     * writing match data).
+     * @param {string} team - Team identifier ('a' or 'b')
+     * ============================================================================== */
+    applyFlag(team) {
+        const explicit = (this.teamFlags[team] || '').trim();
+        const isExplicit = /^[A-Za-z]{2}$/.test(explicit);
+        const code = isExplicit ? explicit.toUpperCase() : resolveFlag(this.teamNames[team] || '');
+        const $flagElems = $(`.flag-indicator.team_${team}`);
+
+        // Only called from updateColorIndicatorVisibility(), which already
+        // confirmed flags should be visible right now - this only decides
+        // per-team whether there's actually a flag to show.
+        if (code) {
+            $flagElems.attr('src', `https://flagcdn.com/${code.toLowerCase()}.svg`).show();
+        } else {
+            $flagElems.removeAttr('src').hide();
+        }
+
+        if (!isExplicit && code && this.type === 'input' && this.user && this.user.channels.includes(Number(this.channel))) {
+            // Set locally right away so the next ~300ms tick already sees an
+            // explicit value and doesn't fire the same write again while the
+            // round-trip through Firebase is still in flight.
+            this.teamFlags[team] = code;
+            writeData({ [`/match-${this.channel}/teams_info/team_${team}/flag`]: code });
+        }
+    }
+
+    /** ==============================================================================
+     * Fill every .flag-select (input.html's manual country picker, replacing
+     * the old free-text ISO-code field) with an "Auto-detect" option plus
+     * every country resolveFlag() can match, sourced from the same table so
+     * a manually-picked country always round-trips correctly. No-op when
+     * there are no .flag-select elements on the page (output.html).
+     * ============================================================================== */
+    populateFlagSelects() {
+        const $selects = this.$html_frame.find('.flag-select');
+        if (!$selects.length) return;
+
+        const countries = getCountryList();
+        $selects.each((_, sel) => {
+            const $sel = $(sel);
+            $sel.append($('<option></option>').val('').text('Auto-detect from name'));
+            countries.forEach(({ code, name }) => {
+                $sel.append($('<option></option>').val(code).text(`${name} (${code})`));
+            });
+        });
+    }
+
+    /** ==============================================================================
+     * Set .flag-indicator-wrap's total height (select + gap + flag, stacked)
+     * in px to match its sibling .details column (teamname + player names) -
+     * input.html only, no-op elsewhere. The select keeps its natural height;
+     * the flag <img> gets whatever's left, so together they exactly fill
+     * .details' height. Deliberately measured in JS rather than done with CSS
+     * percentage/flex sizing on the image: that made the flag's height and
+     * the wrapper's height circularly dependent on each other (the wrapper's
+     * hypothetical size, computed before its height is resolved, came from
+     * the img's own percentage height resolving to auto -> the img's large
+     * intrinsic SVG size -> which then became the "tallest child" the whole
+     * row and the wrapper sized against), which is the actual cause of the
+     * flags rendering huge. .details and the select never depend on the flag,
+     * so measuring them directly and applying explicit heights breaks the cycle.
+     * ============================================================================== */
+    syncFlagWrapHeights() {
+        const gap = 4; // matches .flag-indicator-wrap's CSS gap
+        this.$html_frame.find('.teams .team').each((_, teamEl) => {
+            const $team = $(teamEl);
+            const $details = $team.find('.details').first();
+            const $wrap = $team.find('.flag-indicator-wrap').first();
+            const $select = $wrap.find('.flag-select').first();
+            const $img = $wrap.find('.flag-indicator').first();
+            if (!$details.length || !$wrap.length) return;
+
+            const totalHeight = $details.outerHeight();
+            $wrap.css('height', totalHeight + 'px');
+
+            if ($select.length && $img.length) {
+                const flagHeight = Math.max(0, totalHeight - $select.outerHeight() - gap);
+                $img.css('height', flagHeight + 'px');
+            }
+        });
     }
 
     /** ==============================================================================
@@ -1110,6 +1275,7 @@ export class Scoreboard {
         }
     }
 
+
     /** ==============================================================================
      * Get the team that a player belongs to
      * @param {string} player - Player identifier ('a', 'b', 'c', 'd')
@@ -1123,6 +1289,7 @@ export class Scoreboard {
         }
         return null;
     }
+
 
     /** ==============================================================================
      * Auto-correct any set whose starting server and receiver ended up on the
@@ -1465,8 +1632,94 @@ export class Scoreboard {
     }
 
     updateColorIndicatorVisibility() {
-        const isVisible = this.settings.show_color === 1;
-        $('.color-indicator').toggle(isVisible);
+        const showColor = this.settings.show_color === 1;
+        const showFlag = this.settings.show_flag === 1;
+        // Colors and flags are two independent settings, but mutually
+        // exclusive by choice - flags wins if a stale channel somehow has
+        // both set (the toggle-switch handler keeps them exclusive going
+        // forward, but old data or a second admin editing concurrently could
+        // still leave both at 1). Previously this required show_color AND
+        // show_flag to both be on for flags to appear at all, which made
+        // "flags on, colors off" show neither.
+        const flagsOn = showFlag;
+
+        $('.color-indicator').toggle(showColor && !showFlag);
+        $('.flag-indicator').toggle(flagsOn);
+        // .flag-indicator-wrap (input.html only) stays visible whenever
+        // flags mode is on regardless of whether a flag currently resolves,
+        // since it also holds the country <select> - applyFlag() below only
+        // hides the <img> inside it when there's nothing to show. Uses
+        // .css('display', ...) rather than .toggle()/.show(), which would
+        // restore the tag's generic default display ('block' for a div)
+        // instead of the 'flex' the CSS layout needs.
+        $('.flag-indicator-wrap').css('display', flagsOn ? 'flex' : 'none');
+
+        if (flagsOn) {
+            this.applyFlag('a');
+            this.applyFlag('b');
+            // Explicit pixel sizing, not CSS - see syncFlagWrapHeights()/
+            // syncOutputFlagSizes().
+            this.syncFlagWrapHeights();
+            this.syncOutputFlagSizes();
+        }
+    }
+
+    /** ==============================================================================
+     * Set every .flag-indicator <img> on an output page (index.html) to an
+     * explicit height (scaled by FLAG_HEIGHT_SCALE) with a proportional
+     * width via a plain 4:3 multiplication done in JS - not left to CSS
+     * height:77%/aspect-ratio + !important, which kept getting silently
+     * defeated per-theme across several rounds with no way to verify live.
+     * The "full" theme never has a .flag-indicator at all (removed per
+     * request - flags aren't offered there).
+     *
+     * Measures .name, a sibling that's independent of the flag's own size,
+     * rather than .team's own height. .team's height is itself driven by
+     * its tallest child - on first paint, before this method has run even
+     * once, an un-sized flag <img> briefly renders at its raw SVG intrinsic
+     * size (large), which WAS .team's tallest child, so measuring .team gave
+     * a too-large height; applying it shrank the flag a bit, which shrank
+     * .team a bit, and each ~300ms update tick repeated that, visibly
+     * converging over several frames instead of landing on the right size
+     * immediately. .name never depends on the flag at all, so measuring it
+     * is stable from the very first call - which also fixes team A and B
+     * settling to different sizes (they were converging from different
+     * starting points depending on exactly when their flag images loaded).
+     * ============================================================================== */
+    syncOutputFlagSizes() {
+        const FLAG_HEIGHT_SCALE = 0.65;
+
+        $('.flag-indicator').each((_, el) => {
+            const $flag = $(el);
+            // input.html's flag <img> lives inside .flag-indicator-wrap and
+            // is already sized (relative to .details, not .team) by
+            // syncFlagWrapHeights() - skip it here to avoid the two fighting
+            // over the same element with conflicting target heights.
+            if ($flag.closest('.flag-indicator-wrap').length) return;
+
+            const $team = $flag.closest('.team');
+            if (!$team.length) return;
+
+            let heightPx;
+            if ($flag.closest('.match_statistics .score_history_in_stats').length) {
+                // Fixed in this context (see the matching .color-indicator
+                // rule in style-output.css), not relative to anything.
+                heightPx = 22;
+            } else {
+                // No .flag-indicator ever lives in the "full" theme anymore
+                // (removed per request), so .name is always the right
+                // reference here - no need for the "full" theme's nested
+                // .right fallback this used to need.
+                const $reference = $team.find('.name').first();
+                if (!$reference.length) return;
+                heightPx = $reference.outerHeight() * 0.77;
+            }
+            if (!heightPx) return;
+
+            heightPx *= FLAG_HEIGHT_SCALE;
+            $flag[0].style.setProperty('height', `${heightPx}px`, 'important');
+            $flag[0].style.setProperty('width', `${heightPx * 4 / 3}px`, 'important');
+        });
     }
 
     updatePlayerNamesVisibility() {
@@ -1497,41 +1750,59 @@ export class Scoreboard {
         }
     }
 
+    /** ==============================================================================
+     * True for themes whose layout has room for the Match Statistics/Preview
+     * overlays - mirrors setTheme()'s own condition (it force-hides both
+     * containers whenever html_structure isn't 'vertical_score'). Compares
+     * html_structure rather than the theme name directly: "small" uses the
+     * same vertical_score layout as "rg"/"france"/"eura", even though its
+     * name doesn't say so.
+     * ============================================================================== */
+    supportsOverlays() {
+        const themeConfig = themes[this.theme];
+        return !!themeConfig && themeConfig.html_structure === 'vertical_score';
+    }
+
     updateMatchStatisticsVisibility() {
-        if (this.theme != 'full' && this.theme != 'small') {
-            const isVisible = this.settings.show_match_statistics === 1;
-        
-            if (isVisible) {
-                // Add animation class first, then show
-                this.$matchStatisticsContainer.addClass('animate');
-                
-                // Small delay to ensure CSS is applied before showing
-                setTimeout(() => {
-                    this.$matchStatisticsContainer.addClass('show').removeClass('hidden');
-                }, 400);
-            } else {
-                this.$matchStatisticsContainer.removeClass('animate');
-                setTimeout(() => {
-                    this.$matchStatisticsContainer.removeClass('animate show').addClass('hidden');
-                }, 300);
-            }
+        // Previously checked theme name (`!= 'full' && != 'small'`) instead of
+        // structure - since "small" is a vertical_score theme like "rg", that
+        // skipped this entirely for it, so once shown, Match Statistics could
+        // never be hidden again on that theme (setTheme() doesn't force-hide
+        // vertical_score themes either - it defers to this toggle).
+        if (!this.supportsOverlays()) return;
+
+        const isVisible = this.settings.show_match_statistics === 1;
+
+        if (isVisible) {
+            // Add animation class first, then show
+            this.$matchStatisticsContainer.addClass('animate');
+
+            // Small delay to ensure CSS is applied before showing
+            setTimeout(() => {
+                this.$matchStatisticsContainer.addClass('show').removeClass('hidden');
+            }, 400);
+        } else {
+            this.$matchStatisticsContainer.removeClass('animate');
+            setTimeout(() => {
+                this.$matchStatisticsContainer.removeClass('animate show').addClass('hidden');
+            }, 300);
         }
     }
 
     updateMatchPreviewVisibility() {
-        if (this.theme != 'full' && this.theme != 'small') {
-            const isVisible = this.settings.show_match_preview === 1;
-            if (isVisible) {
-                this.$matchPreviewContainer.addClass('animate');
-                setTimeout(() => {
-                    this.$matchPreviewContainer.addClass('show').removeClass('hidden');
-                }, 400);
-            } else {
-                this.$matchPreviewContainer.removeClass('animate');
-                setTimeout(() => {
-                    this.$matchPreviewContainer.removeClass('animate show').addClass('hidden');
-                }, 300);
-            }
+        if (!this.supportsOverlays()) return;
+
+        const isVisible = this.settings.show_match_preview === 1;
+        if (isVisible) {
+            this.$matchPreviewContainer.addClass('animate');
+            setTimeout(() => {
+                this.$matchPreviewContainer.addClass('show').removeClass('hidden');
+            }, 400);
+        } else {
+            this.$matchPreviewContainer.removeClass('animate');
+            setTimeout(() => {
+                this.$matchPreviewContainer.removeClass('animate show').addClass('hidden');
+            }, 300);
         }
     }
 

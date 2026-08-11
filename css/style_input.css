@@ -640,6 +640,42 @@ select.small {
   background: #00000013;
 }
 
+/* Sits in the same position as .color-indicator, shown instead of it when
+   "Show as Flags" is on (see updateColorIndicatorVisibility() in
+   Scoreboard.js) - a normal closed country <select> (opens its native
+   dropdown on click, like any country picker) stacked on top of the flag
+   preview. Both heights are set explicitly in px by syncFlagWrapHeights(),
+   NOT via CSS flex/align-self sizing - a percentage/stretch-based height on
+   the flag <img> made it and the wrapper circularly dependent on each other,
+   which rendered the flag huge (see that method's comment for the full
+   explanation). The wrapper's total height (select + gap + flag) matches the
+   sibling .details column (teamname + player names). */
+.flag-indicator-wrap {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 76px;
+}
+
+.flag-indicator-wrap .flag-select {
+  width: 100%;
+  flex: none;
+  border: none;
+  background: #00000013;
+  font-size: 0.65rem;
+  padding: 2px;
+}
+
+.flag-indicator-wrap .flag-indicator {
+  width: auto !important;
+  max-width: 100%;
+  aspect-ratio: 4 / 3 !important;
+  object-fit: cover;
+  border-radius: 2px;
+  flex: none;
+}
+
 .team .details {
   display: flex;
   flex-direction: column;

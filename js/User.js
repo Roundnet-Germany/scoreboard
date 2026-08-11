@@ -1,4 +1,4 @@
-import { auth, signOut } from "./firebase_config.js";
+import { auth, signOut } from "./firebase_config.js?v=3";
 
 export class User {
     constructor(username, channels = [], displayName = "") {
