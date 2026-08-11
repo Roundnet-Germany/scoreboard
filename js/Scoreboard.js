@@ -383,6 +383,7 @@ export class Scoreboard {
             const value = Number($(event.target).val());
             this.gameSettings.win_points = value;
         });
+        this.$winPoints.add(this.$hardcap).on('blur', () => this.warnIfHardcapInvalid());
 
         // Hardcap score handler
         this.$hardcap.on('input', (event) => {
@@ -1074,12 +1075,17 @@ export class Scoreboard {
     setWinner(set = this.active_set) {
         const scoreA = this.getScore(set, 'a');
         const scoreB = this.getScore(set, 'b');
-        
-        // Check if hardcap is reached by either team
-        if (scoreA >= this.gameSettings.hardcap || scoreB >= this.gameSettings.hardcap) {
+
+        // Check if hardcap is reached by either team. Only meaningful as a
+        // sudden-death ceiling *above* the win score - if it's misconfigured
+        // at or below win_points, honoring it here would lock in a winner
+        // (on a tie, arbitrarily 'b') before the match ever reaches its real
+        // target score, making that intended final score impossible to record.
+        if (this.gameSettings.hardcap > this.gameSettings.win_points &&
+            scoreA !== scoreB && (scoreA >= this.gameSettings.hardcap || scoreB >= this.gameSettings.hardcap)) {
             return scoreA > scoreB ? 'a' : 'b';
         }
-        
+
         // Check if winning score is reached
         if (scoreA >= this.gameSettings.win_points || scoreB >= this.gameSettings.win_points) {
             const scoreDifference = Math.abs(scoreA - scoreB);
@@ -1089,10 +1095,20 @@ export class Scoreboard {
                 return scoreA > scoreB ? 'a' : 'b';
             }
         }
-        
+
         return null;
     }
 
+    /** ==============================================================================
+     * Warn the operator when Hardcap is configured at or below Win Score - in
+     * that state the hardcap rule is ignored (see setWinner()), since honoring
+     * it would end the set before the real target score is ever reached.
+     * ============================================================================== */
+    warnIfHardcapInvalid() {
+        if (this.gameSettings.hardcap <= this.gameSettings.win_points) {
+            showToast("⚠️", "Hardcap should be higher than Win Score, otherwise it's ignored.", 3000);
+        }
+    }
 
     /** ==============================================================================
      * Get the team that a player belongs to
@@ -1312,9 +1328,11 @@ export class Scoreboard {
             scoreB = this.getScoreAtPointIndex(set, 'b', pointIndex);
         }
         // console.log(pointIndex, scoreA, scoreB);
-        
-        // Check if hardcap is reached by either team
-        if (scoreA >= this.gameSettings.hardcap || scoreB >= this.gameSettings.hardcap) {
+
+        // Check if hardcap is reached by either team (see setWinner() for why
+        // this only applies when hardcap is configured above win_points).
+        if (this.gameSettings.hardcap > this.gameSettings.win_points &&
+            scoreA !== scoreB && (scoreA >= this.gameSettings.hardcap || scoreB >= this.gameSettings.hardcap)) {
             return true;
         }
 
