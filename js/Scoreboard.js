@@ -198,10 +198,32 @@ export class Scoreboard {
 
         // Starting team dropdown listener
         this.$html_frame.find('.starting_team_selector select').change((event) => {
+            const $target = $(event.target);
+            const uploadTargets = [$target];
+
+            // If the server was just changed onto the same team as the
+            // already-selected receiver, auto-correct the receiver to the
+            // opposing team - a same-team combo has no valid serve order
+            // and used to freeze score input entirely (see getServingPlayerAtPoint).
+            const fbData = $target.attr('fb-data') || '';
+            if (fbData.includes('starting_server')) {
+                const setMatch = fbData.match(/set_(\d+)/);
+                const set = setMatch ? setMatch[1] : null;
+                if (set) {
+                    const $receiverSel = this.$html_frame.find(`[fb-data="score.set_${set}.starting_receiver"]`).first();
+                    const server = $target.val();
+                    const receiver = $receiverSel.val();
+                    if (server && receiver && $receiverSel.is('select') && this.getPlayerTeam(server) === this.getPlayerTeam(receiver)) {
+                        $receiverSel.val(this.getPlayerTeam(server) === 'a' ? 'c' : 'a');
+                        uploadTargets.push($receiverSel);
+                    }
+                }
+            }
+
             this.updateIndicators();
-            this.uploadData([$(event.target)]);
-        });     
-        
+            this.uploadData(uploadTargets);
+        });
+
         // Output Theme input dropdown listener
         this.$themeInput.change((event) => {
             this.theme = $(event.target).val();
@@ -453,6 +475,7 @@ export class Scoreboard {
         try {
             const data = await readData(this.channel);
             this.processDataAndUpdateFields(data);
+            this.sanitizeStartingSelections();
             if (window.AUTH_DEBUG) console.log("[Scoreboard] insertLiveData ok, channel=" + this.channel);
         } catch (err) {
             if (window.AUTH_DEBUG) console.warn("[Scoreboard] insertLiveData error, channel=" + this.channel, err?.code || err?.message, err);
@@ -1085,6 +1108,32 @@ export class Scoreboard {
         return null;
     }
 
+    /** ==============================================================================
+     * Auto-correct any set whose starting server and receiver ended up on the
+     * same team (e.g. both left at their default "A" selection) - that combo
+     * has no valid serve order and used to permanently freeze score input for
+     * the set (see the guards in getServingPlayerAtPoint/getReceivingPlayerAtPoint).
+     * Idempotent: no-op once the receiver is on the opposing team, so it's
+     * safe to call on every data poll as a self-healing pass against stale data.
+     * ============================================================================== */
+    sanitizeStartingSelections() {
+        if (this.type !== 'input') return;
+
+        for (let set = 1; set <= 7; set++) {
+            const $receiverSel = this.$html_frame.find(`[fb-data="score.set_${set}.starting_receiver"]`).first();
+            if (!$receiverSel.is('select')) continue;
+
+            const server = this.getStartingServer(set);
+            const receiver = $receiverSel.val();
+            if (!server || !receiver) continue;
+
+            if (this.getPlayerTeam(server) === this.getPlayerTeam(receiver)) {
+                $receiverSel.val(this.getPlayerTeam(server) === 'a' ? 'c' : 'a');
+                this.uploadData([$receiverSel]);
+            }
+        }
+    }
+
 
     /** ==============================================================================
      * Get the player name by player identifier
@@ -1555,7 +1604,11 @@ export class Scoreboard {
         } else if (startingServer == 'd' && startingReceiver == 'b') {
             serveOrder = ['d', 'a', 'c', 'b'];
         }
-        
+
+        // Same-team combo (see matching guard in getReceivingPlayerAtPoint) -
+        // no valid serve order, so bail out instead of crashing below.
+        if (!serveOrder) return null;
+
         const startIndex = serveOrder.indexOf(startingServer);
         // const startIndex = serveOrder.indexOf(this.playerLocationTransformation(startingServer, 'player', set));
         if (pointIndex === 0) {
@@ -1622,6 +1675,13 @@ export class Scoreboard {
             overtimeOrder15 = ['d', 'a', 'c', 'b'];
             overtimeOrder21 = ['c', 'a', 'd', 'b'];
         }
+
+        // Starting server/receiver from the same team (e.g. both default to
+        // 'a' before an operator sets the receiver) has no valid serve order -
+        // bail out instead of leaving receivingOrder undefined, which would
+        // throw on the next line and abort updateCurrentPlayersDisplay()
+        // before it reaches uploadData(), silently blocking every score input.
+        if (!receivingOrder) return null;
 
         // TODO: fix overtime
         const startIndex = receivingOrder.indexOf(startingReceiver);
