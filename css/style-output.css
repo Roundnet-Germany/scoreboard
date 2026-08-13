@@ -30,12 +30,18 @@
   flex: none !important;
 }
 
-/* Main scoreboard team header (vertical_score theme - rg/small/france/eura)
-   - matches ".teams .team .color-indicator"'s height:77%/margin-top:5px in
-   style-v1.css, style-v4-france.css, style-v5.css and style-v5-eura.css. */
-.teams .team .flag-indicator {
-  height: 77% !important;
-  margin-top: 5px;
+/* Main scoreboard team header (vertical_score theme - rg/small/france/eura):
+   the flag sits inline with the teamname on its own row instead of spanning
+   the whole .team row like .color-indicator does. align-items:baseline lines
+   the flag's bottom edge up with the teamname's text baseline - paired with
+   the cap-height sizing done in JS by syncOutputFlagSizes() in
+   Scoreboard.js, that puts the flag flush with both the top and bottom of
+   the visible letters instead of centered in their taller line box. */
+.teams .team .name .teamname-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
 }
 
 /* Score history legend - matches this file's own

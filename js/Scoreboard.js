@@ -1673,21 +1673,30 @@ export class Scoreboard {
      * The "full" theme never has a .flag-indicator at all (removed per
      * request - flags aren't offered there).
      *
-     * Measures .name, a sibling that's independent of the flag's own size,
-     * rather than .team's own height. .team's height is itself driven by
-     * its tallest child - on first paint, before this method has run even
-     * once, an un-sized flag <img> briefly renders at its raw SVG intrinsic
-     * size (large), which WAS .team's tallest child, so measuring .team gave
-     * a too-large height; applying it shrank the flag a bit, which shrank
-     * .team a bit, and each ~300ms update tick repeated that, visibly
-     * converging over several frames instead of landing on the right size
-     * immediately. .name never depends on the flag at all, so measuring it
-     * is stable from the very first call - which also fixes team A and B
-     * settling to different sizes (they were converging from different
-     * starting points depending on exactly when their flag images loaded).
+     * Main scoreboard branch measures .teamname's cap-height (top of a
+     * capital letter to the baseline), not .name, .team, or .teamname's own
+     * box. .teamname's box is a line box - it includes the font's internal
+     * leading above and below the glyphs, which is why a flag sized off of
+     * it (via outerHeight()) still looked visibly taller than the letters
+     * themselves even though the numbers matched. measureCapHeight() below
+     * reads the font's actual glyph metrics instead via Canvas, and
+     * .teamname-row aligns the row by CSS baseline (see style-output.css),
+     * so the flag's bottom lands on the text baseline and its height reaches
+     * exactly to the cap top - flush with both edges of the visible letters.
+     * Measuring cap-height off a fixed reference glyph ("H") rather than the
+     * team name's own text also keeps the flag a stable size regardless of
+     * whether the current name has descenders (e.g. switching from "ITALY"
+     * to "Germany" no longer changes the flag's height.) .name and .team
+     * both contain the flag being sized, so measuring either of those (like
+     * this method used to) would reintroduce the circular convergence this
+     * method had when it measured .team: an un-sized flag briefly renders at
+     * its raw SVG intrinsic size (large) on first paint, inflating the
+     * measured container, which produces a too-large height that shrinks a
+     * bit on each ~300ms update tick instead of landing on the right size
+     * immediately.
      * ============================================================================== */
     syncOutputFlagSizes() {
-        const FLAG_HEIGHT_SCALE = 0.65;
+        const SCORE_HISTORY_FLAG_SCALE = 0.65; // relative to the legend's fixed 22px slot
 
         $('.flag-indicator').each((_, el) => {
             const $flag = $(el);
@@ -1704,22 +1713,31 @@ export class Scoreboard {
             if ($flag.closest('.match_statistics .score_history_in_stats').length) {
                 // Fixed in this context (see the matching .color-indicator
                 // rule in style-output.css), not relative to anything.
-                heightPx = 22;
+                heightPx = 22 * SCORE_HISTORY_FLAG_SCALE;
             } else {
-                // No .flag-indicator ever lives in the "full" theme anymore
-                // (removed per request), so .name is always the right
-                // reference here - no need for the "full" theme's nested
-                // .right fallback this used to need.
-                const $reference = $team.find('.name').first();
+                const $reference = $team.find('.teamname').first();
                 if (!$reference.length) return;
-                heightPx = $reference.outerHeight() * 0.77;
+                heightPx = this.measureCapHeight($reference[0]);
             }
             if (!heightPx) return;
 
-            heightPx *= FLAG_HEIGHT_SCALE;
             $flag[0].style.setProperty('height', `${heightPx}px`, 'important');
             $flag[0].style.setProperty('width', `${heightPx * 4 / 3}px`, 'important');
         });
+    }
+
+    /**
+     * Cap-height (top of a capital letter to the baseline) of an element's
+     * rendered font, via Canvas measureText's actualBoundingBoxAscent on a
+     * flat-topped reference glyph ("H", no descender to bias the reading) -
+     * see syncOutputFlagSizes() for why this is measured off a fixed
+     * reference glyph rather than the element's own text or box.
+     */
+    measureCapHeight(el) {
+        const ctx = this._capHeightCtx || (this._capHeightCtx = document.createElement('canvas').getContext('2d'));
+        const cs = getComputedStyle(el);
+        ctx.font = cs.font || `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        return ctx.measureText('H').actualBoundingBoxAscent;
     }
 
     updatePlayerNamesVisibility() {
