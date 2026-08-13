@@ -426,7 +426,7 @@ export class Scoreboard {
             const value = Number($(event.target).val());
             this.gameSettings.win_points = value;
         });
-        this.$winPoints.add(this.$hardcap).on('blur', () => this.warnIfHardcapInvalid());
+        this.$winPoints.add(this.$hardcap).on('input', () => this.warnIfHardcapInvalid());
 
         // Hardcap score handler
         this.$hardcap.on('input', (event) => {
