@@ -138,6 +138,7 @@
 
 .teams .team .color-indicator {
   width: 6px;
+  flex-shrink: 0;
   height: 77%;
   border-radius: 2px;
   margin-top: 5px;

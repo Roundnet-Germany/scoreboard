@@ -6,6 +6,59 @@
   background-color: var(--B_Color) !important;
 }
 
+/* Shown instead of .color-indicator when "Show as Flags" is enabled (see
+   updateColorIndicatorVisibility() in Scoreboard.js) - hidden by default,
+   toggled via JS, never both visible at once. Sized to occupy the exact same
+   slot as .color-indicator in each context (matching its height/margin
+   exactly - see the theme CSS files' ".teams .team .color-indicator" and
+   this file's own score_history/score_history_in_stats rules), with a
+   proportional flag-shaped width via aspect-ratio instead of trying to
+   squeeze a flag into the color bar's few-px width, which isn't wide enough
+   to render a recognizable flag. !important throughout because flagcdn's
+   SVGs carry their own large intrinsic viewBox, and .team/.name are flex
+   containers - an <img> that loses this sizing for any reason (a later
+   stylesheet, a caching hiccup) otherwise flex-grows to fill the whole row
+   instead of failing quietly. */
+.flag-indicator {
+  display: none;
+  height: 20px !important;
+  aspect-ratio: 4 / 3 !important;
+  width: auto !important;
+  object-fit: cover;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+  flex: none !important;
+}
+
+/* Main scoreboard team header (vertical_score theme - rg/small/france/eura):
+   the flag sits inline with the teamname on its own row instead of spanning
+   the whole .team row like .color-indicator does. align-items:baseline lines
+   the flag's bottom edge up with the teamname's text baseline - paired with
+   the cap-height sizing done in JS by syncOutputFlagSizes() in
+   Scoreboard.js, that puts the flag flush with both the top and bottom of
+   the visible letters instead of centered in their taller line box. */
+.teams .team .name .teamname-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* Score history legend - matches this file's own
+   ".score_history .teams_info .team .color-indicator" (height:77%,
+   margin-top:5px) below. */
+.score_history .teams_info .team .flag-indicator {
+  height: 77% !important;
+  margin-top: 5px;
+}
+
+/* Match statistics' score history legend - matches this file's own
+   ".match_statistics .score_history_in_stats .teams_info .team
+   .color-indicator" (fixed height:22px) below. */
+.match_statistics .score_history_in_stats .teams_info .team .flag-indicator {
+  height: 22px !important;
+}
+
 .player_names {
   display: flex;
   flex-direction: row;
