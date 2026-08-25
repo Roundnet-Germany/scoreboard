@@ -1042,7 +1042,16 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- Shared timeout/medical/break countdown - synced through
+         match-<channel>/timer (see Scoreboard.js's updateTimerDisplay()).
+         Positioned once, fixed to the viewport rather than nested inside
+         any one of the three .wrapper[theme] blocks above, so it appears
+         identically on the right regardless of which theme is active. -->
+    <div class="timer_widget">
+        <p class="timer_widget_label"></p>
+        <p class="timer_widget_time"></p>
+    </div>
 
     <script type="module" src="js/main.js?v=3"></script>
 

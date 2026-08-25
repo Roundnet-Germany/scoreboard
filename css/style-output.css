@@ -1495,3 +1495,80 @@
 .match_statistics .score_history_in_stats .score_item[break] .score_number {
   color: var(--primary);
 }
+
+/* Shared timeout/medical/break countdown (index.html) - see
+   Scoreboard.js's updateTimerDisplay(). `top`/`left` are set inline by JS
+   every tick (getBoundingClientRect() on whichever .board is currently
+   visible), so the card sits at the same vertical level as the scoreboard
+   and follows it across themes/window sizes rather than being pinned to a
+   fixed viewport position - only the static defaults live here. Card chrome
+   (white background, radius, drop-shadow) intentionally mirrors .board's
+   own (style-v1.css etc.) rather than pulling per-theme --white/
+   --text-primary variables: several themes (style-v2 "tops", style-v3
+   "full") invert those to light-text-on-dark-card, which would make a
+   white-background widget's text unreadable on those themes. Label/time
+   colors are fixed (not theme-derived) for the same reason, echoing the LED
+   board's own fixed orange/red timeout/medical colors (led.h). */
+/* Enter/exit animation: driven by the .visible class (see
+   Scoreboard.js's updateTimerDisplay(), which toggles it instead of the
+   shared .hidden utility - .hidden's max-width/opacity collapse doesn't mix
+   well with the clip-path wipe here). clip-path's right-inset is the same
+   parameter for both directions: animating it 100%->0% reveals the card by
+   sweeping its visible edge left-to-right (appear), and 0%->100% does the
+   reverse, receding right-to-left (disappear) - one property, two readings,
+   since it's just time-reversed. The small translateX riding alongside it
+   reinforces the same left/right motion so the card actually slides rather
+   than only wiping in place, and the mismatched easing per state (snappy
+   ease-out revealing in, quick ease-in tucking away) is what makes it read
+   as dynamic rather than a flat linear wipe. */
+.timer_widget {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 22px 12px 22px;
+  border-radius: 8px;
+  background-color: #ffffff;
+  filter: drop-shadow(1px 3px 20px rgba(0, 0, 0, 0.15));
+  pointer-events: none;
+  opacity: 0;
+  clip-path: inset(0 100% 0 0);
+  transform: translateY(-50%) translateX(-18px);
+  transition: opacity 0.35s cubic-bezier(0.64, 0, 0.78, 0),
+              clip-path 0.35s cubic-bezier(0.64, 0, 0.78, 0),
+              transform 0.35s cubic-bezier(0.64, 0, 0.78, 0);
+}
+
+.timer_widget.visible {
+  opacity: 1;
+  clip-path: inset(0 0 0 0);
+  transform: translateY(-50%) translateX(0);
+  transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+              clip-path 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.timer_widget_label {
+  font-family: 'Barlow', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #ff9800;
+}
+
+.timer_widget[data-timer-type="medical"] .timer_widget_label {
+  color: #C55151;
+}
+
+.timer_widget_time {
+  font-family: 'Antonio', sans-serif;
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1;
+  color: #111111;
+}
