@@ -1,5 +1,5 @@
 // import firebase config
-import { get, ref, update, set } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-database.js";
+import { get, ref, update, set, remove, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-database.js";
 import { db, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase_config.js?v=3";
 
 import { User } from "./User.js?v=3";
@@ -120,6 +120,32 @@ export async function writeData(newData) {
         console.log("Data updated successfully.");
     } catch (error) {
         console.error("Error updating user data:", error);
+    }
+}
+
+// Shared timeout/medical/break timer, synced through match-<channel>/timer -
+// same node the LED scoreboard firmware and its manager server read/write
+// (see the mono-repo CLAUDE.md / led_scoreboard's firebase.h). No duration
+// is written here: every reader keeps its own copy of the same fixed
+// durations the firmware already hardcodes (60s timeout, 5min medical,
+// 3min break), so this only ever needs to say *which* timer is running.
+// started_at uses Firebase's server-timestamp sentinel so every reader
+// (this page's own output display, the LED board, the manager server)
+// computes "time remaining" against the same clock regardless of whose
+// device's local clock started it.
+export async function writeTimerState(channel, type) {
+    try {
+        if (type) {
+            await update(ref(db), {
+                [`/match-${channel}/timer/type`]: type,
+                [`/match-${channel}/timer/started_at`]: serverTimestamp(),
+            });
+        } else {
+            await remove(ref(db, `match-${channel}/timer`));
+        }
+        console.log("Timer state updated:", type || "(cleared)");
+    } catch (error) {
+        console.error("Error updating timer state:", error);
     }
 }
 

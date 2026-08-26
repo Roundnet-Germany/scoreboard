@@ -259,6 +259,18 @@ button.destructive,
   color: var(--white);
 }
 
+/* Sober/neutral variant for bare <button> elements - deliberately its own
+   rule rather than joining the pre-existing ".button.neutral" (line ~173
+   above, #6e6e6e, the unrelated div-based .button component - unused in the
+   current markup, but not touched here to avoid silently recoloring it).
+   Matches the lighter neutral tone already used throughout the rest of this
+   UI for non-emphasized surfaces (.input_container inputs,
+   .flag-indicator-wrap .flag-select, etc. all use this same #00000011). */
+button.neutral {
+  background-color: #00000011;
+  color: var(--text-primary);
+}
+
 button:hover,
 .button:hover {
   cursor: pointer;
@@ -851,6 +863,26 @@ select#Match_Stats_Type {
 
 .controls .output .setting_entry {
   flex-grow: 1;
+}
+
+/* .hidden (base.css) collapses via max-width/max-height:0, which relies on
+   the element being able to shrink below its content size - true for a
+   block element, but NOT for a flex item, which defaults to min-width:auto
+   (content-based) unless overridden. min-width:auto beats max-width:0 in
+   the flex sizing algorithm, so #cancel_timer/.timer_status - flex items
+   inside .timer_buttons - kept their full content width and a reserved gap
+   even while "hidden" (invisible via opacity:0, but still occupying space),
+   which is what made the visible buttons stop short of the same right edge
+   the toggle switches above reach. display:none sidesteps the whole
+   min-width:auto quirk by removing the item from flex layout entirely. */
+.timer_buttons .hidden {
+  display: none;
+}
+
+.timer_status {
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--secondary);
 }
 
 .output .output_entry {

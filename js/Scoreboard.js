@@ -1,5 +1,26 @@
-import { themes, readData, getPathsAndValues, getColorBrightness, rgb2hex, writeData, showToast, copyToClipboard } from "./main.js?v=3";
+import { themes, readData, getPathsAndValues, getColorBrightness, rgb2hex, writeData, writeTimerState, showToast, copyToClipboard } from "./main.js?v=3";
+
+// Fixed durations for the shared timeout/medical/break timer - matches
+// led_scoreboard/include/score_actions.h's BREAK/TIMEOUT/MEDICAL_*_MS
+// exactly. Never sent over the wire; every reader (this page, the LED
+// board, the manager server) keeps its own copy so match-<channel>/timer
+// only ever has to say *which* timer is running, not how long it lasts.
+const TIMER_DURATIONS_MS = { timeout: 60_000, medical: 300_000, break: 180_000 };
+const TIMER_LABELS = { timeout: 'Timeout', medical: 'Medical Timeout', break: 'Break' };
 import { resolveFlag, getCountryList } from "./flags.js?v=3";
+
+// Same convention as led_scoreboard/include/firebase.h's _parseSetMode() and
+// the manager server's setModeToFormat() (firebaseBridge.js): 0=BO1 (never
+// auto-starts a break), 1=2 sets (always does), 2=BO3 (only while the match
+// isn't already decided) - see startTimer('break') callers below.
+function setModeToFormat(raw) {
+    const text = String(raw || '').trim();
+    if (!text) return 2;
+    const lower = text.toLowerCase();
+    if (text === '1' || /\b1\s*set\b/.test(lower)) return 0;
+    if (text === '2' || /\b2\s*sets?\b/.test(lower)) return 1;
+    return 2; // any other value (e.g. "3", "Best of 3") -> BO3
+}
 
 
 /* ==============================================================================
@@ -29,6 +50,11 @@ export class Scoreboard {
         this.$winPoints = $('#win_points');
         this.$hardcap = $('#Hardcap');
         this.$resetScoresButton = $('#reset_scores');
+        this.$startTimeoutButton = $('#start_timeout');
+        this.$startMedicalButton = $('#start_medical');
+        this.$cancelTimerButton = $('#cancel_timer');
+        this.$timerStatus = $('.timer_status');
+        this.$timerWidget = $('.timer_widget');
         this.$sets = $('.set');
         this.$setScoreCounterA = $('.a_sets_won');
         this.$setScoreCounterB = $('.b_sets_won');
@@ -66,6 +92,9 @@ export class Scoreboard {
         this.teamNames = { a: '', b: '' };
         this.teamFlags = { a: '', b: '' };
         this.active_set = 1;
+        // { type: "timeout"|"medical"|"break", startedAt: <epoch ms> } | null -
+        // mirrors match-<channel>/timer, see processDataAndUpdateFields().
+        this.timerState = null;
         this.ScoreHistoryChart = null;
         this.event_history = [];
         this.data_interval = null;
@@ -138,6 +167,7 @@ export class Scoreboard {
         this.updateActiveScore();
         this.updateIndicators();
         this.updateSettings();
+        this.updateTimerDisplay();
         this.handleEventHistory();
         this.updateCurrentPlayersDisplay();
         
@@ -361,6 +391,25 @@ export class Scoreboard {
             const newSet = currentSet + change;
 
             if (newSet > 0 && newSet <= 7) {
+                // Auto-start the shared break timer on a forward set
+                // transition, mirroring the LED board's own
+                // ScoreActions::apply() "nextset" logic (score_actions.h) -
+                // BO1 never, 2-sets always, BO3 only while the match isn't
+                // already decided - computed BEFORE active_set advances
+                // (getSetScore()/setWinner() below both read it) so the
+                // countdown appears here too even on a channel with no
+                // physical board attached to independently trigger it.
+                if (change > 0) {
+                    const format = setModeToFormat(this.gameSettings.set_mode);
+                    const winner = this.setWinner(currentSet);
+                    const setsA = this.getSetScore('a') + (winner === 'a' ? 1 : 0);
+                    const setsB = this.getSetScore('b') + (winner === 'b' ? 1 : 0);
+                    const matchOver = setsA >= 2 || setsB >= 2;
+                    if (format === 1 || (format === 2 && !matchOver)) {
+                        this.startTimer('break');
+                    }
+                }
+
                 this.active_set = newSet;
                 this.$setCounter.trigger('input');
                 this.updateSets();
@@ -444,6 +493,13 @@ export class Scoreboard {
             this.event_history.push({ type: 'reset' });
             this.uploadData();
         });
+
+        // Shared timer buttons - see writeTimerState() in main.js for the
+        // RTDB side of this. Fixed durations (TIMER_DURATIONS_MS above)
+        // match the LED board's own hardcoded ones, so no duration is sent.
+        this.$startTimeoutButton.click(() => this.startTimer('timeout'));
+        this.$startMedicalButton.click(() => this.startTimer('medical'));
+        this.$cancelTimerButton.click(() => this.cancelTimer());
 
         // Logout button handler (nutzt User.logout() für Firebase signOut)
         this.$logoutButton.click(() => {
@@ -535,6 +591,20 @@ export class Scoreboard {
      * @param {boolean} isImport - Whether this is an import operation (affects special handling)
      * ============================================================================== */
     processDataAndUpdateFields(data, isImport = false) {
+        // Set directly from `data.timer` rather than through the flattened
+        // path loop below: that loop only ever fires for keys actually
+        // PRESENT in `data`, so it has no way to represent "the timer node
+        // was deleted" (natural expiry/cancel) - only a direct check against
+        // its absence can. Skipped for JSON imports, which are one-off
+        // partial payloads a user pastes in (almost certainly with no
+        // `timer` key at all) - those shouldn't blow away a genuinely active
+        // synced timer just because the import didn't mention it.
+        if (!isImport) {
+            this.timerState = (data && data.timer && data.timer.type)
+                ? { type: data.timer.type, startedAt: data.timer.started_at || null }
+                : null;
+        }
+
         const pathsAndValues = getPathsAndValues(data);
 
         // Process each path and value
@@ -897,6 +967,96 @@ export class Scoreboard {
 
         writeData(newData);
         // console.log(newData)
+    }
+
+    /** ==============================================================================
+     * Start a shared timeout/medical timer - writes match-<channel>/timer via
+     * writeTimerState() (main.js), picked up by the LED board (directly, or
+     * via the manager server's Firebase bridge) and this page's own output
+     * display alike. No duration is sent - every reader keeps the same
+     * fixed durations locally (TIMER_DURATIONS_MS above, matching
+     * led_scoreboard's score_actions.h).
+     * @param {string} type - 'timeout' or 'medical'
+     * ============================================================================== */
+    startTimer(type) {
+        if (!this.user || !this.channel || !this.user.channels.includes(Number(this.channel))) {
+            showToast("❌", "You're not authenticated for this channel");
+            return;
+        }
+        // Set locally right away, same reasoning as applyFlag(): the next UI
+        // tick already reflects it instead of waiting on the round trip.
+        this.timerState = { type, startedAt: Date.now() };
+        writeTimerState(this.channel, type);
+    }
+
+    /** ==============================================================================
+     * Cancel the currently active shared timer (timeout/medical/break) from
+     * either tool - deletes match-<channel>/timer.
+     * ============================================================================== */
+    cancelTimer() {
+        if (!this.user || !this.channel || !this.user.channels.includes(Number(this.channel))) {
+            showToast("❌", "You're not authenticated for this channel");
+            return;
+        }
+        this.timerState = null;
+        writeTimerState(this.channel, null);
+    }
+
+    /** ==============================================================================
+     * Render the shared timer, both as input.html's inline status text (next
+     * to the Timers buttons) and, for output.html, the .timer_widget card -
+     * both driven by this.timerState, which processDataAndUpdateFields()
+     * keeps in sync with match-<channel>/timer. Also toggles input.html's
+     * Cancel button. Ticks down locally every updateUI() cycle (300ms)
+     * between the underlying ~500ms/2s data polls, then hides itself once
+     * time's up. Purely a reader: the RTDB node itself is only ever cleared
+     * by whichever board/bridge is authoritative for it (fixed durations
+     * mean the board that started/adopted a timer knows exactly when it
+     * ends) - this never writes back on natural expiry.
+     * ============================================================================== */
+    updateTimerDisplay() {
+        const state = this.timerState;
+        const duration = state && TIMER_DURATIONS_MS[state.type];
+        const remainingMs = duration && state.startedAt ? duration - (Date.now() - state.startedAt) : 0;
+        const active = !!duration && remainingMs > 0;
+
+        this.$cancelTimerButton.toggleClass('hidden', !active);
+        this.$timerStatus.toggleClass('hidden', !active);
+
+        if (!active) {
+            this.$timerWidget.removeClass('visible');
+            return;
+        }
+
+        const totalSec = Math.ceil(remainingMs / 1000);
+        const mm = Math.floor(totalSec / 60);
+        const ss = totalSec % 60;
+        const timeText = `${mm}:${String(ss).padStart(2, '0')}`;
+        const label = TIMER_LABELS[state.type] || state.type;
+
+        this.$timerStatus.text(`${label} ${timeText}`);
+
+        if (this.type !== 'output' || !this.$timerWidget.length) return;
+
+        // Sit at the same vertical level as, and just to the right of,
+        // whichever theme's .board is actually visible right now (setTheme()
+        // shows exactly one .wrapper[theme] at a time) - measured fresh each
+        // tick so it tracks the board across theme switches/resizes instead
+        // of sitting at a fixed viewport position.
+        const $board = $('.board:visible').first();
+        if ($board.length) {
+            const rect = $board[0].getBoundingClientRect();
+            this.$timerWidget.css({
+                top: (rect.top + rect.height / 2) + 'px',
+                left: (rect.right + 24) + 'px',
+            });
+        }
+
+        this.$timerWidget
+            .attr('data-timer-type', state.type)
+            .addClass('visible');
+        this.$timerWidget.find('.timer_widget_label').text(label);
+        this.$timerWidget.find('.timer_widget_time').text(timeText);
     }
 
     handleEventHistory() {
