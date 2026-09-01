@@ -1,4 +1,4 @@
-import { themes, readData, getPathsAndValues, getColorBrightness, rgb2hex, writeData, writeTimerState, showToast, copyToClipboard } from "./main.js?v=3";
+import { themes, DEFAULT_BRAND_LOGO, readData, getPathsAndValues, getColorBrightness, rgb2hex, writeData, writeTimerState, showToast, copyToClipboard } from "./main.js?v=3";
 
 // Fixed durations for the shared timeout/medical/break timer - matches
 // led_scoreboard/include/score_actions.h's BREAK/TIMEOUT/MEDICAL_*_MS
@@ -206,11 +206,35 @@ export class Scoreboard {
         // forces a re-fetch of CSS that was already loaded, briefly leaving
         // the page unstyled (raw HTML, in normal flow, no opacity:0/
         // position:fixed on .overlay) while the new links load.
-        $('link[rel="stylesheet"][href*="css/style-v"]').remove();
-        $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('href', css_path).appendTo('head');
+        // The 'css/style-v' half of the selector is what clears the theme link
+        // that index.html ships in its own <head>; [theme-stylesheet] catches
+        // the ones this method appended on an earlier call, whatever they're
+        // named (style-irf.css doesn't match the 'style-v' pattern, and
+        // without this a theme switch would leave the old sheet behind).
+        $('link[rel="stylesheet"][href*="css/style-v"], link[theme-stylesheet]').remove();
+        $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('theme-stylesheet', '').attr('href', css_path).appendTo('head');
+
+        // Federation logo in the overlay headers - per-theme, falling back to
+        // the RG badge for themes that don't define one.
+        $('.brand_logo').attr('src', themes[theme].brand_logo || DEFAULT_BRAND_LOGO);
+
+        // Fixed event mark ahead of the event name, in the cut that suits
+        // the ground each copy sits on - the board's strip is dark, the
+        // overlay headers are light. Most themes don't have one; for those
+        // the attribute is removed rather than set to '', since an empty src
+        // makes the browser re-request the page itself.
+        const eventLogo = themes[theme].event_logo || {};
+        ['dark_bg', 'light_bg'].forEach((ground) => {
+            const $el = $(`.event_logo_${ground}`);
+            if (eventLogo[ground]) {
+                $el.attr('src', eventLogo[ground]);
+            } else {
+                $el.removeAttr('src');
+            }
+        });
 
         if (this.type === 'input') {
-            $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('href', css_path_input).appendTo('head');
+            $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('theme-stylesheet', '').attr('href', css_path_input).appendTo('head');
         } else if (this.type === 'output') {
             // Set corresponding html
             $('.scoreboard').hide();
@@ -1803,7 +1827,10 @@ export class Scoreboard {
         // "flags on, colors off" show neither.
         const flagsOn = showFlag;
 
-        $('.color-indicator').toggle(showColor && !showFlag);
+        // .color_indicator (underscore) is the overlays' own bar - a separate
+        // class from the board's .color-indicator, which is why it used to
+        // ignore this setting entirely and stayed on even in flags mode.
+        $('.color-indicator, .overlay .color_indicator').toggle(showColor && !showFlag);
         $('.flag-indicator').toggle(flagsOn);
         // .flag-indicator-wrap (input.html only) stays visible whenever
         // flags mode is on regardless of whether a flag currently resolves,
@@ -1866,15 +1893,22 @@ export class Scoreboard {
             // over the same element with conflicting target heights.
             if ($flag.closest('.flag-indicator-wrap').length) return;
 
-            const $team = $flag.closest('.team');
-            if (!$team.length) return;
-
             let heightPx;
             if ($flag.closest('.match_statistics .score_history_in_stats').length) {
                 // Fixed in this context (see the matching .color-indicator
                 // rule in style-output.css), not relative to anything.
                 heightPx = 22 * SCORE_HISTORY_FLAG_SCALE;
+            } else if ($flag.hasClass('overlay_flag')) {
+                // Overlay team headers carry the name in an <h4>, not a
+                // .teamname, and the statistics overlay's header isn't inside
+                // a .team either - so neither lookup below applies. The <h4>
+                // is always the flag's next sibling (see index.html).
+                const $reference = $flag.nextAll('h4').first();
+                if (!$reference.length) return;
+                heightPx = this.measureCapHeight($reference[0]);
             } else {
+                const $team = $flag.closest('.team');
+                if (!$team.length) return;
                 const $reference = $team.find('.teamname').first();
                 if (!$reference.length) return;
                 heightPx = this.measureCapHeight($reference[0]);

@@ -44,6 +44,20 @@
   gap: 8px;
 }
 
+/* Overlay team headers (match preview + match statistics): the flag stands
+   in for the .color_indicator bar next to the team name, the same swap the
+   board makes - see updateColorIndicatorVisibility() in Scoreboard.js, which
+   toggles both. Sized in JS by syncOutputFlagSizes() off the <h4>'s
+   cap-height, like every other .flag-indicator on an output page. */
+.overlay .team_header .team_title {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 /* Score history legend - matches this file's own
    ".score_history .teams_info .team .color-indicator" (height:77%,
    margin-top:5px) below. */
@@ -57,6 +71,14 @@
    .color-indicator" (fixed height:22px) below. */
 .match_statistics .score_history_in_stats .teams_info .team .flag-indicator {
   height: 22px !important;
+}
+
+/* Fixed per-theme event badge ahead of the event name, set by setTheme()
+   in Scoreboard.js. Themes without one leave the element srcless, which
+   would otherwise render as a broken image. */
+.event_logo:not([src]),
+.event_logo[src=""] {
+  display: none;
 }
 
 .player_names {
@@ -404,6 +426,86 @@
 }
 
 /* ============================================================== */
+/* Overlay design tokens                                          */
+/* ============================================================== */
+
+/* The overlays (match preview, match statistics) and the timer widget used
+   to hardcode their colours, so they looked identical under every theme
+   while the board next to them changed completely. The rules below now read
+   from these custom properties instead, and the values defined here are
+   byte-for-byte the ones that were previously inlined - so a theme that
+   overrides nothing renders exactly as before.
+
+   A theme opts in by redefining any of these in its own :root. That works
+   because the theme stylesheet is appended to <head> after this file (see
+   setTheme() in Scoreboard.js), so its :root wins the cascade. See
+   style-irf.css for a full override set.
+
+   A theme can go as far as flipping the overlays to a light surface with
+   dark text - style-irf.css does exactly that. Nothing here assumes one or
+   the other; the defaults are simply the dark set the overlays shipped
+   with. What a light override does need on top of the tokens is a hairline
+   on each panel: on a dark surface the panels separate themselves by being
+   lighter than their ground, and on a light one they don't. */
+:root {
+  /* Surface + chrome */
+  --ov-surface: rgba(23, 25, 28, 0.994);
+  --ov-header-bg: #000000;
+  --ov-radius: 12px;
+  --ov-line: rgb(255, 255, 255, 0.2);
+
+  /* Typography */
+  --ov-font: 'Barlow Condensed', sans-serif;
+  --ov-num-font: 'Antonio', sans-serif;
+
+  /* Text */
+  --ov-text: #ffffff;
+  --ov-text-muted: rgba(255, 255, 255, 0.7);
+  --ov-text-faint: rgba(255, 255, 255, 0.5);
+
+  /* Panels (stat tiles, player cards) */
+  --ov-panel: rgb(0, 0, 0, 0.4);
+  --ov-panel-raised: hsl(216deg 6% 23% / 70%);
+
+  /* Accent - the highlight for "best" stats, break points and set winners.
+     Defaults to the RG yellow the overlays were built around; --ov-accent
+     itself used to be var(--primary), i.e. the theme's own accent. */
+  --ov-accent: var(--primary);
+  --ov-accent-soft: #FCC35222;
+  --ov-accent-border: #FCC35244;
+  --ov-accent-strong: #fcc15566;
+  --ov-accent-muted: #fcc155aa;
+
+  /* Player stat bars */
+  --ov-bar-track: rgb(255, 255, 255, 0.2);
+  --ov-bar-fill: rgb(255, 255, 255);
+
+  /* Score-history table inside the statistics overlay */
+  --ov-table-bg: rgba(255, 255, 255, 0.05);
+  --ov-cell-bg: rgba(0, 0, 0, 0.3);
+  --ov-cell-border: rgba(255, 255, 255, 0.15);
+  --ov-cell-active-bg: rgba(255, 255, 255, 0.05);
+  --ov-cell-active-bg-strong: rgba(255, 255, 255, 0.2);
+  --ov-cell-active-border: rgba(255, 255, 255, 0.1);
+
+  /* RGX chips */
+  --ov-chip-bg: rgba(255, 255, 255, 0.95);
+  --ov-chip-text: var(--text-primary);
+  --ov-chip-pro-bg: #000000;
+  --ov-chip-pro-text: #ffffff;
+
+  /* Timeout / medical / break timer widget. Kept separate from the overlay
+     tokens because the widget sits next to the board, not on a dark
+     surface - see the note above .timer_widget. */
+  --timer-bg: #ffffff;
+  --timer-label-font: 'Barlow', sans-serif;
+  --timer-time-font: 'Antonio', sans-serif;
+  --timer-label-color: #ff9800;
+  --timer-label-medical-color: #C55151;
+  --timer-time-color: #111111;
+}
+
+/* ============================================================== */
 /* General Overlay Styles */
 /* ============================================================== */
 
@@ -412,14 +514,14 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: rgba(23, 25, 28, 0.994);
-  border-radius: 12px;
+  background: var(--ov-surface);
+  border-radius: var(--ov-radius);
   overflow: hidden;
   width: 80%;
   max-width: 90vw;
   max-height: 90vh;
   z-index: 1000;
-  color: white;
+  color: var(--ov-text);
   opacity: 0;
   transition: opacity 0.3s ease-in-out;
 }
@@ -445,7 +547,7 @@
 }
 
 .overlay * {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--ov-font);
 }
 
 .overlay .overlay_header {
@@ -454,7 +556,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  background-color: #000000;
+  background-color: var(--ov-header-bg);
   padding: 16px 30px 20px 30px;
 }
 
@@ -641,7 +743,7 @@
   gap: 14px;
   /* min-height: 70px; */
   padding-bottom: 16px;
-  border-bottom: 1px solid rgb(255, 255, 255, 0.2);
+  border-bottom: 1px solid var(--ov-line);
   flex-grow: 1;
 }
 
@@ -677,8 +779,8 @@
   padding: 3px 12px 5px 12px;
   gap: 4px;
   border-radius: 15px;
-  background-color: rgba(255,255,255, 0.95);
-  color: var(--text-primary);
+  background-color: var(--ov-chip-bg);
+  color: var(--ov-chip-text);
 }
 
 .rgx img {
@@ -694,13 +796,13 @@
 
 .rgx.pro {
   /* background-color: rgba(255,255,255, 0.15); */
-  background-color: #000000;
+  background-color: var(--ov-chip-pro-bg);
   padding: 4px 14px 6px 14px;
   /* border: 1.5px solid #fcc15533; */
 }
 
 .rgx.pro span{
-  color: #ffffff;
+  color: var(--ov-chip-pro-text);
 }
 
 .rgx #pro,
@@ -728,7 +830,7 @@
 }
 
 .team_rgx.pro {
-  background: #000000;
+  background: var(--ov-chip-pro-bg);
   /* background-color: rgb(255,255,255, 0.1); */
   padding: 5px 18px 7px 18px;
 }
@@ -749,7 +851,7 @@
   padding: 18px 20px 20px 20px;
   border-radius: 10px;
   /* border: 1px solid rgba(255,255,255,0.1); */
-  background: hsl(216deg 6% 23% / 70%);
+  background: var(--ov-panel-raised);
   /* flex-grow: 1; */
   /* flex-basis: 48%; */
   width: 49%;
@@ -872,21 +974,21 @@
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
-  background-color: rgb(0, 0, 0, 0.4);
+  background-color: var(--ov-panel);
   gap: 2px;
 }
 
 .match_statistics .stat_item * {
-  font-family: 'Antonio', sans-serif;
+  font-family: var(--ov-num-font);
   font-size: 2rem;
   font-weight: 400;
 }
 
 .match_statistics .stat_item.best {
-  /* background-color: var(--primary) !important;
+  /* background-color: var(--ov-accent) !important;
   color: #000000 !important; */
-  background-color: #FCC35222;
-  color: var(--primary);
+  background-color: var(--ov-accent-soft);
+  color: var(--ov-accent);
 }
 
 .match_statistics .stat_item .value_container {
@@ -921,11 +1023,11 @@
 .match_statistics .stat_item .absolute_value .stat_value {
   font-size: 1.2rem;
   font-weight: 300;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--ov-text-muted);
 }
 
 .match_statistics .stat_item.best .absolute_value .stat_value {
-  color: #fcc155aa;
+  color: var(--ov-accent-muted);
 }
 
 .match_statistics .team_statistics {
@@ -950,7 +1052,7 @@
 .match_statistics .spacer {
   width: 50px;
   height: 100%;
-  border-bottom: 1px solid rgb(255, 255, 255, 0.2);
+  border-bottom: 1px solid var(--ov-line);
 }
 
 .match_statistics .team_stats_container {
@@ -968,7 +1070,7 @@
 
 .match_statistics .team_stats_container .team_stats:last-child {
   flex-direction: column-reverse;
-  border-top: 1px solid rgb(255, 255, 255, 0.2);
+  border-top: 1px solid var(--ov-line);
 }
 
 .match_statistics .team_stats_container .team_stats .team_header {
@@ -1046,8 +1148,8 @@
   font-size: 1.3rem;
   font-weight: 400;
   text-transform: uppercase;
-  font-family: 'Barlow Condensed', sans-serif;
-  color: rgba(255, 255, 255, 0.7);
+  font-family: var(--ov-font);
+  color: var(--ov-text-muted);
 }
 
 .match_statistics .team_stats_container .team_stats .set_stats {
@@ -1064,7 +1166,7 @@
   justify-content: center;
   align-items: center;
   padding: 2px 4px 6px 4px;
-  background-color: rgb(0, 0, 0, 0.4);
+  background-color: var(--ov-panel);
   text-transform: uppercase;
   flex-grow: 0;
   height: 44px;
@@ -1089,8 +1191,8 @@
 }
 
 .match_statistics .team_stats_container .team_stats .set_stats .counter.winner {
-  background-color: #FCC35222;
-  color: var(--primary);
+  background-color: var(--ov-accent-soft);
+  color: var(--ov-accent);
 }
 
 .match_statistics .team_stats_container .team_stats .set_stats .counter.winner .score {
@@ -1121,7 +1223,7 @@
 .match_statistics .players_container .team:last-child {
   padding-bottom: 0px;
   padding-top: 28px;
-  border-top: 1px solid rgb(255, 255, 255, 0.2);
+  border-top: 1px solid var(--ov-line);
 }
 
 .match_statistics .players_container .player {
@@ -1162,7 +1264,7 @@
 }
 
 .match_statistics .players_container .player.best .details .name * {
-  color: var(--primary) !important;
+  color: var(--ov-accent) !important;
 }
 
 .match_statistics .players_container .player .details .name h5 {
@@ -1215,7 +1317,7 @@
   font-size: 1.4rem;
   font-weight: 400;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--ov-text-muted);
 }
 
 .match_statistics .player_stats .player_stats_container {
@@ -1229,7 +1331,7 @@
 }
 
 .match_statistics .player_stats .player_stats_container:last-child {
-  border-top: 1px solid rgb(255, 255, 255, 0.2);
+  border-top: 1px solid var(--ov-line);
   padding-top: 20px;
   padding-bottom: 0px;
 }
@@ -1265,7 +1367,7 @@
   justify-content: center;
   align-items: stretch;
   gap: 4px;
-  background-color: rgb(0, 0, 0, 0.4);
+  background-color: var(--ov-panel);
   padding: 6px 12px 14px 12px;
   border-radius: 4px;
   text-transform: uppercase;
@@ -1298,19 +1400,19 @@
   /* min-width: 117px; */
   width: 100%;
   height: 3px;
-  background-color: rgb(255, 255, 255, 0.2);
+  background-color: var(--ov-bar-track);
   border-radius: 4px;
 }
 
 .match_statistics .player_stats .line_stats_group .line_stat .bar_stat .fill {
   width: 80%;
   height: 100%;
-  background-color: rgb(255, 255, 255);
+  background-color: var(--ov-bar-fill);
   border-radius: 4px;
 }
 
 .match_statistics .line_stat.best .bar_stat .fill {
-  background-color: var(--primary) !important;
+  background-color: var(--ov-accent) !important;
 }
 
 .match_statistics .player_stats .line_stats_group .line_stat .right {
@@ -1322,17 +1424,17 @@
 }
 
 .match_statistics .player_stats .line_stats_group .line_stat .right .stat_value {
-  font-family: 'Antonio', sans-serif;
+  font-family: var(--ov-num-font);
   font-size: 1.3rem;
   font-weight: 300;
 }
 
 .match_statistics .player_stats .line_stats_group .line_stat.best .right .stat_value {
-  color: var(--primary) !important;
+  color: var(--ov-accent) !important;
 }
 
 .match_statistics .score_history_in_stats .table_view {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--ov-table-bg);
   border-radius: 0px 0px 8px 8px;
   padding: 15px;
   display: flex;
@@ -1427,8 +1529,8 @@
   min-width: 15px;
   max-width: 32px;
   flex: 1;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--ov-cell-bg);
+  border: 1px solid var(--ov-cell-border);
   border-radius: 0px;
   box-sizing: border-box;
 }
@@ -1452,7 +1554,7 @@
 .match_statistics .score_history_in_stats .score_item .score_number {
   font-size: .9rem;
   font-weight: 300;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--ov-text-faint);
   /* min-width: 0px !important; */
   /* width: 15px; */
   text-align: center;
@@ -1468,32 +1570,32 @@
 }
 
 .match_statistics .score_history_in_stats .score_item.active {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--ov-cell-active-bg);
+  border-color: var(--ov-cell-active-border);
 }
 
 .match_statistics .score_history_in_stats .scores.full .score_item.active {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--ov-cell-active-bg-strong);
+  border-color: var(--ov-cell-active-border);
 }
 
 .match_statistics .score_history_in_stats .score_item.active .score_number {
-  color: var(--white);
+  color: var(--ov-text);
   font-weight: 400;
 }
 
 .match_statistics .score_history_in_stats .score_item[break] {
-  background-color: #FCC35222;
-  border-color: #FCC35244;
+  background-color: var(--ov-accent-soft);
+  border-color: var(--ov-accent-border);
 }
 
 .match_statistics .score_history_in_stats .scores.full .score_item[break] {
-  background-color: #fcc15566;
-  /* border-color: var(--primary); */
+  background-color: var(--ov-accent-strong);
+  /* border-color: var(--ov-accent); */
 }
 
 .match_statistics .score_history_in_stats .score_item[break] .score_number {
-  color: var(--primary);
+  color: var(--ov-accent);
 }
 
 /* Shared timeout/medical/break countdown (index.html) - see
@@ -1520,7 +1622,16 @@
    reinforces the same left/right motion so the card actually slides rather
    than only wiping in place, and the mismatched easing per state (snappy
    ease-out revealing in, quick ease-in tucking away) is what makes it read
-   as dynamic rather than a flat linear wipe. */
+   as dynamic rather than a flat linear wipe.
+   The insets are negative on every edge except the one doing the wiping,
+   which is what lets the drop-shadow above survive: clip-path is applied
+   *after* filter in the element rendering order, so a plain inset(0) clips
+   to the border box and cuts the shadow off entirely - the card had been
+   rendering with hard edges in every theme. -40px is simply more than the
+   widest shadow any theme sets here reaches (offset + blur); a theme going
+   beyond that would need this raised to match. The left edge stays at 0
+   rather than -40px so the reveal doesn't briefly show a band of shadow to
+   the left of a card that hasn't swept in yet. */
 .timer_widget {
   position: fixed;
   top: 50%;
@@ -1532,11 +1643,11 @@
   gap: 2px;
   padding: 10px 22px 12px 22px;
   border-radius: 8px;
-  background-color: #ffffff;
+  background-color: var(--timer-bg);
   filter: drop-shadow(1px 3px 20px rgba(0, 0, 0, 0.15));
   pointer-events: none;
   opacity: 0;
-  clip-path: inset(0 100% 0 0);
+  clip-path: inset(-40px 100% -40px 0);
   transform: translateY(-50%) translateX(-18px);
   transition: opacity 0.35s cubic-bezier(0.64, 0, 0.78, 0),
               clip-path 0.35s cubic-bezier(0.64, 0, 0.78, 0),
@@ -1545,7 +1656,7 @@
 
 .timer_widget.visible {
   opacity: 1;
-  clip-path: inset(0 0 0 0);
+  clip-path: inset(-40px);
   transform: translateY(-50%) translateX(0);
   transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1),
               clip-path 0.45s cubic-bezier(0.22, 1, 0.36, 1),
@@ -1553,22 +1664,22 @@
 }
 
 .timer_widget_label {
-  font-family: 'Barlow', sans-serif;
+  font-family: var(--timer-label-font);
   font-size: 14px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #ff9800;
+  color: var(--timer-label-color);
 }
 
 .timer_widget[data-timer-type="medical"] .timer_widget_label {
-  color: #C55151;
+  color: var(--timer-label-medical-color);
 }
 
 .timer_widget_time {
-  font-family: 'Antonio', sans-serif;
+  font-family: var(--timer-time-font);
   font-size: 40px;
   font-weight: 600;
   line-height: 1;
-  color: #111111;
+  color: var(--timer-time-color);
 }

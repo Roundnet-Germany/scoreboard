@@ -5,6 +5,13 @@ import { db, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } fro
 import { User } from "./User.js?v=3";
 import { Scoreboard } from "./Scoreboard.js?v=3";
 
+/**
+ * Theme registry.
+ *
+ * `brand_logo` is optional and overrides the federation logo in the top-right
+ * of the overlay headers (see setTheme() in Scoreboard.js); themes that omit
+ * it keep the Roundnet Germany badge that is hardcoded in index.html.
+ */
 export const themes = {
     'full': {
         'html_structure': 'full',
@@ -30,7 +37,27 @@ export const themes = {
         'html_structure': 'vertical_score',
         'css_path': 'css/style-v5-eura.css?v=3'
     },
+    'irf': {
+        'html_structure': 'vertical_score',
+        'css_path': 'css/style-irf.css?v=3',
+        // The overlay headers run light in this theme, so the mark with its
+        // original black lettering is the one that reads there.
+        // img/irf_logo_white.png is the same mark with that lettering
+        // inverted, for a dark header.
+        'brand_logo': 'img/irf_logo_full.png',
+        // Fixed event mark, shown ahead of the event name. Two cuts of the
+        // same artwork, named for the ground they sit on: the board's strip
+        // is dark, the overlay headers are light, and the mark's white
+        // details vanish on the wrong one.
+        'event_logo': {
+            'dark_bg': 'img/irf_event_logo_dark_bg.png',
+            'light_bg': 'img/irf_event_logo_light_bg.png'
+        }
+    },
 }
+
+/** Fallback for themes without their own `brand_logo` (matches index.html). */
+export const DEFAULT_BRAND_LOGO = 'img/rg_logo_white.png';
 
 // Debug: auf true setzen für Console-Logs (Auth/Daten-Flow); wird auch für Scoreboard exponiert
 const AUTH_DEBUG = true;

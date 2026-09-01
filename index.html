@@ -25,7 +25,7 @@
         <div class="board">
             <div class="top">
                 <div class="content">
-                    <!-- <img src="../img/2drb.svg" alt=""> -->
+                    <img class="event_logo event_logo_dark_bg" alt="">
                     <p class="text" fb-data="tournament_name">Occasion</p>
                 </div>
             </div>
@@ -342,6 +342,7 @@
     <div class="match_statistics overlay">
         <div class="overlay_header">
             <div class="left">
+                <img class="event_logo event_logo_light_bg" alt="">
                 <img id="tournament_logo" src="" alt="logo" fb-data="tournament_logo">
                 <p fb-data="tournament_name">Tournament Name</p>
             </div>
@@ -350,7 +351,7 @@
                 <h4 fb-data="phase">Game Name</h4>
             </div>
             <div class="right">
-                <img src="img/rg_logo_white.png" alt="RG Logo">
+                <img class="brand_logo" src="img/rg_logo_white.png" alt="Federation Logo">
             </div>
         </div>
         
@@ -360,6 +361,7 @@
                     <div class="team_header">
                         <div class="left">
                             <div class="color_indicator" fb-data="teams_info.team_a.color"></div>
+                            <img class="flag-indicator overlay_flag team_a" width="28" height="21" alt="">
                             <h4 fb-data="teams_info.team_a.name">Team A</h4>
                         </div>
                         <div class="team_rgx rgx">
@@ -411,6 +413,7 @@
                     <div class="team_header">
                         <div class="left">
                             <div class="color_indicator" fb-data="teams_info.team_b.color"></div>
+                            <img class="flag-indicator overlay_flag team_b" width="28" height="21" alt="">
                             <h4 fb-data="teams_info.team_b.name">Team B</h4>
                         </div>
                         <div class="team_rgx rgx">
@@ -920,6 +923,7 @@
     <div class="match_preview overlay hidden">
         <div class="overlay_header">
             <div class="left">
+                <img class="event_logo event_logo_light_bg" alt="">
                 <img id="tournament_logo" src="" alt="logo" fb-data="tournament_logo">
                 <p fb-data="tournament_name">Tournament Name</p>
             </div>
@@ -928,15 +932,17 @@
                 <h4 fb-data="phase">Game Name</h4>
             </div>
             <div class="right">
-                <img src="img/rg_logo_white.png" alt="RG Logo">
+                <img class="brand_logo" src="img/rg_logo_white.png" alt="Federation Logo">
             </div>
         </div>
 
         <div class="players_container">
             <div class="team team_a">
                 <div class="team_header">
-                    <!-- <div class="color_indicator" fb-data="teams_info.team_a.color"></div> -->
-                    <h4 fb-data="teams_info.team_a.name">Team A</h4>
+                    <div class="team_title">
+                        <img class="flag-indicator overlay_flag team_a" width="28" height="21" alt="">
+                        <h4 fb-data="teams_info.team_a.name">Team A</h4>
+                    </div>
                     <div class="team_rgx rgx">
                         <img id="normal" src="img/rgx_small.png" alt="">
                         <img id="pro" src="img/rgxpro_small.png" alt="">
@@ -989,8 +995,10 @@
 
             <div class="team team_b">
                 <div class="team_header">
-                    <!-- <div class="color_indicator" fb-data="teams_info.team_b.color"></div> -->
-                    <h4 fb-data="teams_info.team_b.name">Team B</h4>
+                    <div class="team_title">
+                        <img class="flag-indicator overlay_flag team_b" width="28" height="21" alt="">
+                        <h4 fb-data="teams_info.team_b.name">Team B</h4>
+                    </div>
                     <div class="team_rgx rgx">
                         <img id="normal" src="img/rgx_small.png" alt="">
                         <img id="pro" src="img/rgxpro_small.png" alt="">
