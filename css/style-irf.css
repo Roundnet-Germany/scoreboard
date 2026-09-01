@@ -6,8 +6,11 @@
 
      warm cream surfaces, near-white cards with a warm hairline border,
      ink-navy text, a blue accent for live/interactive values, gold for
-     "winner/final" and red for "live", Bebas Neue as the display face over a
-     neutral grotesque for body copy.
+     "winner/final" and red for "live", Bebas Neue as the display face over
+     Barlow Semi Condensed for body copy. Bebas carries the large type only -
+     it ships a single weight, so anything that needs a lighter or heavier
+     cut (player names, labels, stat values) is set in Barlow Semi
+     Condensed.
 
    Unlike the other themes this one also restyles the overlays (match preview,
    match statistics) and the timer widget, via the --ov-* / --timer-* tokens
@@ -19,7 +22,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
 
 * {
-  font-family: 'Barlow', sans-serif;
+  font-family: 'Barlow Semi Condensed', sans-serif;
   font-weight: 500;
 }
 
@@ -56,8 +59,8 @@
   --ov-radius: 16px;
   --ov-line: rgba(243, 241, 234, 0.16);
 
-  --ov-font: 'Barlow', sans-serif;
-  --ov-num-font: 'Barlow', sans-serif;
+  --ov-font: 'Barlow Semi Condensed', sans-serif;
+  --ov-num-font: 'Barlow Semi Condensed', sans-serif;
 
   --ov-text: #f3f1ea;
   --ov-text-muted: rgba(243, 241, 234, 0.68);
@@ -100,8 +103,8 @@
 
   /* --- Timer widget ----------------------------------------------------- */
   --timer-bg: #ffffff;
-  --timer-label-font: 'Bebas Neue', 'Barlow', sans-serif;
-  --timer-time-font: 'Barlow', sans-serif;
+  --timer-label-font: 'Bebas Neue', 'Barlow Semi Condensed', sans-serif;
+  --timer-time-font: 'Barlow Semi Condensed', sans-serif;
   --timer-label-color: #b8860f;
   --timer-label-medical-color: #d92b23;
   --timer-time-color: #1c2030;
@@ -178,7 +181,7 @@
    the same treatment used here for the two chrome strips and, further down,
    for the team names. */
 .top .content p {
-  font-family: 'Bebas Neue', 'Barlow', sans-serif;
+  font-family: 'Bebas Neue', 'Barlow Semi Condensed', sans-serif;
   font-size: 19px;
   font-weight: 400;
   letter-spacing: 0.8px;
@@ -218,7 +221,7 @@
 }
 
 .board .center * {
-  font-family: 'Barlow', sans-serif;
+  font-family: 'Barlow Semi Condensed', sans-serif;
 }
 
 .board .teams {
@@ -264,7 +267,7 @@
 }
 
 .teams .team .teamname {
-  font-family: 'Bebas Neue', 'Barlow', sans-serif;
+  font-family: 'Bebas Neue', 'Barlow Semi Condensed', sans-serif;
   font-weight: 400;
   letter-spacing: 0.6px;
   text-transform: uppercase;
@@ -388,7 +391,7 @@ body[players='show'] .counter {
 }
 
 .score_history * {
-  font-family: 'Barlow', sans-serif;
+  font-family: 'Barlow Semi Condensed', sans-serif;
 }
 
 .score_history .scores .team_rows .score_item {
@@ -397,7 +400,7 @@ body[players='show'] .counter {
 }
 
 .score_history .teams_info .team .name p {
-  font-family: 'Bebas Neue', 'Barlow', sans-serif;
+  font-family: 'Bebas Neue', 'Barlow Semi Condensed', sans-serif;
   font-weight: 400;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -447,19 +450,28 @@ body[players='show'] .counter {
    under the header.
    ============================================================================== */
 
+/* No RGX anywhere in this theme - the rating is a Roundnet Germany ladder and
+   has nothing to say at a world championship. Hiding the wrapper covers both
+   the per-player chips and the per-team ones (they all carry .rgx, see
+   index.html), and it leaves the values in the DOM, so Scoreboard.js' data
+   export still reads them. */
+.rgx {
+  display: none;
+}
+
 .overlay .overlay_header {
   border-bottom: 2px solid var(--primary);
 }
 
 .overlay .overlay_header .center h3,
 .overlay .overlay_header .left p {
-  font-family: 'Bebas Neue', 'Barlow', sans-serif;
+  font-family: 'Bebas Neue', 'Barlow Semi Condensed', sans-serif;
   font-weight: 400;
   letter-spacing: 1.2px;
 }
 
 .overlay .overlay_header .center h4 {
-  font-family: 'Bebas Neue', 'Barlow', sans-serif;
+  font-family: 'Bebas Neue', 'Barlow Semi Condensed', sans-serif;
   font-weight: 400;
   letter-spacing: 1px;
   color: var(--ov-accent-blue);
@@ -475,7 +487,7 @@ body[players='show'] .counter {
 .overlay.match_preview .players_container .team .team_header h4,
 .match_statistics .team_stats_container .team_stats .team_header h4,
 .overlay .players_container .player .details .name h5 {
-  font-family: 'Bebas Neue', 'Barlow', sans-serif;
+  font-family: 'Bebas Neue', 'Barlow Semi Condensed', sans-serif;
   font-weight: 400;
   letter-spacing: 0.8px;
 }
@@ -525,7 +537,7 @@ body[players='show'] .counter {
 }
 
 .match_statistics .score_history_in_stats .teams_info .team p {
-  font-family: 'Bebas Neue', 'Barlow', sans-serif;
+  font-family: 'Bebas Neue', 'Barlow Semi Condensed', sans-serif;
   font-weight: 400;
   letter-spacing: 0.5px;
   text-transform: uppercase;
