@@ -55,12 +55,13 @@
   --secondary-1: rgba(47, 95, 199, 0.12);
 
   /* --- Overlay palette (see style-output.css' token block) ---------------
-     Straight off the hub: cream ground, white cards, warm hairline, ink
-     text. The overlays sit on top of the camera feed, so they get a border
-     and a real shadow further down to lift them off it - a dark panel used
+     Same three-band build as the board: a sand strip on top, a white sheet
+     for the content, a sand strip along the bottom, warm hairlines and ink
+     text throughout. The overlays sit on top of the camera feed, so they
+     get a real shadow further down to lift them off it - a dark panel used
      to do that on its own. */
-  --ov-surface: #f6f4ee;
-  --ov-header-bg: #ffffff;
+  --ov-surface: #ffffff;
+  --ov-header-bg: #f6f4ee;
   --ov-radius: 16px;
   --ov-line: #e2ded2;
 
@@ -71,8 +72,12 @@
   --ov-text-muted: #6c7280;
   --ov-text-faint: #98a0ae;
 
-  --ov-panel: #ffffff;
-  --ov-panel-raised: #ffffff;
+  /* The data tiles take the board's own counter tint (--light-3), so a
+     stat tile in the overlay and a score cell on the board are the same
+     surface. The player cards get the lighter sand instead - they're a far
+     bigger area, and a block of --light-3 that size sits too heavy. */
+  --ov-panel: #f0ede3;
+  --ov-panel-raised: #f6f4ee;
 
   /* "Best stat", "set winner" and "break point" are all winner semantics,
      which the hub paints with --final (#b8860f) over rgba(--final-rgb,.14).
@@ -87,10 +92,12 @@
   --ov-bar-track: #e6e1d2;
   --ov-bar-fill: #1c2030;
 
-  --ov-table-bg: #ffffff;
+  /* The score history is the overlay's bottom strip, so it takes the same
+     sand as the header - and its cells go white, to read against it. */
+  --ov-table-bg: #f6f4ee;
   --ov-cell-bg: #ffffff;
   --ov-cell-border: #e2ded2;
-  --ov-cell-active-bg: #f0ede3;
+  --ov-cell-active-bg: #e6e1d2;
   --ov-cell-active-bg-strong: #cdd7ef;
   --ov-cell-active-border: #d7d2c1;
 
@@ -458,25 +465,32 @@ body[players='show'] .counter {
   display: none;
 }
 
+/* The sand strips at the top and bottom are divided off the white sheet by
+   a single hairline each, drawn on the edge that faces the sheet - never
+   down the sides, where it would read as a frame around the strip instead
+   of a seam between the two bands. */
 .overlay .overlay_header {
-  border-bottom: 2px solid var(--special);
+  border-bottom: 1px solid var(--ov-line);
+}
+
+.match_statistics .score_history_in_stats .table_view {
+  border: none;
+  border-top: 1px solid var(--ov-line);
 }
 
 /* On the near-black default surface the overlays separated themselves from
-   the camera feed just by being dark. A cream panel doesn't, so it gets the
-   same edge and lift the hub gives its own cards. */
+   the camera feed just by being dark. A light one doesn't, so it leans on
+   the shadow the hub gives its own cards. */
 .overlay {
-  border: 1px solid var(--ov-line);
   box-shadow: 0 20px 60px rgba(28, 32, 48, 0.30);
 }
 
-/* Same reasoning one level down: the stat tiles, set counters, player cards
-   and the score-history table are white on cream, so each needs a hairline
-   to read as a panel at all. */
+/* The stat tiles, set counters and player cards are sand on white - close
+   enough in value that a hairline is what actually makes them read as
+   panels rather than as tinted patches. */
 .match_statistics .stat_item,
 .match_statistics .line_stats_group,
 .match_statistics .set_stats .counter,
-.match_statistics .score_history_in_stats .table_view,
 .overlay.match_preview .players_container .player {
   border: 1px solid var(--ov-line);
 }
