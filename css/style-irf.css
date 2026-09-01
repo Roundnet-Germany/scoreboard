@@ -1,0 +1,551 @@
+/* ==============================================================================
+   IRF - International Roundnet Federation (World Championships)
+
+   Started from style-v1.css (the "rg" theme) and re-coloured/re-typeset to
+   match the tournament hub at https://tournament-live-scores.web.app/:
+
+     warm cream surfaces, near-white cards with a warm hairline border,
+     ink-navy text, a blue accent for live/interactive values, gold for
+     "winner/final" and red for "live", Bebas Neue as the display face over a
+     neutral grotesque for body copy.
+
+   Unlike the other themes this one also restyles the overlays (match preview,
+   match statistics) and the timer widget, via the --ov-* / --timer-* tokens
+   declared in style-output.css. The overlays stay dark - they sit over the
+   live feed - but they take the same navy/cream/gold palette and the same
+   type as the board instead of the default neutral black + RG yellow.
+   ============================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
+
+* {
+  font-family: 'Barlow', sans-serif;
+  font-weight: 500;
+}
+
+:root {
+  /* --- Board palette. Names mirror the hub's own tokens ------------------ */
+  --primary: #2f5fc7;         /* --accent : live values, active set        */
+  --secondary: #d92b23;       /* --live   : red                            */
+  --special: #b8860f;         /* --final  : winner gold                    */
+  --white: #ffffff;           /* --card                                    */
+  --cream: #f6f4ee;           /* --bg                                      */
+  --card-border: #e2ded2;
+  --text-primary: #1c2030;    /* --ink                                     */
+  --text-secondary: #98a0ae;  /* --faint  : inactive score-history numbers */
+  --muted: #6c7280;
+
+  /* Warm neutral ramp. --light-3 is the hub's --elem (the tint behind the
+     current score cell), --light-5 its --border; the rest fill in around
+     them so the score-history streak/break shading stays on the same warm
+     axis instead of the RG theme's orange one. */
+  --light-2: #faf9f5;
+  --light-3: #f0ede3;
+  --light-4: #e6e1d2;
+  --light-5: #d7d2c1;
+  --light-6: #c6c0ab;
+  --light-7: #b5ae95;
+  --light-8: #a49c7f;
+
+  /* Squad/group counters - the hub prints the tie score in accent blue. */
+  --secondary-1: rgba(47, 95, 199, 0.12);
+
+  /* --- Overlay palette (see style-output.css' token block) --------------- */
+  --ov-surface: rgba(19, 22, 35, 0.994);
+  --ov-header-bg: #0e1120;
+  --ov-radius: 16px;
+  --ov-line: rgba(243, 241, 234, 0.16);
+
+  --ov-font: 'Barlow', sans-serif;
+  --ov-num-font: 'Barlow', sans-serif;
+
+  --ov-text: #f3f1ea;
+  --ov-text-muted: rgba(243, 241, 234, 0.68);
+  --ov-text-faint: rgba(243, 241, 234, 0.45);
+
+  /* On the hub, cards are *lighter* than the page behind them. Inverted onto
+     a dark surface that means lifting the panels, not sinking them - hence
+     white washes here where the default tokens use black ones. */
+  --ov-panel: rgba(255, 255, 255, 0.05);
+  --ov-panel-raised: rgba(255, 255, 255, 0.075);
+
+  /* "Best stat", "set winner" and "break point" are all winner semantics,
+     which the hub paints with --final (#b8860f) over rgba(--final-rgb,.14).
+     The flat colour is lifted to stay legible on the dark surface; the
+     washes keep the hub's own alphas. */
+  --ov-accent: #e0b445;
+  --ov-accent-soft: rgba(184, 134, 15, 0.18);
+  --ov-accent-border: rgba(184, 134, 15, 0.38);
+  --ov-accent-strong: rgba(224, 180, 69, 0.45);
+  --ov-accent-muted: rgba(224, 180, 69, 0.62);
+
+  --ov-bar-track: rgba(243, 241, 234, 0.16);
+  --ov-bar-fill: #f3f1ea;
+
+  --ov-table-bg: rgba(255, 255, 255, 0.045);
+  --ov-cell-bg: rgba(255, 255, 255, 0.035);
+  --ov-cell-border: rgba(255, 255, 255, 0.1);
+  --ov-cell-active-bg: rgba(255, 255, 255, 0.09);
+  --ov-cell-active-bg-strong: rgba(255, 255, 255, 0.22);
+  --ov-cell-active-border: rgba(255, 255, 255, 0.14);
+
+  --ov-chip-bg: #f3f1ea;
+  --ov-chip-text: #1c2030;
+  --ov-chip-pro-bg: #0e1120;
+  --ov-chip-pro-text: #f3f1ea;
+
+  /* Accent blue only shows up on the dark overlays where it can carry
+     contrast; #2f5fc7 itself is too dark against --ov-surface. */
+  --ov-accent-blue: #7ea2f5;
+
+  /* --- Timer widget ----------------------------------------------------- */
+  --timer-bg: #ffffff;
+  --timer-label-font: 'Bebas Neue', 'Barlow', sans-serif;
+  --timer-time-font: 'Barlow', sans-serif;
+  --timer-label-color: #b8860f;
+  --timer-label-medical-color: #d92b23;
+  --timer-time-color: #1c2030;
+}
+
+/* ==============================================================================
+   Board
+   ============================================================================== */
+
+.wrapper {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 10px;
+  opacity: 1;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.wrapper.hidden {
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.board {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  margin: 20px 20px 0px 20px;
+  filter: drop-shadow(0px 4px 14px rgba(28, 32, 48, 0.14));
+}
+
+.top, .bottom {
+  height: 34px;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+.top .content, .bottom .content {
+  padding: 6px 16px 8px 16px;
+  max-height: 100%;
+  display: flex;
+  max-width: 380px;
+  overflow: hidden;
+  align-items: center;
+}
+
+.top .content {
+  background-color: var(--text-primary);
+  border-radius: 10px 10px 0px 0px;
+  gap: 8px;
+}
+
+.bottom .content {
+  background-color: var(--light-3);
+  border-radius: 0px 0px 10px 10px;
+  flex-direction: row;
+  gap: 8px;
+  border: 1px solid var(--card-border);
+  border-top: none;
+}
+
+.teamname, .text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The hub sets its titles in Bebas Neue, uppercase, slightly tracked out -
+   the same treatment used here for the two chrome strips and, further down,
+   for the team names. */
+.top .content p {
+  font-family: 'Bebas Neue', 'Barlow', sans-serif;
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #f3f1ea;
+  margin-bottom: 0px;
+}
+
+.top .content img {
+  width: 7%;
+}
+
+.bottom .content p {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--muted);
+}
+
+.divider {
+  height: 15px;
+  width: 1px;
+  background: var(--light-5);
+  margin-top: 2px;
+}
+
+.board .center {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 8px 10px 8px 16px;
+  background-color: var(--white);
+  border: 1px solid var(--card-border);
+  border-radius: 0px 10px 10px 0px;
+  margin-top: -1px;
+}
+
+.board .center * {
+  font-family: 'Barlow', sans-serif;
+}
+
+.board .teams {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  align-items: flex-start;
+  gap: 8px;
+  margin-right: 28px;
+  min-width: 260px;
+  max-width: 350px;
+}
+
+.teams .team {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  padding-bottom: 1px;
+  max-width: 100%;
+  gap: 9px;
+}
+
+.teams .team:last-child {
+  padding-bottom: 5px;
+}
+
+.teams .team .color-indicator {
+  min-width: 5px;
+  height: 77%;
+  border-radius: 3px;
+  margin-top: 5px;
+  background-color: var(--text-primary);
+  border: 0px;
+  box-sizing: border-box;
+  margin-left: 0;
+}
+
+.teams .team p {
+  font-size: 30px;
+  font-weight: 700;
+  max-width: 100%;
+}
+
+.teams .team .teamname {
+  font-family: 'Bebas Neue', 'Barlow', sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.teams .team .name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0px;
+  padding: 3px 0;
+  max-width: 100%;
+}
+
+.teams .team .name .player_names > * {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--muted);
+  max-width: 100%;
+}
+
+/* ==============================================================================
+   Scores
+   ============================================================================== */
+
+/* The hub's score cells are a bold grotesque with tabular figures on the warm
+   --elem tint, so digits keep their column as the score changes. */
+.counter {
+  font-size: 29px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  height: 47px;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  border-radius: 8px;
+  padding-bottom: 2px;
+  flex-grow: 1;
+}
+
+body[players='show'] .counter {
+  font-size: 33px;
+}
+
+.counter:not(.group) {
+  width: 48px;
+  background-color: var(--light-3);
+}
+
+.counter.group {
+  width: 36px;
+  background-color: var(--secondary-1);
+  color: var(--primary);
+}
+
+.active:not(.completed) .counter {
+  border: 2px solid var(--primary);
+}
+
+.scores {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+}
+
+.score {
+  font-weight: 500;
+}
+
+.counter.winner .score {
+  font-weight: 800;
+}
+
+.score.loser {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.group_score {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.group_score .group-indicator {
+  position: absolute;
+  margin-top: -42px;
+  padding: 8px 9px 6px 9px;
+  background-color: var(--primary);
+  border-radius: 8px 8px 0px 0px;
+}
+
+.team_score {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.team_score .set {
+  display: flex;
+  flex-direction: column;
+  justify-content: stretch;
+  gap: 8px;
+  height: 100%;
+}
+
+/* ==============================================================================
+   Score history (output board, below the scoreboard)
+   ============================================================================== */
+
+.score_history .table_view,
+.score_history .chartContainer {
+  border: 1px solid var(--card-border);
+  filter: drop-shadow(0px 4px 12px rgba(28, 32, 48, 0.1));
+}
+
+.score_history * {
+  font-family: 'Barlow', sans-serif;
+}
+
+.score_history .scores .team_rows .score_item {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.score_history .teams_info .team .name p {
+  font-family: 'Bebas Neue', 'Barlow', sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* ==============================================================================
+   Input controls
+   ============================================================================== */
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.controls .team_container {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+}
+
+.button.add {
+  background-color: #04b904;
+}
+
+.button.remove {
+  background-color: var(--secondary);
+  transition: .1s ease;
+}
+
+.button:hover {
+  opacity: .8;
+}
+
+.button:active {
+  opacity: .6;
+  transform: scale(.95);
+}
+
+/* ==============================================================================
+   Overlays
+
+   Everything colour-related is already handled by the --ov-* tokens above.
+   What is left here is the type and the two places where the hub's blue
+   accent earns its keep: the phase line under each overlay title (the hub
+   sets "· Live Scores" in --accent next to its title) and a hairline of it
+   under the header.
+   ============================================================================== */
+
+.overlay .overlay_header {
+  border-bottom: 2px solid var(--primary);
+}
+
+.overlay .overlay_header .center h3,
+.overlay .overlay_header .left p {
+  font-family: 'Bebas Neue', 'Barlow', sans-serif;
+  font-weight: 400;
+  letter-spacing: 1.2px;
+}
+
+.overlay .overlay_header .center h4 {
+  font-family: 'Bebas Neue', 'Barlow', sans-serif;
+  font-weight: 400;
+  letter-spacing: 1px;
+  color: var(--ov-accent-blue);
+}
+
+/* The IRF wordmark is far wider than the RG badge it replaces (roughly 3.2:1
+   against 1.8:1), so the 100px default would leave it a third the height of
+   the tournament logo opposite it. */
+.overlay .overlay_header .right img {
+  width: 170px;
+}
+
+.overlay.match_preview .players_container .team .team_header h4,
+.match_statistics .team_stats_container .team_stats .team_header h4,
+.overlay .players_container .player .details .name h5 {
+  font-family: 'Bebas Neue', 'Barlow', sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.8px;
+}
+
+.overlay .players_container .player .details .name p {
+  font-weight: 500;
+  color: var(--ov-text-muted);
+}
+
+.overlay.match_preview .players_container .player {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.overlay.match_preview .players_container .player img {
+  border-radius: 8px;
+}
+
+/* Stat values: same tabular-figure treatment as the board's counters. */
+.match_statistics .stat_item * {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.match_statistics .stat_item .value .unit,
+.match_statistics .stat_item .absolute_value .stat_value {
+  font-weight: 500;
+}
+
+.match_statistics .stat_item,
+.match_statistics .player_stats .player_stats_container .player_stats_group .line_stats_group {
+  border-radius: 10px;
+}
+
+.match_statistics .team_stats_container .team_stats .team_overall_stats .stat_item {
+  border-radius: 10px;
+}
+
+.match_statistics .player_stats .line_stats_group .line_stat .right .stat_value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.match_statistics .score_history_in_stats .score_item .score_number {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.match_statistics .score_history_in_stats .teams_info .team p {
+  font-family: 'Bebas Neue', 'Barlow', sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* ==============================================================================
+   Timer widget (timeout / medical / break)
+   ============================================================================== */
+
+.timer_widget {
+  border: 1px solid var(--card-border);
+  filter: drop-shadow(0px 4px 14px rgba(28, 32, 48, 0.14));
+}
+
+.timer_widget_label {
+  letter-spacing: 1.2px;
+  font-weight: 400;
+}
+
+.timer_widget_time {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}

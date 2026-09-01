@@ -1,4 +1,4 @@
-import { themes, readData, getPathsAndValues, getColorBrightness, rgb2hex, writeData, writeTimerState, showToast, copyToClipboard } from "./main.js?v=3";
+import { themes, DEFAULT_BRAND_LOGO, readData, getPathsAndValues, getColorBrightness, rgb2hex, writeData, writeTimerState, showToast, copyToClipboard } from "./main.js?v=3";
 
 // Fixed durations for the shared timeout/medical/break timer - matches
 // led_scoreboard/include/score_actions.h's BREAK/TIMEOUT/MEDICAL_*_MS
@@ -206,11 +206,20 @@ export class Scoreboard {
         // forces a re-fetch of CSS that was already loaded, briefly leaving
         // the page unstyled (raw HTML, in normal flow, no opacity:0/
         // position:fixed on .overlay) while the new links load.
-        $('link[rel="stylesheet"][href*="css/style-v"]').remove();
-        $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('href', css_path).appendTo('head');
+        // The 'css/style-v' half of the selector is what clears the theme link
+        // that index.html ships in its own <head>; [theme-stylesheet] catches
+        // the ones this method appended on an earlier call, whatever they're
+        // named (style-irf.css doesn't match the 'style-v' pattern, and
+        // without this a theme switch would leave the old sheet behind).
+        $('link[rel="stylesheet"][href*="css/style-v"], link[theme-stylesheet]').remove();
+        $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('theme-stylesheet', '').attr('href', css_path).appendTo('head');
+
+        // Federation logo in the overlay headers - per-theme, falling back to
+        // the RG badge for themes that don't define one.
+        $('.brand_logo').attr('src', themes[theme].brand_logo || DEFAULT_BRAND_LOGO);
 
         if (this.type === 'input') {
-            $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('href', css_path_input).appendTo('head');
+            $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('theme-stylesheet', '').attr('href', css_path_input).appendTo('head');
         } else if (this.type === 'output') {
             // Set corresponding html
             $('.scoreboard').hide();

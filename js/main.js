@@ -5,6 +5,13 @@ import { db, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } fro
 import { User } from "./User.js?v=3";
 import { Scoreboard } from "./Scoreboard.js?v=3";
 
+/**
+ * Theme registry.
+ *
+ * `brand_logo` is optional and overrides the federation logo in the top-right
+ * of the overlay headers (see setTheme() in Scoreboard.js); themes that omit
+ * it keep the Roundnet Germany badge that is hardcoded in index.html.
+ */
 export const themes = {
     'full': {
         'html_structure': 'full',
@@ -30,7 +37,15 @@ export const themes = {
         'html_structure': 'vertical_score',
         'css_path': 'css/style-v5-eura.css?v=3'
     },
+    'irf': {
+        'html_structure': 'vertical_score',
+        'css_path': 'css/style-irf.css?v=3',
+        'brand_logo': 'img/irf_logo_white.png'
+    },
 }
+
+/** Fallback for themes without their own `brand_logo` (matches index.html). */
+export const DEFAULT_BRAND_LOGO = 'img/rg_logo_white.png';
 
 // Debug: auf true setzen für Console-Logs (Auth/Daten-Flow); wird auch für Scoreboard exponiert
 const AUTH_DEBUG = true;
