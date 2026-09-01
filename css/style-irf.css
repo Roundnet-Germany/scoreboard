@@ -198,8 +198,20 @@
   margin-bottom: 0px;
 }
 
-.top .content img {
-  width: 7%;
+/* The event badge is a solid indigo square, not a mark that can be knocked
+   out to white - on the navy strip it would otherwise read as a dark blob on
+   dark. A light chip behind it restores the contrast, and matching the chip's
+   radius to the strip's keeps it from looking pasted on. At this size the
+   badge reads as a mark rather than as text, which is all a 34px strip can
+   carry. */
+.top .content .event_logo {
+  height: 22px;
+  width: auto;
+  flex: none;
+  padding: 2px;
+  border-radius: 5px;
+  background-color: var(--cream);
+  margin-right: 2px;
 }
 
 .bottom .content p,
@@ -270,7 +282,7 @@
 }
 
 .teams .team p {
-  font-size: 34px;
+  font-size: 35px;
   font-weight: 700;
   max-width: 100%;
 }
@@ -546,6 +558,13 @@ body[players='show'] .counter {
   letter-spacing: 1px;
   line-height: 1;
   color: var(--ov-accent-blue);
+}
+
+/* The fixed event badge fills the slot the per-match tournament logo used to
+   occupy, so that one would only sit next to it saying the same thing. Drop
+   this rule to show both. */
+.overlay .overlay_header .left #tournament_logo {
+  display: none;
 }
 
 /* The IRF wordmark is far wider than the RG badge it replaces (roughly 3.2:1

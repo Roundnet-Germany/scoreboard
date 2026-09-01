@@ -44,7 +44,10 @@ export const themes = {
         // original black lettering is the one that reads there.
         // img/irf_logo_white.png is the same mark with that lettering
         // inverted, for a dark header.
-        'brand_logo': 'img/irf_logo_full.png'
+        'brand_logo': 'img/irf_logo_full.png',
+        // Fixed event badge, shown ahead of the event name. Swap this one
+        // file to re-point the theme at a different event.
+        'event_logo': 'img/irf_event_logo.png'
     },
 }
 

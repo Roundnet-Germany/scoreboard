@@ -73,6 +73,14 @@
   height: 22px !important;
 }
 
+/* Fixed per-theme event badge ahead of the event name, set by setTheme()
+   in Scoreboard.js. Themes without one leave the element srcless, which
+   would otherwise render as a broken image. */
+.event_logo:not([src]),
+.event_logo[src=""] {
+  display: none;
+}
+
 .player_names {
   display: flex;
   flex-direction: row;
