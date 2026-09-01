@@ -1614,7 +1614,16 @@
    reinforces the same left/right motion so the card actually slides rather
    than only wiping in place, and the mismatched easing per state (snappy
    ease-out revealing in, quick ease-in tucking away) is what makes it read
-   as dynamic rather than a flat linear wipe. */
+   as dynamic rather than a flat linear wipe.
+   The insets are negative on every edge except the one doing the wiping,
+   which is what lets the drop-shadow above survive: clip-path is applied
+   *after* filter in the element rendering order, so a plain inset(0) clips
+   to the border box and cuts the shadow off entirely - the card had been
+   rendering with hard edges in every theme. -40px is simply more than the
+   widest shadow any theme sets here reaches (offset + blur); a theme going
+   beyond that would need this raised to match. The left edge stays at 0
+   rather than -40px so the reveal doesn't briefly show a band of shadow to
+   the left of a card that hasn't swept in yet. */
 .timer_widget {
   position: fixed;
   top: 50%;
@@ -1630,7 +1639,7 @@
   filter: drop-shadow(1px 3px 20px rgba(0, 0, 0, 0.15));
   pointer-events: none;
   opacity: 0;
-  clip-path: inset(0 100% 0 0);
+  clip-path: inset(-40px 100% -40px 0);
   transform: translateY(-50%) translateX(-18px);
   transition: opacity 0.35s cubic-bezier(0.64, 0, 0.78, 0),
               clip-path 0.35s cubic-bezier(0.64, 0, 0.78, 0),
@@ -1639,7 +1648,7 @@
 
 .timer_widget.visible {
   opacity: 1;
-  clip-path: inset(0 0 0 0);
+  clip-path: inset(-40px);
   transform: translateY(-50%) translateX(0);
   transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1),
               clip-path 0.45s cubic-bezier(0.22, 1, 0.36, 1),

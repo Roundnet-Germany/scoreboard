@@ -31,7 +31,7 @@
   /* --- Board palette. Names mirror the hub's own tokens ------------------ */
   --primary: #2f5fc7;         /* --accent : live values, active set        */
   --secondary: #d92b23;       /* --live   : red                            */
-  --special: #b8860f;         /* --final  : winner gold                    */
+  --special: #cd971a;         /* --final  : winner gold                    */
   --white: #ffffff;           /* --card                                    */
   --cream: #f6f4ee;           /* --bg                                      */
   --card-border: #e2ded2;
@@ -62,11 +62,11 @@
      to do that on its own. */
   --ov-surface: #ffffff;
   --ov-header-bg: #f6f4ee;
-  --ov-radius: 16px;
+  --ov-radius: 2px;
   --ov-line: #e2ded2;
 
   --ov-font: 'Barlow Semi Condensed', sans-serif;
-  --ov-num-font: 'Barlow Semi Condensed', sans-serif;
+  --ov-num-font: 'Antonio', sans-serif;
 
   --ov-text: #1c2030;
   --ov-text-muted: #6c7280;
@@ -76,7 +76,7 @@
      stat tile in the overlay and a score cell on the board are the same
      surface. The player cards get the lighter sand instead - they're a far
      bigger area, and a block of --light-3 that size sits too heavy. */
-  --ov-panel: #f0ede3;
+  --ov-panel: #faf9f4;
   --ov-panel-raised: #f6f4ee;
 
   /* "Best stat", "set winner" and "break point" are all winner semantics,
@@ -113,7 +113,7 @@
   --timer-label-font: 'Bebas Neue', 'Barlow Semi Condensed', sans-serif;
   --timer-time-font: 'Barlow Semi Condensed', sans-serif;
   --timer-label-color: #b8860f;
-  --timer-label-medical-color: #d92b23;
+  --timer-label-medical-color: var(--secondary);
   --timer-time-color: #1c2030;
 }
 
@@ -155,7 +155,7 @@
 }
 
 .top .content, .bottom .content {
-  padding: 6px 16px 8px 16px;
+  padding: 8px 16px 8px 16px;
   max-height: 100%;
   display: flex;
   max-width: 380px;
@@ -165,17 +165,18 @@
 
 .top .content {
   background-color: var(--text-primary);
-  border-radius: 10px 10px 0px 0px;
+  border-radius: 0px 0px 0px 0px;
   gap: 8px;
 }
 
 .bottom .content {
   background-color: var(--light-3);
-  border-radius: 0px 0px 10px 10px;
+  border-radius: 0px 0px 0px 0px;
   flex-direction: row;
   gap: 8px;
   border: 1px solid var(--card-border);
   border-top: none;
+  padding: 7px 16px 9px 16px;
 }
 
 .teamname, .text {
@@ -191,7 +192,7 @@
   font-family: 'Bebas Neue', 'Barlow Semi Condensed', sans-serif;
   font-size: 19px;
   font-weight: 400;
-  letter-spacing: 0.8px;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
   color: #f3f1ea;
   margin-bottom: 0px;
@@ -201,17 +202,19 @@
   width: 7%;
 }
 
-.bottom .content p {
-  font-size: 15px;
-  font-weight: 600;
+.bottom .content p,
+.bottom .content span {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px;
+  font-weight: 500;
   letter-spacing: 0.2px;
-  color: var(--muted);
+  color: var(--text-primary);
 }
 
 .divider {
   height: 15px;
   width: 1px;
-  background: var(--light-5);
+  background: var(--muted);
   margin-top: 2px;
 }
 
@@ -223,7 +226,6 @@
   padding: 8px 10px 8px 16px;
   background-color: var(--white);
   border: 1px solid var(--card-border);
-  border-radius: 0px 10px 10px 0px;
   margin-top: -1px;
 }
 
@@ -268,7 +270,7 @@
 }
 
 .teams .team p {
-  font-size: 30px;
+  font-size: 34px;
   font-weight: 700;
   max-width: 100%;
 }
@@ -291,10 +293,15 @@
   max-width: 100%;
 }
 
+.teams .team .name .player_names {
+  margin-top: -4px;
+}
+
 .teams .team .name .player_names > * {
+  font-family: 'Antonio', sans-serif;
   font-size: 17px;
-  font-weight: 500;
-  color: var(--muted);
+  font-weight: 400;
+  color: var(--text-primary);
   max-width: 100%;
 }
 
@@ -314,8 +321,8 @@
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  border-radius: 8px;
-  padding-bottom: 2px;
+  border-radius: 4px;
+  padding-bottom: 6px;
   flex-grow: 1;
 }
 
@@ -335,7 +342,7 @@ body[players='show'] .counter {
 }
 
 .active:not(.completed) .counter {
-  border: 2px solid var(--primary);
+  border: 2px solid var(--special);
 }
 
 .scores {
@@ -345,6 +352,7 @@ body[players='show'] .counter {
 }
 
 .score {
+  font-family: 'Antonio', sans-serif !important;
   font-weight: 500;
 }
 
@@ -354,7 +362,7 @@ body[players='show'] .counter {
 
 .score.loser {
   font-weight: 500;
-  color: var(--muted);
+  /* color: var(--muted); */
 }
 
 .group_score {
@@ -365,10 +373,10 @@ body[players='show'] .counter {
 
 .group_score .group-indicator {
   position: absolute;
-  margin-top: -42px;
-  padding: 8px 9px 6px 9px;
+  margin-top: -43px;
+  padding: 7px 9px 6px 9px;
   background-color: var(--primary);
-  border-radius: 8px 8px 0px 0px;
+  border-radius: 0px 0px 0px 0px;
 }
 
 .team_score {
@@ -395,10 +403,32 @@ body[players='show'] .counter {
 .score_history .chartContainer {
   border: 1px solid var(--card-border);
   filter: drop-shadow(0px 4px 12px rgba(28, 32, 48, 0.1));
+  border-radius: 0;
 }
 
 .score_history * {
   font-family: 'Barlow Semi Condensed', sans-serif;
+}
+
+.score_history .scores {
+  border-radius: 4px;
+}
+
+
+.score_history .scores .team_rows .team:first-child .score_item:first-child {
+  border-radius: 4px 0px 0px 0px;
+}
+
+.score_history .scores .team_rows .team:first-child .score_item:last-child {
+  border-radius: 0px 4px 0px 0px;
+}
+
+.score_history .scores .team_rows .team:last-child .score_item:first-child {
+  border-radius: 0px 0px 0px 4px;
+}
+
+.score_history .scores .team_rows .team:last-child .score_item:last-child {
+  border-radius: 0px 0px 4px 0px;
 }
 
 .score_history .scores .team_rows .score_item {
@@ -413,38 +443,38 @@ body[players='show'] .counter {
   text-transform: uppercase;
 }
 
+.score_history .scores .team_rows .team .score_item * {
+  font-family: 'Antonio', sans-serif;
+}
+
+.score_history .teams_info .team .name {
+  padding: 5px 0 0 0;
+}
+
+.score_history .teams_info .team .flag-indicator {
+  margin-top: 3px;
+}
+
+.score_history .scores .team_rows .team .score_item.active {
+  border: 2px solid var(--light-5);
+  color: var(--text-primary);
+  z-index: 10;
+  font-weight: 400;
+}
+
+.score_history .scores .team_rows .score_item[break] {
+  background-color: var(--light-3);
+}
+
+
 /* ==============================================================================
-   Input controls
+   Serve Indicators
    ============================================================================== */
 
-.controls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.controls .team_container {
-  display: flex;
-  flex-direction: row;
-  gap: 4px;
-}
-
-.button.add {
-  background-color: #04b904;
-}
-
-.button.remove {
-  background-color: var(--secondary);
-  transition: .1s ease;
-}
-
-.button:hover {
-  opacity: .8;
-}
-
-.button:active {
-  opacity: .6;
-  transform: scale(.95);
+.serve_indicator.active,
+.serve_indicator.serve_1::before,
+.serve_indicator.serve_2::before {
+  background-color: var(--special);
 }
 
 /* ==============================================================================
@@ -471,6 +501,7 @@ body[players='show'] .counter {
    of a seam between the two bands. */
 .overlay .overlay_header {
   border-bottom: 1px solid var(--ov-line);
+  padding: 20px 30px 20px 30px
 }
 
 .match_statistics .score_history_in_stats .table_view {
@@ -483,17 +514,18 @@ body[players='show'] .counter {
    the shadow the hub gives its own cards. */
 .overlay {
   box-shadow: 0 20px 60px rgba(28, 32, 48, 0.30);
+  border: 2px solid var(--ov-line);
 }
 
 /* The stat tiles, set counters and player cards are sand on white - close
    enough in value that a hairline is what actually makes them read as
    panels rather than as tinted patches. */
-.match_statistics .stat_item,
+/* .match_statistics .stat_item,
 .match_statistics .line_stats_group,
 .match_statistics .set_stats .counter,
 .overlay.match_preview .players_container .player {
   border: 1px solid var(--ov-line);
-}
+} */
 
 .match_statistics .stat_item.best,
 .match_statistics .set_stats .counter.winner {
@@ -504,13 +536,15 @@ body[players='show'] .counter {
 .overlay .overlay_header .left p {
   font-family: 'Bebas Neue', 'Barlow Semi Condensed', sans-serif;
   font-weight: 400;
-  letter-spacing: 1.2px;
+  letter-spacing: 1px;
+  line-height: 1;
 }
 
 .overlay .overlay_header .center h4 {
   font-family: 'Bebas Neue', 'Barlow Semi Condensed', sans-serif;
   font-weight: 400;
   letter-spacing: 1px;
+  line-height: 1;
   color: var(--ov-accent-blue);
 }
 
@@ -518,7 +552,8 @@ body[players='show'] .counter {
    against 1.8:1), so the 100px default would leave it a third the height of
    the tournament logo opposite it. */
 .overlay .overlay_header .right img {
-  width: 170px;
+  width: 150px;
+  margin-bottom: 8px;
 }
 
 .overlay.match_preview .players_container .team .team_header h4,
@@ -532,34 +567,42 @@ body[players='show'] .counter {
 .overlay .players_container .player .details .name p {
   font-weight: 500;
   color: var(--ov-text-muted);
+  margin-bottom: -2px;
 }
 
 .overlay.match_preview .players_container .player {
-  border-radius: 12px;
+  border-radius: 0px;
 }
 
 .overlay.match_preview .players_container .player img {
-  border-radius: 8px;
+  border-radius: 0px;
 }
 
 /* Stat values: same tabular-figure treatment as the board's counters. */
 .match_statistics .stat_item * {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
+  font-family: var(--ov-num-font);
 }
 
 .match_statistics .stat_item .value .unit,
 .match_statistics .stat_item .absolute_value .stat_value {
   font-weight: 500;
+  font-family: var(--ov-num-font);
+}
+
+.match_statistics .player_stats .col_label p {
+  font-size: 1.3rem;
+  font-weight: 500;
 }
 
 .match_statistics .stat_item,
 .match_statistics .player_stats .player_stats_container .player_stats_group .line_stats_group {
-  border-radius: 10px;
+  border-radius: 4px;
 }
 
 .match_statistics .team_stats_container .team_stats .team_overall_stats .stat_item {
-  border-radius: 10px;
+  border-radius: 4px;
 }
 
 .match_statistics .player_stats .line_stats_group .line_stat .right .stat_value {
@@ -569,7 +612,7 @@ body[players='show'] .counter {
 
 .match_statistics .score_history_in_stats .score_item .score_number {
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .match_statistics .score_history_in_stats .teams_info .team p {
@@ -579,6 +622,35 @@ body[players='show'] .counter {
   text-transform: uppercase;
 }
 
+.match_statistics .score_history_in_stats .score_item.active {
+  background: var(--light-3);
+  border-color: var(--ov-cell-active-border);
+}
+
+.match_statistics .score_history_in_stats .scores.full .score_item.active {
+  background: var(--light-3);
+  border-color: var(--ov-cell-active-border);
+}
+
+.match_statistics .score_history_in_stats .score_item.active .score_number {
+  color: var(--ov-text);
+  font-weight: 500;
+}
+
+.match_statistics .score_history_in_stats .score_item[break] {
+  background-color: var(--ov-accent-soft);
+  border-color: var(--ov-accent-border);
+}
+
+.match_statistics .score_history_in_stats .scores.full .score_item[break] {
+  background-color: var(--ov-accent-strong);
+  /* border-color: var(--ov-accent); */
+}
+
+.match_statistics .score_history_in_stats .score_item[break] .score_number {
+  color: var(--ov-accent);
+}
+
 /* ==============================================================================
    Timer widget (timeout / medical / break)
    ============================================================================== */
@@ -586,6 +658,7 @@ body[players='show'] .counter {
 .timer_widget {
   border: 1px solid var(--card-border);
   filter: drop-shadow(0px 4px 14px rgba(28, 32, 48, 0.14));
+  border-radius: 0px;
 }
 
 .timer_widget_label {
