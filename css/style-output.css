@@ -44,6 +44,20 @@
   gap: 8px;
 }
 
+/* Overlay team headers (match preview + match statistics): the flag stands
+   in for the .color_indicator bar next to the team name, the same swap the
+   board makes - see updateColorIndicatorVisibility() in Scoreboard.js, which
+   toggles both. Sized in JS by syncOutputFlagSizes() off the <h4>'s
+   cap-height, like every other .flag-indicator on an output page. */
+.overlay .team_header .team_title {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 /* Score history legend - matches this file's own
    ".score_history .teams_info .team .color-indicator" (height:77%,
    margin-top:5px) below. */
@@ -419,10 +433,12 @@
    setTheme() in Scoreboard.js), so its :root wins the cascade. See
    style-irf.css for a full override set.
 
-   The overlays are deliberately dark-on-stream regardless of theme, so an
-   overriding theme is expected to supply a dark surface with light text -
-   these tokens are about matching a theme's hue and accent, not about
-   flipping the overlays to a light mode. */
+   A theme can go as far as flipping the overlays to a light surface with
+   dark text - style-irf.css does exactly that. Nothing here assumes one or
+   the other; the defaults are simply the dark set the overlays shipped
+   with. What a light override does need on top of the tokens is a hairline
+   on each panel: on a dark surface the panels separate themselves by being
+   lighter than their ground, and on a light one they don't. */
 :root {
   /* Surface + chrome */
   --ov-surface: rgba(23, 25, 28, 0.994);

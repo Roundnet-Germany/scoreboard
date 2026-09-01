@@ -1812,7 +1812,10 @@ export class Scoreboard {
         // "flags on, colors off" show neither.
         const flagsOn = showFlag;
 
-        $('.color-indicator').toggle(showColor && !showFlag);
+        // .color_indicator (underscore) is the overlays' own bar - a separate
+        // class from the board's .color-indicator, which is why it used to
+        // ignore this setting entirely and stayed on even in flags mode.
+        $('.color-indicator, .overlay .color_indicator').toggle(showColor && !showFlag);
         $('.flag-indicator').toggle(flagsOn);
         // .flag-indicator-wrap (input.html only) stays visible whenever
         // flags mode is on regardless of whether a flag currently resolves,
@@ -1875,15 +1878,22 @@ export class Scoreboard {
             // over the same element with conflicting target heights.
             if ($flag.closest('.flag-indicator-wrap').length) return;
 
-            const $team = $flag.closest('.team');
-            if (!$team.length) return;
-
             let heightPx;
             if ($flag.closest('.match_statistics .score_history_in_stats').length) {
                 // Fixed in this context (see the matching .color-indicator
                 // rule in style-output.css), not relative to anything.
                 heightPx = 22 * SCORE_HISTORY_FLAG_SCALE;
+            } else if ($flag.hasClass('overlay_flag')) {
+                // Overlay team headers carry the name in an <h4>, not a
+                // .teamname, and the statistics overlay's header isn't inside
+                // a .team either - so neither lookup below applies. The <h4>
+                // is always the flag's next sibling (see index.html).
+                const $reference = $flag.nextAll('h4').first();
+                if (!$reference.length) return;
+                heightPx = this.measureCapHeight($reference[0]);
             } else {
+                const $team = $flag.closest('.team');
+                if (!$team.length) return;
                 const $reference = $team.find('.teamname').first();
                 if (!$reference.length) return;
                 heightPx = this.measureCapHeight($reference[0]);

@@ -14,9 +14,10 @@
 
    Unlike the other themes this one also restyles the overlays (match preview,
    match statistics) and the timer widget, via the --ov-* / --timer-* tokens
-   declared in style-output.css. The overlays stay dark - they sit over the
-   live feed - but they take the same navy/cream/gold palette and the same
-   type as the board instead of the default neutral black + RG yellow.
+   declared in style-output.css. They run light here rather than on the
+   default near-black: same cream ground, white cards and warm hairlines as
+   the board and the hub, so the whole broadcast reads as one design instead
+   of a light scoreboard next to a dark statistics panel.
    ============================================================================== */
 
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
@@ -53,53 +54,52 @@
   /* Squad/group counters - the hub prints the tie score in accent blue. */
   --secondary-1: rgba(47, 95, 199, 0.12);
 
-  /* --- Overlay palette (see style-output.css' token block) --------------- */
-  --ov-surface: rgba(19, 22, 35, 0.994);
-  --ov-header-bg: #0e1120;
+  /* --- Overlay palette (see style-output.css' token block) ---------------
+     Straight off the hub: cream ground, white cards, warm hairline, ink
+     text. The overlays sit on top of the camera feed, so they get a border
+     and a real shadow further down to lift them off it - a dark panel used
+     to do that on its own. */
+  --ov-surface: #f6f4ee;
+  --ov-header-bg: #ffffff;
   --ov-radius: 16px;
-  --ov-line: rgba(243, 241, 234, 0.16);
+  --ov-line: #e2ded2;
 
   --ov-font: 'Barlow Semi Condensed', sans-serif;
   --ov-num-font: 'Barlow Semi Condensed', sans-serif;
 
-  --ov-text: #f3f1ea;
-  --ov-text-muted: rgba(243, 241, 234, 0.68);
-  --ov-text-faint: rgba(243, 241, 234, 0.45);
+  --ov-text: #1c2030;
+  --ov-text-muted: #6c7280;
+  --ov-text-faint: #98a0ae;
 
-  /* On the hub, cards are *lighter* than the page behind them. Inverted onto
-     a dark surface that means lifting the panels, not sinking them - hence
-     white washes here where the default tokens use black ones. */
-  --ov-panel: rgba(255, 255, 255, 0.05);
-  --ov-panel-raised: rgba(255, 255, 255, 0.075);
+  --ov-panel: #ffffff;
+  --ov-panel-raised: #ffffff;
 
   /* "Best stat", "set winner" and "break point" are all winner semantics,
      which the hub paints with --final (#b8860f) over rgba(--final-rgb,.14).
-     The flat colour is lifted to stay legible on the dark surface; the
+     The flat colour is darkened a touch to hold up as text on white; the
      washes keep the hub's own alphas. */
-  --ov-accent: #e0b445;
-  --ov-accent-soft: rgba(184, 134, 15, 0.18);
-  --ov-accent-border: rgba(184, 134, 15, 0.38);
-  --ov-accent-strong: rgba(224, 180, 69, 0.45);
-  --ov-accent-muted: rgba(224, 180, 69, 0.62);
+  --ov-accent: #a97a0c;
+  --ov-accent-soft: rgba(184, 134, 15, 0.14);
+  --ov-accent-border: rgba(184, 134, 15, 0.42);
+  --ov-accent-strong: rgba(184, 134, 15, 0.30);
+  --ov-accent-muted: rgba(169, 122, 12, 0.75);
 
-  --ov-bar-track: rgba(243, 241, 234, 0.16);
-  --ov-bar-fill: #f3f1ea;
+  --ov-bar-track: #e6e1d2;
+  --ov-bar-fill: #1c2030;
 
-  --ov-table-bg: rgba(255, 255, 255, 0.045);
-  --ov-cell-bg: rgba(255, 255, 255, 0.035);
-  --ov-cell-border: rgba(255, 255, 255, 0.1);
-  --ov-cell-active-bg: rgba(255, 255, 255, 0.09);
-  --ov-cell-active-bg-strong: rgba(255, 255, 255, 0.22);
-  --ov-cell-active-border: rgba(255, 255, 255, 0.14);
+  --ov-table-bg: #ffffff;
+  --ov-cell-bg: #ffffff;
+  --ov-cell-border: #e2ded2;
+  --ov-cell-active-bg: #f0ede3;
+  --ov-cell-active-bg-strong: #cdd7ef;
+  --ov-cell-active-border: #d7d2c1;
 
-  --ov-chip-bg: #f3f1ea;
-  --ov-chip-text: #1c2030;
-  --ov-chip-pro-bg: #0e1120;
-  --ov-chip-pro-text: #f3f1ea;
+  --ov-chip-bg: #1c2030;
+  --ov-chip-text: #f6f4ee;
+  --ov-chip-pro-bg: #1c2030;
+  --ov-chip-pro-text: #f6f4ee;
 
-  /* Accent blue only shows up on the dark overlays where it can carry
-     contrast; #2f5fc7 itself is too dark against --ov-surface. */
-  --ov-accent-blue: #7ea2f5;
+  --ov-accent-blue: #2f5fc7;
 
   /* --- Timer widget ----------------------------------------------------- */
   --timer-bg: #ffffff;
@@ -443,11 +443,10 @@ body[players='show'] .counter {
 /* ==============================================================================
    Overlays
 
-   Everything colour-related is already handled by the --ov-* tokens above.
-   What is left here is the type and the two places where the hub's blue
-   accent earns its keep: the phase line under each overlay title (the hub
-   sets "· Live Scores" in --accent next to its title) and a hairline of it
-   under the header.
+   The palette itself is already handled by the --ov-* tokens above. What is
+   left here is the type, the hairlines a light surface needs, and the blue
+   phase line under each overlay title (the hub sets "· Live Scores" in
+   --accent next to its own title).
    ============================================================================== */
 
 /* No RGX anywhere in this theme - the rating is a Roundnet Germany ladder and
@@ -460,7 +459,31 @@ body[players='show'] .counter {
 }
 
 .overlay .overlay_header {
-  border-bottom: 2px solid var(--primary);
+  border-bottom: 2px solid var(--special);
+}
+
+/* On the near-black default surface the overlays separated themselves from
+   the camera feed just by being dark. A cream panel doesn't, so it gets the
+   same edge and lift the hub gives its own cards. */
+.overlay {
+  border: 1px solid var(--ov-line);
+  box-shadow: 0 20px 60px rgba(28, 32, 48, 0.30);
+}
+
+/* Same reasoning one level down: the stat tiles, set counters, player cards
+   and the score-history table are white on cream, so each needs a hairline
+   to read as a panel at all. */
+.match_statistics .stat_item,
+.match_statistics .line_stats_group,
+.match_statistics .set_stats .counter,
+.match_statistics .score_history_in_stats .table_view,
+.overlay.match_preview .players_container .player {
+  border: 1px solid var(--ov-line);
+}
+
+.match_statistics .stat_item.best,
+.match_statistics .set_stats .counter.winner {
+  border-color: var(--ov-accent-border);
 }
 
 .overlay .overlay_header .center h3,
@@ -498,7 +521,6 @@ body[players='show'] .counter {
 }
 
 .overlay.match_preview .players_container .player {
-  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
 }
 

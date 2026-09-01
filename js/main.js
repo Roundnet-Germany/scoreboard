@@ -40,7 +40,11 @@ export const themes = {
     'irf': {
         'html_structure': 'vertical_score',
         'css_path': 'css/style-irf.css?v=3',
-        'brand_logo': 'img/irf_logo_white.png'
+        // The overlay headers run light in this theme, so the mark with its
+        // original black lettering is the one that reads there.
+        // img/irf_logo_white.png is the same mark with that lettering
+        // inverted, for a dark header.
+        'brand_logo': 'img/irf_logo_full.png'
     },
 }
 
