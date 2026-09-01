@@ -45,9 +45,14 @@ export const themes = {
         // img/irf_logo_white.png is the same mark with that lettering
         // inverted, for a dark header.
         'brand_logo': 'img/irf_logo_full.png',
-        // Fixed event badge, shown ahead of the event name. Swap this one
-        // file to re-point the theme at a different event.
-        'event_logo': 'img/irf_event_logo.png'
+        // Fixed event mark, shown ahead of the event name. Two cuts of the
+        // same artwork, named for the ground they sit on: the board's strip
+        // is dark, the overlay headers are light, and the mark's white
+        // details vanish on the wrong one.
+        'event_logo': {
+            'dark_bg': 'img/irf_event_logo_dark_bg.png',
+            'light_bg': 'img/irf_event_logo_light_bg.png'
+        }
     },
 }
 

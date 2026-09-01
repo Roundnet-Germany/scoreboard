@@ -155,7 +155,7 @@
 }
 
 .top .content, .bottom .content {
-  padding: 8px 16px 8px 16px;
+  padding: 8px 14px 8px 14px;
   max-height: 100%;
   display: flex;
   max-width: 380px;
@@ -166,7 +166,7 @@
 .top .content {
   background-color: var(--text-primary);
   border-radius: 0px 0px 0px 0px;
-  gap: 8px;
+  gap: 4px;
 }
 
 .bottom .content {
@@ -198,20 +198,16 @@
   margin-bottom: 0px;
 }
 
-/* The event badge is a solid indigo square, not a mark that can be knocked
-   out to white - on the navy strip it would otherwise read as a dark blob on
-   dark. A light chip behind it restores the contrast, and matching the chip's
-   radius to the strip's keeps it from looking pasted on. At this size the
-   badge reads as a mark rather than as text, which is all a 34px strip can
-   carry. */
+/* Sized off its height, not a percentage width - the mark is square, so a
+   width relative to the strip would leave it a different size on every
+   event name. flex:none because .top .content is a flex row that clips at
+   380px: without it a long event name shrinks the mark instead of
+   ellipsing itself. */
 .top .content .event_logo {
   height: 22px;
   width: auto;
   flex: none;
-  padding: 2px;
-  border-radius: 5px;
-  background-color: var(--cream);
-  margin-right: 2px;
+  margin-right: 0px;
 }
 
 .bottom .content p,

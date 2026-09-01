@@ -218,15 +218,20 @@ export class Scoreboard {
         // the RG badge for themes that don't define one.
         $('.brand_logo').attr('src', themes[theme].brand_logo || DEFAULT_BRAND_LOGO);
 
-        // Fixed event badge ahead of the event name. Most themes don't have
-        // one; the attribute is removed rather than set to '' for them,
-        // since an empty src makes the browser re-request the page itself.
-        const eventLogo = themes[theme].event_logo;
-        if (eventLogo) {
-            $('.event_logo').attr('src', eventLogo);
-        } else {
-            $('.event_logo').removeAttr('src');
-        }
+        // Fixed event mark ahead of the event name, in the cut that suits
+        // the ground each copy sits on - the board's strip is dark, the
+        // overlay headers are light. Most themes don't have one; for those
+        // the attribute is removed rather than set to '', since an empty src
+        // makes the browser re-request the page itself.
+        const eventLogo = themes[theme].event_logo || {};
+        ['dark_bg', 'light_bg'].forEach((ground) => {
+            const $el = $(`.event_logo_${ground}`);
+            if (eventLogo[ground]) {
+                $el.attr('src', eventLogo[ground]);
+            } else {
+                $el.removeAttr('src');
+            }
+        });
 
         if (this.type === 'input') {
             $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('theme-stylesheet', '').attr('href', css_path_input).appendTo('head');
