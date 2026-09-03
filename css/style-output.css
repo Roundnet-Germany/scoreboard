@@ -42,6 +42,7 @@
   flex-direction: row;
   align-items: baseline;
   gap: 8px;
+  max-width: 100%;
 }
 
 /* Overlay team headers (match preview + match statistics): the flag stands
