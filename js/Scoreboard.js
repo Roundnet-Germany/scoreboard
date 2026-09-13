@@ -399,13 +399,17 @@ export class Scoreboard {
                 // (getSetScore()/setWinner() below both read it) so the
                 // countdown appears here too even on a channel with no
                 // physical board attached to independently trigger it.
+                // Gated on the set actually having a winner - otherwise an
+                // operator bumping the set counter for any other reason
+                // (fixing a mis-click, pre-staging the next set) would fire
+                // the shared break countdown with no set actually won.
                 if (change > 0) {
                     const format = setModeToFormat(this.gameSettings.set_mode);
                     const winner = this.setWinner(currentSet);
                     const setsA = this.getSetScore('a') + (winner === 'a' ? 1 : 0);
                     const setsB = this.getSetScore('b') + (winner === 'b' ? 1 : 0);
                     const matchOver = setsA >= 2 || setsB >= 2;
-                    if (format === 1 || (format === 2 && !matchOver)) {
+                    if (winner !== null && (format === 1 || (format === 2 && !matchOver))) {
                         this.startTimer('break');
                     }
                 }
