@@ -7,6 +7,16 @@ import { themes, readData, getPathsAndValues, getColorBrightness, rgb2hex, write
 // only ever has to say *which* timer is running, not how long it lasts.
 const TIMER_DURATIONS_MS = { timeout: 60_000, medical: 300_000, break: 180_000 };
 const TIMER_LABELS = { timeout: 'Timeout', medical: 'Medical Timeout', break: 'Break' };
+// Compact variants for input.html's fixed-width Cancel button.
+const TIMER_SHORT_LABELS = { timeout: 'Timeout', medical: 'Medical', break: 'Break' };
+// Timer types that are called by one team - both get a team on
+// match-<channel>/timer and a matching event in event_history (see
+// startTimer()). A break is between sets, never team-owned.
+const TEAM_TIMER_TYPES = ['timeout', 'medical'];
+// Regular timeouts allowed per team per set - only displayed ("0 left" +
+// greyed button on input.html), never enforced, so an operator can still
+// correct a mistake.
+const TIMEOUTS_PER_SET = 1;
 import { resolveFlag, getCountryList } from "./flags.js?v=3";
 
 // Same convention as led_scoreboard/include/firebase.h's _parseSetMode() and
@@ -50,10 +60,8 @@ export class Scoreboard {
         this.$winPoints = $('#win_points');
         this.$hardcap = $('#Hardcap');
         this.$resetScoresButton = $('#reset_scores');
-        this.$startTimeoutButton = $('#start_timeout');
-        this.$startMedicalButton = $('#start_medical');
-        this.$cancelTimerButton = $('#cancel_timer');
-        this.$timerStatus = $('.timer_status');
+        this.$teamTimerButtons = $('button.team_timer[timer-type][team]');
+        this.$otherTimerButton = $('#other_timer');
         this.$timerWidget = $('.timer_widget');
         this.$sets = $('.set');
         this.$setScoreCounterA = $('.a_sets_won');
@@ -92,7 +100,7 @@ export class Scoreboard {
         this.teamNames = { a: '', b: '' };
         this.teamFlags = { a: '', b: '' };
         this.active_set = 1;
-        // { type: "timeout"|"medical"|"break", startedAt: <epoch ms> } | null -
+        // { type: "timeout"|"medical"|"break", team: "a"|"b"|null, startedAt: <epoch ms> } | null -
         // mirrors match-<channel>/timer, see processDataAndUpdateFields().
         this.timerState = null;
         this.ScoreHistoryChart = null;
@@ -501,9 +509,18 @@ export class Scoreboard {
         // Shared timer buttons - see writeTimerState() in main.js for the
         // RTDB side of this. Fixed durations (TIMER_DURATIONS_MS above)
         // match the LED board's own hardcoded ones, so no duration is sent.
-        this.$startTimeoutButton.click(() => this.startTimer('timeout'));
-        this.$startMedicalButton.click(() => this.startTimer('medical'));
-        this.$cancelTimerButton.click(() => this.cancelTimer());
+        // Clicking the button of the timer that's currently running cancels
+        // it (it reads "Cancel" on hover, see style_input.css) - there's no
+        // separate Cancel button.
+        this.$teamTimerButtons.click((event) => {
+            const $button = $(event.currentTarget);
+            if ($button.hasClass('running')) {
+                this.cancelTimer();
+            } else {
+                this.startTimer($button.attr('timer-type'), $button.attr('team'));
+            }
+        });
+        this.$otherTimerButton.click(() => this.cancelTimer());
 
         // Logout button handler (nutzt User.logout() für Firebase signOut)
         this.$logoutButton.click(() => {
@@ -605,7 +622,7 @@ export class Scoreboard {
         // synced timer just because the import didn't mention it.
         if (!isImport) {
             this.timerState = (data && data.timer && data.timer.type)
-                ? { type: data.timer.type, startedAt: data.timer.started_at || null }
+                ? { type: data.timer.type, team: data.timer.team || null, startedAt: data.timer.started_at || null }
                 : null;
         }
 
@@ -892,12 +909,13 @@ export class Scoreboard {
         const team = path.includes('team_a') ? 'a' : path.includes('team_b') ? 'b' : null;
         if (!team) return;
 
+        // CSS variable on both pages - input.html's per-team timer buttons
+        // (stripe + gauge) use it too, not just the output themes.
+        $('html').css(`--${team.toUpperCase()}_Color`, color);
+
         if ($elem.is('input')) {
             $elem.val(value);
         } else {
-            // Add color to CSS variable
-            $('html').css(`--${team.toUpperCase()}_Color`, color);
-
             const $teamElems = $(`.team.team_${team}`);
 
             // Simplified brightness logic
@@ -974,36 +992,138 @@ export class Scoreboard {
     }
 
     /** ==============================================================================
-     * Start a shared timeout/medical timer - writes match-<channel>/timer via
+     * Start a shared timeout/medical/break timer - writes match-<channel>/timer via
      * writeTimerState() (main.js), picked up by the LED board (directly, or
      * via the manager server's Firebase bridge) and this page's own output
      * display alike. No duration is sent - every reader keeps the same
      * fixed durations locally (TIMER_DURATIONS_MS above, matching
      * led_scoreboard's score_actions.h).
-     * @param {string} type - 'timeout' or 'medical'
+     *
+     * A timeout/medical is called by one team: `team` goes onto the timer
+     * node (for the live widget) and a matching event is appended to
+     * event_history (for the score history, chart and statistics - the timer
+     * node itself is deleted once the countdown ends, so it can't be the
+     * record). Timers started from the LED board/pedal carry no team and
+     * never get a history event.
+     * @param {string} type - 'timeout', 'medical' or 'break'
+     * @param {string|null} team - 'a' or 'b' for timeout/medical, null for break
      * ============================================================================== */
-    startTimer(type) {
+    startTimer(type, team = null) {
         if (!this.user || !this.channel || !this.user.channels.includes(Number(this.channel))) {
             showToast("❌", "You're not authenticated for this channel");
             return;
         }
+        const teamTimer = TEAM_TIMER_TYPES.includes(type) && (team === 'a' || team === 'b');
+        if (!teamTimer) team = null;
+
+        // Same button pressed twice while its timer is still running - don't
+        // restart the countdown or log a second timeout.
+        if (teamTimer && this.isTimerActive() &&
+            this.timerState.type === type && this.getActiveTimerTeam() === team) {
+            return;
+        }
+
+        if (teamTimer) {
+            // Switching to the other team (or timeout <-> medical) before any
+            // point was played means the first press was a mistake - replace
+            // its history event instead of logging both.
+            if (this.isTimerActive() && this.lastEventIsActiveTeamTimer()) {
+                this.event_history.pop();
+            }
+            this.event_history.push({
+                type: type,
+                team: team,
+                set: Number(this.active_set),
+                score_a: this.getScore(this.active_set, 'a'),
+                score_b: this.getScore(this.active_set, 'b'),
+                started_at: Date.now(),
+            });
+            this.uploadData([]); // event_history only
+        }
+
         // Set locally right away, same reasoning as applyFlag(): the next UI
         // tick already reflects it instead of waiting on the round trip.
-        this.timerState = { type, startedAt: Date.now() };
-        writeTimerState(this.channel, type);
+        this.timerState = { type, team, startedAt: Date.now() };
+        writeTimerState(this.channel, type, team);
     }
 
     /** ==============================================================================
      * Cancel the currently active shared timer (timeout/medical/break) from
-     * either tool - deletes match-<channel>/timer.
+     * either tool - deletes match-<channel>/timer. If no point has been
+     * played since the timeout was called, its history event is removed
+     * too (treated as a mis-click rather than a timeout that was taken).
      * ============================================================================== */
     cancelTimer() {
         if (!this.user || !this.channel || !this.user.channels.includes(Number(this.channel))) {
             showToast("❌", "You're not authenticated for this channel");
             return;
         }
+        if (this.isTimerActive() && this.lastEventIsActiveTeamTimer()) {
+            this.event_history.pop();
+            this.uploadData([]); // event_history only
+        }
         this.timerState = null;
         writeTimerState(this.channel, null);
+    }
+
+    /** True while this.timerState is a known timer that hasn't run out yet. */
+    isTimerActive() {
+        const state = this.timerState;
+        const duration = state && TIMER_DURATIONS_MS[state.type];
+        return !!duration && !!state.startedAt && Date.now() - state.startedAt < duration;
+    }
+
+    /** ==============================================================================
+     * Team that called the currently running timeout/medical, or null.
+     * Normally straight from match-<channel>/timer/team, but the manager
+     * server's bridge (CENTRAL-mode boards) re-writes the whole timer node
+     * as {type, started_at} whenever the board pushes, dropping `team` - so
+     * fall back to the latest matching event_history entry whose countdown
+     * would still be running.
+     * ============================================================================== */
+    getActiveTimerTeam() {
+        const state = this.timerState;
+        if (!state || !TEAM_TIMER_TYPES.includes(state.type)) return null;
+        if (state.team === 'a' || state.team === 'b') return state.team;
+
+        const duration = TIMER_DURATIONS_MS[state.type];
+        for (let i = this.event_history.length - 1; i > this.getLastResetIndex(); i--) {
+            const ev = this.event_history[i];
+            if (ev.type !== state.type) continue;
+            if (ev.started_at && Date.now() - ev.started_at < duration) return ev.team || null;
+            break;
+        }
+        return null;
+    }
+
+    /** The last event_history entry is the running timeout/medical's own event (no point played since). */
+    lastEventIsActiveTeamTimer() {
+        const last = this.event_history[this.event_history.length - 1];
+        return !!last && TEAM_TIMER_TYPES.includes(last.type) &&
+            last.type === this.timerState?.type && last.team === this.getActiveTimerTeam();
+    }
+
+    /** ==============================================================================
+     * Timeout/medical events for a set (or every set, set = null) since the
+     * last reset.
+     * ============================================================================== */
+    getTeamTimerEvents(set = this.active_set) {
+        return this.event_history.slice(this.getLastResetIndex() + 1).filter(event =>
+            TEAM_TIMER_TYPES.includes(event.type) &&
+            (event.team === 'a' || event.team === 'b') &&
+            (set === null || event.set == set)
+        );
+    }
+
+    /** Regular timeouts a team still has in a set - display only, see TIMEOUTS_PER_SET. */
+    getTimeoutsLeft(team, set = this.active_set) {
+        const used = this.getTeamTimerEvents(set).filter(ev => ev.type === 'timeout' && ev.team === team).length;
+        return Math.max(0, TIMEOUTS_PER_SET - used);
+    }
+
+    /** Team display name, falling back to "Team A"/"Team B". */
+    getTeamLabel(team) {
+        return (this.teamNames[team] || '').trim() || `Team ${team.toUpperCase()}`;
     }
 
     /** ==============================================================================
@@ -1019,26 +1139,38 @@ export class Scoreboard {
      * ends) - this never writes back on natural expiry.
      * ============================================================================== */
     updateTimerDisplay() {
-        const state = this.timerState;
-        const duration = state && TIMER_DURATIONS_MS[state.type];
-        const remainingMs = duration && state.startedAt ? duration - (Date.now() - state.startedAt) : 0;
-        const active = !!duration && remainingMs > 0;
+        this.updateTeamTimerButtons();
 
-        this.$cancelTimerButton.toggleClass('hidden', !active);
-        this.$timerStatus.toggleClass('hidden', !active);
+        const state = this.timerState;
+        const active = this.isTimerActive();
 
         if (!active) {
+            this.$otherTimerButton.addClass('hidden');
             this.$timerWidget.removeClass('visible');
             return;
         }
 
+        const remainingMs = TIMER_DURATIONS_MS[state.type] - (Date.now() - state.startedAt);
         const totalSec = Math.ceil(remainingMs / 1000);
         const mm = Math.floor(totalSec / 60);
         const ss = totalSec % 60;
         const timeText = `${mm}:${String(ss).padStart(2, '0')}`;
         const label = TIMER_LABELS[state.type] || state.type;
+        const team = this.getActiveTimerTeam();
+        const teamLabel = team ? this.getTeamLabel(team) : '';
 
-        this.$timerStatus.text(`${label} ${timeText}`);
+        // A team timer shows its countdown inside that team's button
+        // (updateTeamTimerButtons()); a break or a board/pedal-started timer
+        // has no button of its own, so input.html shows it on #other_timer
+        // in the Scores header instead - same countdown + gauge, click to cancel.
+        this.$otherTimerButton.toggleClass('hidden', !!team);
+        if (!team) {
+            const elapsedMs = Date.now() - state.startedAt;
+            this.$otherTimerButton.find('.team_timer_name').text(TIMER_SHORT_LABELS[state.type] || label);
+            this.$otherTimerButton.find('.team_timer_info').text(timeText);
+            this.$otherTimerButton.find('.timer_gauge').css('width', `${Math.min(100, (elapsedMs / TIMER_DURATIONS_MS[state.type]) * 100)}%`);
+            this.$otherTimerButton.attr('title', `${label} - click to cancel`);
+        }
 
         if (this.type !== 'output' || !this.$timerWidget.length) return;
 
@@ -1058,9 +1190,53 @@ export class Scoreboard {
 
         this.$timerWidget
             .attr('data-timer-type', state.type)
+            .attr('data-timer-team', team || '')
             .addClass('visible');
         this.$timerWidget.find('.timer_widget_label').text(label);
+        this.$timerWidget.find('.timer_widget_team').text(teamLabel).toggleClass('hidden', !teamLabel);
         this.$timerWidget.find('.timer_widget_time').text(timeText);
+    }
+
+    /** ==============================================================================
+     * input.html's per-team Timeout/Medical buttons (in the Scores card, one
+     * column per team row, so the label is just the timer type and the team
+     * name only goes in the tooltip): on the right either the running countdown (with a gauge filling the button
+     * left to right as time elapses) or, for regular timeouts, "N left" in
+     * the active set (greyed at 0, still clickable).
+     * ============================================================================== */
+    updateTeamTimerButtons() {
+        if (!this.$teamTimerButtons.length) return;
+        const active = this.isTimerActive();
+        const activeTeam = active ? this.getActiveTimerTeam() : null;
+        const duration = active ? TIMER_DURATIONS_MS[this.timerState.type] : 0;
+        const elapsedMs = active ? Date.now() - this.timerState.startedAt : 0;
+
+        this.$teamTimerButtons.each((_, elem) => {
+            const $button = $(elem);
+            const type = $button.attr('timer-type');
+            const team = $button.attr('team');
+            const teamLabel = this.getTeamLabel(team);
+            const running = active && this.timerState.type === type && activeTeam === team;
+
+            $button.attr('title', running ? `${TIMER_LABELS[type]} - ${teamLabel} - click to cancel` : `${TIMER_LABELS[type]} - ${teamLabel}`);
+            $button.toggleClass('running', running);
+
+            let info = '';
+            if (running) {
+                const totalSec = Math.ceil((duration - elapsedMs) / 1000);
+                info = `${Math.floor(totalSec / 60)}:${String(totalSec % 60).padStart(2, '0')}`;
+            } else if (type === 'timeout') {
+                info = `${this.getTimeoutsLeft(team)} left`;
+            }
+            $button.find('.team_timer_info').text(info);
+            if (type === 'timeout') $button.toggleClass('used', !running && this.getTimeoutsLeft(team) === 0);
+
+            // Width = share of the timer already elapsed. Only animated
+            // while .running (see style_input.css), so it snaps back to 0
+            // instead of draining backwards when the timer ends/switches.
+            const progress = running ? Math.min(100, (elapsedMs / duration) * 100) : 0;
+            $button.find('.timer_gauge').css('width', `${progress}%`);
+        });
     }
 
     handleEventHistory() {
@@ -2303,9 +2479,28 @@ export class Scoreboard {
         scoresList = this.scoreHistoryToTeamPoints(this.getScoreHistory(set), team);
         
         $container.empty();
-        
+
+        // Timeout/medical markers sit between the points they were called
+        // at - a "T"/"M" chip in the calling team's row and an empty spacer
+        // of the same width in the other, so both rows stay column-aligned.
+        // <span>s, not <div>s, so the .score_item:first-of-type/last-of-type
+        // corner rounding still finds the first/last score cell.
+        const markers = this.getTeamTimerMarkers(set);
+        const appendMarkers = (pointIndex) => {
+            markers.filter(m => m.pointIndex === pointIndex).forEach(m => {
+                const called = m.team === team;
+                const symbol = m.type === 'medical' ? 'M' : 'T';
+                $container.append(
+                    `<span class="timer_marker${called ? ' called' : ''}" timer-type="${m.type}" called-by="${m.team}">` +
+                    (called ? `<p class="timer_marker_symbol">${symbol}</p>` : '') +
+                    `</span>`
+                );
+            });
+        };
+
         let streak = 0;
         $.each(scoresList, (i, score) => {
+            appendMarkers(i);
             const isActive = score > (i > 0 ? scoresList[i - 1] : 0);
             streak = isActive ? streak + 1 : 0;
             const status = isActive ? 'active' : '';
@@ -2322,6 +2517,73 @@ export class Scoreboard {
             const element = `<div class="score_item ${status}" streak="${streak}"${breakAttribute}><p class="score_number">${score}</p></div>`;
             $container.append(element);
         });
+        appendMarkers(scoresList.length);
+    }
+
+    /** ==============================================================================
+     * Where each timeout/medical of a set falls in its score history:
+     * pointIndex = number of points already played in that set when it was
+     * called (0 = before the first point). Counts points exactly like
+     * getScoreHistory(), so indices line up with the history strip and chart.
+     * @returns {Array<{type: string, team: string, pointIndex: number}>}
+     * ============================================================================== */
+    getTeamTimerMarkers(set = this.active_set) {
+        const markers = [];
+        let points = 0;
+        this.event_history.slice(this.getLastResetIndex() + 1).forEach(event => {
+            if (event.set != set) return;
+            if (event.type === 'score' && event.team && typeof event.team === 'string' && event.score !== undefined) {
+                points++;
+            } else if (TEAM_TIMER_TYPES.includes(event.type) && (event.team === 'a' || event.team === 'b')) {
+                markers.push({ type: event.type, team: event.team, pointIndex: points });
+            }
+        });
+        return markers;
+    }
+
+    /** ==============================================================================
+     * Chart.js plugin body for updateScoreHistoryChart(): a dashed vertical
+     * line in the calling team's color at each timeout/medical, between the
+     * two points it was called between, with a small "T"/"M" tag on top.
+     * ============================================================================== */
+    drawTimerMarkers(chart, markers) {
+        const xScale = chart.scales.x;
+        const count = chart.data.labels.length;
+        if (!xScale || !markers.length) return;
+
+        const { ctx, chartArea } = chart;
+        const rootStyle = getComputedStyle(document.documentElement);
+
+        markers.forEach(m => {
+            let x;
+            if (count === 0) {
+                x = chartArea.left;
+            } else if (m.pointIndex <= 0) {
+                x = xScale.getPixelForValue(0);
+            } else if (m.pointIndex >= count) {
+                x = xScale.getPixelForValue(count - 1);
+            } else {
+                x = (xScale.getPixelForValue(m.pointIndex - 1) + xScale.getPixelForValue(m.pointIndex)) / 2;
+            }
+            const color = rootStyle.getPropertyValue(`--${m.team.toUpperCase()}_Color`).trim() || '#888888';
+
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.setLineDash(m.type === 'medical' ? [2, 3] : [5, 4]);
+            ctx.beginPath();
+            ctx.moveTo(x, chartArea.top + 14);
+            ctx.lineTo(x, chartArea.bottom);
+            ctx.stroke();
+
+            ctx.setLineDash([]);
+            ctx.fillStyle = color;
+            ctx.font = "600 11px 'Antonio', sans-serif";
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText(m.type === 'medical' ? 'M' : 'T', x, chartArea.top);
+            ctx.restore();
+        });
     }
 
     /** ==============================================================================
@@ -2333,6 +2595,7 @@ export class Scoreboard {
         const scoresTeamA = this.scoreHistoryToTeamPoints(this.getScoreHistory(), 'a');
         const scoresTeamB = this.scoreHistoryToTeamPoints(this.getScoreHistory(), 'b');
         const labels = scoresTeamA.map((_, i) => `${i + 1}`);
+        const timerMarkers = this.getTeamTimerMarkers();
 
         const ctx = document.getElementById('scoreChart').getContext('2d');
 
@@ -2343,6 +2606,10 @@ export class Scoreboard {
 
         this.scoreChart = new Chart(ctx, {
             type: 'line',
+            plugins: [{
+                id: 'timerMarkers',
+                afterDatasetsDraw: (chart) => this.drawTimerMarkers(chart, timerMarkers),
+            }],
             data: {
                 labels: labels,
                 datasets: [
@@ -2449,9 +2716,24 @@ export class Scoreboard {
             $('#team_b_break_percentage').closest('.stat_item').addClass('best');
         }
         
+        this.updateTimeoutStatistics(setNumber);
         this.updatePlayerStatistics(stats);
         this.updatePlayerSetStatistics();
         this.updateSetScoresDisplay(setNumber);
+    }
+
+    /** ==============================================================================
+     * Timeouts (and medical timeouts, when any) per team for the match
+     * (setNumber = null) or one set - from event_history, see startTimer().
+     * ============================================================================== */
+    updateTimeoutStatistics(setNumber) {
+        const events = this.getTeamTimerEvents(setNumber);
+        ['a', 'b'].forEach(team => {
+            const timeouts = events.filter(ev => ev.type === 'timeout' && ev.team === team).length;
+            const medicals = events.filter(ev => ev.type === 'medical' && ev.team === team).length;
+            $(`#team_${team}_timeouts`).text(`${timeouts}`);
+            $(`#team_${team}_medicals`).text(medicals > 0 ? `(+${medicals} medical)` : '');
+        });
     }
 
     updateMatchStatisticsTitle() {
