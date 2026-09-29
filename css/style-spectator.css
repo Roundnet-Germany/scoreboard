@@ -573,6 +573,7 @@ html[data-theme="spectator"] .timer_widget.visible {
 }
 
 html[data-theme="spectator"] .timer_widget_label,
+html[data-theme="spectator"] .timer_widget_team,
 html[data-theme="spectator"] .timer_widget_time {
   margin: 0;
   font-family: 'Oswald', sans-serif;
@@ -590,6 +591,14 @@ html[data-theme="spectator"] .timer_widget_label {
 
 html[data-theme="spectator"] .timer_widget[data-timer-type="medical"] .timer_widget_label {
   color: #ff6b6b;
+}
+
+/* Calling team of a timeout/medical - its color is the card's left stripe */
+html[data-theme="spectator"] .timer_widget_team {
+  max-width: 90%;
+  font-size: clamp(10px, min(11cqh, 6.5cqw), 40px);
+  font-weight: 500;
+  color: #ffffff;
 }
 
 html[data-theme="spectator"] .timer_widget_time {

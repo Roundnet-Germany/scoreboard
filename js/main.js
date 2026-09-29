@@ -271,11 +271,16 @@ export { serverTimestamp };
 // (this page's own output display, the LED board, the manager server)
 // computes "time remaining" against the same clock regardless of whose
 // device's local clock started it.
-export async function writeTimerState(channel, type) {
+// `team` ('a'/'b') marks which team called a timeout/medical; always written
+// (null deletes it) so a team from a previous timer never lingers. The LED
+// firmware and manager bridge only read `type`, and PUT the node without a
+// team - see Scoreboard.js's getActiveTimerTeam() for that fallback.
+export async function writeTimerState(channel, type, team = null) {
     try {
         // updated_at: the Playerzone hides a live game whose court hasn't changed for a while
         await update(ref(db), type ? {
             [`/match-${channel}/timer/type`]: type,
+            [`/match-${channel}/timer/team`]: team || null,
             [`/match-${channel}/timer/started_at`]: serverTimestamp(),
             [`/match-${channel}/updated_at`]: serverTimestamp(),
         } : {
