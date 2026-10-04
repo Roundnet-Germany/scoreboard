@@ -1621,7 +1621,10 @@
   filter: drop-shadow(1px 3px 20px rgba(0, 0, 0, 0.15));
   pointer-events: none;
   opacity: 0;
-  clip-path: inset(0 100% 0 0);
+  /* Insets extend 40px past the card so the drop-shadow isn't clipped
+     (a 0 inset cuts the shadow flat and leaves a hard edge on the right);
+     right inset = 100% + 40px puts the right edge on the left one = hidden. */
+  clip-path: inset(-40px calc(100% + 40px) -40px -40px);
   transform: translateY(-50%) translateX(-18px);
   transition: opacity 0.35s cubic-bezier(0.64, 0, 0.78, 0),
               clip-path 0.35s cubic-bezier(0.64, 0, 0.78, 0),
@@ -1630,7 +1633,7 @@
 
 .timer_widget.visible {
   opacity: 1;
-  clip-path: inset(0 0 0 0);
+  clip-path: inset(-40px -40px -40px -40px);
   transform: translateY(-50%) translateX(0);
   transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1),
               clip-path 0.45s cubic-bezier(0.22, 1, 0.36, 1),
@@ -1656,6 +1659,12 @@
   font-weight: 600;
   line-height: 1;
   color: #111111;
+  /* Antonio's digits are proportional, so the card would resize every tick
+     ("0:14" is narrower than "0:50") - tabular figures where supported, and
+     a min-width wide enough for "5:00" as a fallback. */
+  font-variant-numeric: tabular-nums;
+  min-width: 1.9em;
+  text-align: center;
 }
 /* Team that called the timeout/medical (Scoreboard.js's
    updateTimerDisplay()) - name under the label, plus an accent stripe in
