@@ -208,7 +208,7 @@
   font-weight: 300;
 }
 
-.score_history .scores .team_rows .score_item:not(:first-child) {
+.score_history .scores .team_rows .score_item:not(:first-of-type) {
   margin-left: -2px;
 }
 
@@ -274,20 +274,54 @@
   font-weight: 400;
 } */
 
-.score_history .scores .team_rows .team:first-child .score_item:first-child {
+.score_history .scores .team_rows .team:first-child .score_item:first-of-type {
   border-radius: 6px 0px 0px 0px;
 }
 
-.score_history .scores .team_rows .team:first-child .score_item:last-child {
+.score_history .scores .team_rows .team:first-child .score_item:last-of-type {
   border-radius: 0px 6px 0px 0px;
 }
 
-.score_history .scores .team_rows .team:last-child .score_item:first-child {
+.score_history .scores .team_rows .team:last-child .score_item:first-of-type {
   border-radius: 0px 0px 0px 6px;
 }
 
-.score_history .scores .team_rows .team:last-child .score_item:last-child {
+.score_history .scores .team_rows .team:last-child .score_item:last-of-type {
   border-radius: 0px 0px 6px 0px;
+}
+
+/* Timeout/medical markers between points (Scoreboard.js's
+   updateScoreHistoryForContainer()). Rendered in both rows at the same
+   width - a colored chip in the calling team's row, an empty spacer in the
+   other - so the two rows stay column-aligned. Team color comes from the
+   same --A_Color/--B_Color vars as the rest of the page; the symbol gets a
+   dark shadow so it reads on light (yellow) and dark team colors alike. */
+.score_history .scores .team_rows .timer_marker {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: none;
+  width: 20px;
+  height: 42px;
+  margin: 0px 3px;
+  box-sizing: border-box;
+}
+
+.score_history .scores .team_rows .timer_marker.called {
+  border-radius: 4px;
+  background-color: var(--A_Color);
+}
+
+.score_history .scores .team_rows .timer_marker.called[called-by="b"] {
+  background-color: var(--B_Color);
+}
+
+.score_history .scores .team_rows .timer_marker .timer_marker_symbol {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.6);
+  padding-bottom: 3px;
 }
 
 .score_history .teams_info {
@@ -1042,6 +1076,17 @@
   flex-grow: 1;
 }
 
+/* Timeouts count (Scoreboard.js's updateTimeoutStatistics()) - secondary
+   to Break %, so a slimmer row under it that doesn't take half the space. */
+.match_statistics .team_stats_container .team_stats .team_overall_stats .stat_item.timeouts {
+  padding: 8px 20px 10px 20px;
+  flex-grow: 0;
+}
+
+.match_statistics .team_stats_container .team_stats .team_overall_stats .stat_item.timeouts .value .stat_value {
+  font-size: 1.5rem;
+}
+
 .match_statistics .team_stats_container .team_stats .team_overall_stats .stat_item .stat_label {
   font-size: 1.3rem;
   font-weight: 400;
@@ -1433,20 +1478,60 @@
   box-sizing: border-box;
 }
 
-.match_statistics .score_history_in_stats .team_rows .team:first-child .score_item:first-child {
+.match_statistics .score_history_in_stats .team_rows .team:first-child .score_item:first-of-type {
   border-radius: 4px 0px 0px 0px;
 }
 
-.match_statistics .score_history_in_stats .team_rows .team:first-child .score_item:last-child {
+.match_statistics .score_history_in_stats .team_rows .team:first-child .score_item:last-of-type {
   border-radius: 0px 4px 0px 0px;
 }
 
-.match_statistics .score_history_in_stats .team_rows .team:last-child .score_item:first-child {
+.match_statistics .score_history_in_stats .team_rows .team:last-child .score_item:first-of-type {
   border-radius: 0px 0px 0px 4px;
 }
 
-.match_statistics .score_history_in_stats .team_rows .team:last-child .score_item:last-child {
+.match_statistics .score_history_in_stats .team_rows .team:last-child .score_item:last-of-type {
   border-radius: 0px 0px 4px 0px;
+}
+
+/* Timeout/medical markers - same idea as in .score_history above, sized
+   for the stats overlay's narrower cells. Fixed width (flex: none), so the
+   .score_item cells around them still share the remaining space. */
+.match_statistics .score_history_in_stats .timer_marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 14px;
+  height: 32px;
+  margin: 0px 2px;
+  box-sizing: border-box;
+}
+
+.match_statistics .score_history_in_stats .timer_marker.called {
+  border-radius: 3px;
+  background-color: var(--A_Color);
+}
+
+.match_statistics .score_history_in_stats .timer_marker.called[called-by="b"] {
+  background-color: var(--B_Color);
+}
+
+.match_statistics .score_history_in_stats .timer_marker .timer_marker_symbol {
+  font-size: .7rem;
+  font-weight: 600;
+  color: #ffffff;
+  text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.6);
+  margin-bottom: 2px;
+}
+
+.match_statistics .score_history_in_stats .scores.full .timer_marker {
+  width: 6px;
+  margin: 0px 1px;
+}
+
+.match_statistics .score_history_in_stats .scores.full .timer_marker_symbol {
+  display: none;
 }
 
 .match_statistics .score_history_in_stats .score_item .score_number {
@@ -1536,7 +1621,10 @@
   filter: drop-shadow(1px 3px 20px rgba(0, 0, 0, 0.15));
   pointer-events: none;
   opacity: 0;
-  clip-path: inset(0 100% 0 0);
+  /* Insets extend 40px past the card so the drop-shadow isn't clipped
+     (a 0 inset cuts the shadow flat and leaves a hard edge on the right);
+     right inset = 100% + 40px puts the right edge on the left one = hidden. */
+  clip-path: inset(-40px calc(100% + 40px) -40px -40px);
   transform: translateY(-50%) translateX(-18px);
   transition: opacity 0.35s cubic-bezier(0.64, 0, 0.78, 0),
               clip-path 0.35s cubic-bezier(0.64, 0, 0.78, 0),
@@ -1545,7 +1633,7 @@
 
 .timer_widget.visible {
   opacity: 1;
-  clip-path: inset(0 0 0 0);
+  clip-path: inset(-40px -40px -40px -40px);
   transform: translateY(-50%) translateX(0);
   transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1),
               clip-path 0.45s cubic-bezier(0.22, 1, 0.36, 1),
@@ -1571,4 +1659,35 @@
   font-weight: 600;
   line-height: 1;
   color: #111111;
+  /* Antonio's digits are proportional, so the card would resize every tick
+     ("0:14" is narrower than "0:50") - tabular figures where supported, and
+     a min-width wide enough for "5:00" as a fallback. */
+  font-variant-numeric: tabular-nums;
+  min-width: 1.9em;
+  text-align: center;
+}
+/* Team that called the timeout/medical (Scoreboard.js's
+   updateTimerDisplay()) - name under the label, plus an accent stripe in
+   that team's color. Empty for breaks and board/pedal-started timeouts. */
+.timer_widget_team {
+  font-family: 'Barlow', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111111;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timer_widget_team.hidden {
+  display: none;
+}
+
+.timer_widget[data-timer-team="a"] {
+  border-left: 6px solid var(--A_Color);
+}
+
+.timer_widget[data-timer-team="b"] {
+  border-left: 6px solid var(--B_Color);
 }

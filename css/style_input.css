@@ -865,26 +865,6 @@ select#Match_Stats_Type {
   flex-grow: 1;
 }
 
-/* .hidden (base.css) collapses via max-width/max-height:0, which relies on
-   the element being able to shrink below its content size - true for a
-   block element, but NOT for a flex item, which defaults to min-width:auto
-   (content-based) unless overridden. min-width:auto beats max-width:0 in
-   the flex sizing algorithm, so #cancel_timer/.timer_status - flex items
-   inside .timer_buttons - kept their full content width and a reserved gap
-   even while "hidden" (invisible via opacity:0, but still occupying space),
-   which is what made the visible buttons stop short of the same right edge
-   the toggle switches above reach. display:none sidesteps the whole
-   min-width:auto quirk by removing the item from flex layout entirely. */
-.timer_buttons .hidden {
-  display: none;
-}
-
-.timer_status {
-  font-size: .85rem;
-  font-weight: 600;
-  color: var(--secondary);
-}
-
 .output .output_entry {
   max-width: 300px;
 }
@@ -1056,3 +1036,163 @@ select#Match_Stats_Type {
   gap: 4px;
 }
 
+
+/* Per-team Timeout/Medical buttons (Scoreboard.js's
+   updateTeamTimerButtons()) - a column right of the +1/-1 buttons in the
+   Scores card, one stacked Timeout/Medical pair per team row (the row
+   already says which team, so no name/stripe here). Timer type on the
+   left, countdown or "N left" on the right, and a gauge (.timer_gauge) in
+   the team's color filling the button left to right as the running timer
+   elapses. Everything is fixed-width on purpose - buttons, the countdown
+   column (tabular digits) and the Cancel button - so the card never
+   resizes while a countdown runs. .used (no timeout left this set) only
+   greys the button out; it stays clickable so an operator can still
+   correct things. */
+.points .team_timers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.points .team_timers .team_timer_group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-grow: 1;
+  width: 120px;
+}
+
+.team_timer {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex: 1 1 0px;
+  min-height: 0px;
+}
+
+.team_timer .timer_gauge {
+  position: absolute;
+  top: 0px;
+  bottom: 0px;
+  left: 0px;
+  width: 0%;
+  background-color: var(--A_Color, #cccccc);
+  opacity: .35;
+  pointer-events: none;
+}
+
+.team_timer[team="b"] .timer_gauge {
+  background-color: var(--B_Color, #cccccc);
+}
+
+/* Animate only while running: the width is updated every 300ms (updateUI),
+   a matching linear transition turns those steps into a smooth fill. */
+.team_timer.running .timer_gauge {
+  transition: width .3s linear;
+}
+
+.team_timer .team_timer_name,
+.team_timer .team_timer_info {
+  position: relative; /* above the gauge */
+}
+
+.team_timer .team_timer_name {
+  min-width: 0px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team_timer .team_timer_info {
+  flex: none;
+  min-width: 34px;
+  text-align: right;
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+  opacity: .7;
+}
+
+.team_timer.running .team_timer_info {
+  font-size: .9rem;
+  font-weight: 700;
+  opacity: 1;
+}
+
+.team_timer.used {
+  opacity: .45;
+}
+
+/* No separate Cancel button: hovering the running button swaps its label
+   and countdown for "Cancel" (the gauge keeps filling behind it), and
+   clicking it cancels - see Scoreboard.js's $teamTimerButtons handler. */
+.team_timer.running:hover > .team_timer_name,
+.team_timer.running:hover > .team_timer_info {
+  visibility: hidden;
+}
+
+.team_timer.running:hover::after {
+  content: 'Cancel';
+  position: absolute;
+  inset: 0px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--ui-error);
+}
+
+.team_timer.running:hover {
+  opacity: 1; /* not the generic button:hover fade - keep the gauge readable */
+  box-shadow: inset 0px 0px 0px 2px var(--ui-error);
+}
+
+/* Break / board-started timer (no team button of its own) - same look as
+   a running team button, in the Scores header left of Active Set, only
+   present while such a timer runs. */
+#other_timer {
+  flex: none;
+  width: 110px;
+  margin-right: 8px;
+}
+
+#other_timer.hidden {
+  display: none;
+}
+
+#other_timer .timer_gauge {
+  background-color: var(--secondary);
+}
+
+/* Phones: same narrower column as the +1/-1 buttons, countdown under the
+   label instead of beside it. */
+@media only screen and (max-width: 600px) and (pointer: coarse) {
+  .points .team_timers .team_timer_group {
+    width: 64px;
+  }
+
+  .team_timer {
+    flex-direction: column;
+    justify-content: center;
+    gap: 0px;
+    padding: 1px 2px 2px 2px;
+    font-size: .7rem;
+    line-height: 1.1;
+  }
+
+  .team_timer .team_timer_info {
+    min-width: 0px;
+    text-align: center;
+    font-size: .65rem;
+  }
+
+  .team_timer.running .team_timer_info {
+    font-size: .75rem;
+  }
+
+  #other_timer {
+    width: 76px;
+  }
+}

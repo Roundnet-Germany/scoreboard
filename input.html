@@ -133,6 +133,10 @@
                     <div class="header_row">
                         <h3>Scores</h3>
                         <div class="set_counter_container">
+                            <!-- Countdown for a timer with no team button of its own (break between sets, or a
+                                 timeout started from the LED board/pedal) - hidden otherwise. Click to cancel,
+                                 like the team buttons. See Scoreboard.js's updateTimerDisplay(). -->
+                            <button id="other_timer" class="small neutral team_timer running hidden"><span class="timer_gauge"></span><span class="team_timer_name"></span><span class="team_timer_info"></span></button>
                             <div class="input_container horizontal">
                                 <label for="Set_Count">Active Set:</label>
                                 <input type="number" id="Set_Count" class="small" min="1" max="7" fb-data="active_set">
@@ -189,6 +193,20 @@
                                 </div>
                             </div>
                             <div class="points">
+                                <!-- Per-team timeouts - see Scoreboard.js's startTimer(team)/updateTeamTimerButtons().
+                                     "N left" and the running countdown + gauge are filled in by JS. Fixed widths so the
+                                     row never resizes while a countdown runs. Clicking the running one cancels it
+                                     (it shows "Cancel" on hover). -->
+                                <div class="team_timers">
+                                    <div class="team_timer_group">
+                                        <button class="small neutral team_timer" timer-type="timeout" team="a"><span class="timer_gauge"></span><span class="team_timer_name">Timeout</span><span class="team_timer_info"></span></button>
+                                        <button class="small negative team_timer" timer-type="medical" team="a"><span class="timer_gauge"></span><span class="team_timer_name">Medical</span><span class="team_timer_info"></span></button>
+                                    </div>
+                                    <div class="team_timer_group">
+                                        <button class="small neutral team_timer" timer-type="timeout" team="b"><span class="timer_gauge"></span><span class="team_timer_name">Timeout</span><span class="team_timer_info"></span></button>
+                                        <button class="small negative team_timer" timer-type="medical" team="b"><span class="timer_gauge"></span><span class="team_timer_name">Medical</span><span class="team_timer_info"></span></button>
+                                    </div>
+                                </div>
                                 <div class="group_score">
                                     <input type="number" class="counter score" id="A_Score_Team" value="0" min="0" fb-data="score.squad_score.team_a_score">
                                     <input type="number" class="counter score" id="B_Score_Team" value="0" min="0" fb-data="score.squad_score.team_b_score">
@@ -464,16 +482,6 @@
                                 <label class="toggle-switch" for="Show_Match_Statistics">
                                     <input type="checkbox" id="Show_Match_Statistics" fb-data="admin_settings.show_match_statistics">
                                 </label>
-                            </div>
-                        </div>
-
-                        <div class="setting_entry boolean">
-                            <label>Timers:</label>
-                            <div class="right timer_buttons">
-                                <span class="timer_status hidden"></span>
-                                <button id="start_timeout" class="small neutral">Timeout</button>
-                                <button id="start_medical" class="small negative">Medical</button>
-                                <button id="cancel_timer" class="small destructive hidden">Cancel</button>
                             </div>
                         </div>
 
