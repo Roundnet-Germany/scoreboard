@@ -1,5 +1,5 @@
 // import firebase config
-import { get, ref, update, set, remove, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-database.js";
+import { get, ref, update, set, remove, onValue, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-database.js";
 import { db, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase_config.js?v=3";
 
 import { User } from "./User.js?v=3";
@@ -105,17 +105,20 @@ $(document).ready(async function () {
 
 // ========================================= Data Functions ===================================== //
 
-export async function readData(channel) {
-    if (AUTH_DEBUG) console.log("[Data] readData start, channel:", channel);
-    try {
-        const matchRef = ref(db, `match-${channel}`);
-        const matchData = await get(matchRef);
-        if (AUTH_DEBUG) console.log("[Data] readData ok, channel:", channel);
-        return matchData.val();
-    } catch (err) {
-        if (AUTH_DEBUG) console.warn("[Data] readData error, channel:", channel, err?.code || err?.message, err);
-        throw err;
-    }
+/**
+ * Live-Listener auf match-<channel>: Firebase hält eine WebSocket-Verbindung
+ * offen und ruft onData nur auf, wenn sich wirklich etwas geändert hat (bzw.
+ * einmal sofort mit dem aktuellen Stand). Eigene Schreibvorgänge kommen
+ * ebenfalls sofort lokal zurück, ohne Round-Trip zum Server.
+ * @returns {Function} Unsubscribe-Funktion zum Abmelden des Listeners
+ */
+export function subscribeToMatch(channel, onData) {
+    if (AUTH_DEBUG) console.log("[Data] subscribeToMatch, channel:", channel);
+    return onValue(ref(db, `match-${channel}`), (snapshot) => {
+        onData(snapshot.val());
+    }, (err) => {
+        console.warn("[Data] subscribeToMatch error, channel:", channel, err?.code || err?.message, err);
+    });
 }
 
 // Kurzer Cache für users – vermeidet mehrfache langsame Reads und nutzt Preload
