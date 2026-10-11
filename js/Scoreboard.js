@@ -1,4 +1,4 @@
-import { themes, DEFAULT_BRAND_LOGO, readData, getPathsAndValues, getColorBrightness, rgb2hex, writeData, writeTimerState, showToast, copyToClipboard } from "./main.js?v=3";
+import { themes, DEFAULT_BRAND_LOGO, subscribeToMatch, getPathsAndValues, getColorBrightness, rgb2hex, writeData, writeTimerState, showToast, copyToClipboard } from "./main.js?v=3";
 
 // Fixed durations for the shared timeout/medical/break timer - matches
 // led_scoreboard/include/score_actions.h's BREAK/TIMEOUT/MEDICAL_*_MS
@@ -88,17 +88,23 @@ export class Scoreboard {
         // Raw teams_info.team_x.name/flag as last received from Firebase -
         // kept independently of the DOM so applyFlag() can fall back to
         // resolveFlag(name) whenever an explicit flag code isn't set,
-        // regardless of which of the two paths arrives first on a given poll.
+        // regardless of which of the two paths arrives first on a given update.
         this.teamNames = { a: '', b: '' };
         this.teamFlags = { a: '', b: '' };
         this.active_set = 1;
         // { type: "timeout"|"medical"|"break", startedAt: <epoch ms> } | null -
         // mirrors match-<channel>/timer, see processDataAndUpdateFields().
         this.timerState = null;
-        this.ScoreHistoryChart = null;
+        this.scoreChart = null;
         this.event_history = [];
-        this.data_interval = null;
-        this.update_interval = null;
+        // Unsubscribe-Funktion des aktiven Firebase-Listeners (subscribeToChannel())
+        this.unsubscribeMatch = null;
+        // requestRender() bündelt mehrere Änderungen zu einem updateUI()
+        this.renderScheduled = false;
+        // Läuft nur, solange ein Timer aktiv ist (siehe syncTimerTicker())
+        this.timer_interval = null;
+        // Ausstehende Ein-/Ausblend-Timeouts der Overlays, siehe toggleOverlay()
+        this.overlayTimeouts = new Map();
         
         // Game settings
         this.gameSettings = {
@@ -115,46 +121,81 @@ export class Scoreboard {
 
     /* ==============================================================================
      * Initialize the scoreboard with event listeners and data synchronization
-     * Sets up intervals for UI updates and data fetching based on board type
-     * Input: Daten-Polling erst nach Login (startDataSync()), um Permission denied zu vermeiden
+     * Rendert nicht mehr im festen Takt, sondern nur bei Bedarf (requestRender()):
+     * bei neuen Daten aus Firebase, bei lokalen Eingaben, bei Resize und
+     * sobald Fonts geladen sind (die Flaggengrößen hängen an den Font-Metriken).
+     * Input: Daten-Listener erst nach Login (startDataSync()), um Permission denied zu vermeiden
      * ============================================================================== */
     init() {
         this.initEventListeners();
         this.populateFlagSelects();
 
-        // Update UI every 300ms for smooth real-time updates
-        this.update_interval = setInterval(() => {
-            this.updateUI();
-        }, 300);
+        $(window).on('resize', () => this.requestRender());
+        if (document.fonts) {
+            document.fonts.ready.then(() => this.requestRender());
+            document.fonts.addEventListener('loadingdone', () => this.requestRender());
+        }
 
         if (this.type === 'input') {
-            // Input: Daten-Polling erst nach Login starten (main.js ruft startDataSync() auf)
-            // Kein insertLiveData() und kein data_interval hier – sonst Permission denied auf dem Login-Screen
+            // Lokale Eingaben (Scores, Selects, Toggles, ...) sofort rendern -
+            // auch die, die (noch) nichts hochladen, z.B. vor dem Login.
+            $(document).on('input change', () => this.requestRender());
+            // Input: Daten-Listener erst nach Login starten (main.js ruft startDataSync() auf)
         } else {
-            // Output: sofort Daten laden und Intervall starten
-            this.insertLiveData();
-            this.data_interval = setInterval(() => {
-                this.insertLiveData();
-            }, 500);
+            // Output: sofort live auf den Kanal hören
+            this.subscribeToChannel();
         }
 
         // Set theme for output type
         if (this.type === 'output') {
             this.setTheme(this.theme);
         }
+
+        this.requestRender();
     }
 
     /**
-     * Startet das Daten-Polling für Input-Modus (nach erfolgreichem Login).
+     * Startet den Daten-Listener für Input-Modus (nach erfolgreichem Login).
      * Wird von main.js aufgerufen, sobald der User eingeloggt ist.
      */
     startDataSync() {
-        if (this.type !== 'input' || this.data_interval !== null) return;
+        if (this.type !== 'input' || this.unsubscribeMatch !== null) return;
         if (window.AUTH_DEBUG) console.log("[Scoreboard] startDataSync aufgerufen");
-        this.insertLiveData();
-        this.data_interval = setInterval(() => {
-            this.insertLiveData();
-        }, 2000);
+        this.subscribeToChannel();
+    }
+
+    /**
+     * (Neu-)Anmelden des Firebase-Listeners auf den aktuellen Kanal. Ersetzt
+     * das frühere Polling per get() alle 500ms/2s: Firebase meldet Änderungen
+     * jetzt selbst, sobald sie passieren.
+     */
+    subscribeToChannel() {
+        if (this.unsubscribeMatch) this.unsubscribeMatch();
+        const channel = this.channel;
+        this.unsubscribeMatch = subscribeToMatch(channel, (data) => {
+            // Späte Events eines alten Kanals ignorieren
+            if (channel !== this.channel) return;
+            this.processDataAndUpdateFields(data);
+            this.sanitizeStartingSelections();
+            this.requestRender();
+        });
+    }
+
+    /**
+     * Plant ein updateUI() direkt im Anschluss an den aktuellen Task. Mehrere
+     * Aufrufe davor (z.B. Firebase-Event + Input-Event im selben Moment)
+     * ergeben nur einen Render-Durchlauf. Bewusst kein requestAnimationFrame:
+     * das pausiert, sobald der Browser die Seite für unsichtbar hält
+     * (verdecktes Fenster bei OBS-Fensteraufnahme, inaktive Browserquelle),
+     * und das Scoreboard würde einfrieren.
+     */
+    requestRender() {
+        if (this.renderScheduled) return;
+        this.renderScheduled = true;
+        queueMicrotask(() => {
+            this.renderScheduled = false;
+            this.updateUI();
+        });
     }
 
 
@@ -170,6 +211,7 @@ export class Scoreboard {
         this.updateTimerDisplay();
         this.handleEventHistory();
         this.updateCurrentPlayersDisplay();
+        this.syncTimerTicker();
         
         // Only update score history for output type
         if (this.type === 'output') {
@@ -212,7 +254,11 @@ export class Scoreboard {
         // named (style-irf.css doesn't match the 'style-v' pattern, and
         // without this a theme switch would leave the old sheet behind).
         $('link[rel="stylesheet"][href*="css/style-v"], link[theme-stylesheet]').remove();
-        $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('theme-stylesheet', '').attr('href', css_path).appendTo('head');
+        // Once the sheet is in, layout and fonts change - re-render so the
+        // JS-measured sizes (flags, timer widget position) pick that up.
+        $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('theme-stylesheet', '').attr('href', css_path)
+            .on('load', () => this.requestRender())
+            .appendTo('head');
 
         // Federation logo in the overlay headers - per-theme, falling back to
         // the RG badge for themes that don't define one.
@@ -254,9 +300,9 @@ export class Scoreboard {
     initEventListeners() {
         // Channel input dropdown listener
         this.$channelInput.change((event) => {
-            this.channel = $(event.target).val();
-            this.insertLiveData();
-            this.updateUI();
+            this.channel = Number($(event.target).val());
+            this.subscribeToChannel();
+            this.requestRender();
         });
 
         // Data import button handler
@@ -590,24 +636,6 @@ export class Scoreboard {
     }
 
 
-    /** ==============================================================================
-     * Fetch and process live data from Firebase
-     * Handles different data types: event history, admin settings, team colors, and general values
-     * ============================================================================== */
-    async insertLiveData() {
-        if (window.AUTH_DEBUG) console.log("[Scoreboard] insertLiveData start, channel=" + this.channel + ", type=" + this.type);
-        try {
-            const data = await readData(this.channel);
-            this.processDataAndUpdateFields(data);
-            this.sanitizeStartingSelections();
-            if (window.AUTH_DEBUG) console.log("[Scoreboard] insertLiveData ok, channel=" + this.channel);
-        } catch (err) {
-            if (window.AUTH_DEBUG) console.warn("[Scoreboard] insertLiveData error, channel=" + this.channel, err?.code || err?.message, err);
-            throw err;
-        }
-    }
-
-
     /** ============================================================================== 
      * Process data object and update form fields
      * Common function used by both live data insertion and JSON import
@@ -643,12 +671,12 @@ export class Scoreboard {
                 this.insertColor($allElements.first(), path, value);
             } else if (path.includes('teams_info') && path.endsWith('.flag')) {
                 // Only cache the raw code here - do NOT touch .flag-indicator
-                // visibility/src from the data-poll path (every 500ms-2s on
-                // output/input alike). That used to make the flag flash
-                // visible on every poll regardless of "Show as Flags", since
-                // it raced against updateColorIndicatorVisibility()'s own
-                // 300ms cycle re-hiding it. applyFlag() is now only ever
-                // called from there, which is also the sole owner of visibility.
+                // visibility/src from the data path. That used to make the
+                // flag flash visible on every data update regardless of "Show
+                // as Flags", since it raced against
+                // updateColorIndicatorVisibility() re-hiding it. applyFlag() is
+                // now only ever called from there, which is also the sole
+                // owner of visibility.
                 const team = path.includes('team_a') ? 'a' : path.includes('team_b') ? 'b' : null;
                 if (team) this.teamFlags[team] = value || '';
                 $allElements.each((_, elem) => {
@@ -805,7 +833,7 @@ export class Scoreboard {
      * second admin's browser, TournamentLiveScores/Fwango) then see it
      * directly instead of each re-deriving their own guess from the name,
      * and the country <select> picks it up as its selected option on the
-     * next poll instead of sitting on "Auto-detect" forever. Not done on
+     * next data update instead of sitting on "Auto-detect" forever. Not done on
      * output.html: it has no write auth, so writeData() there would just
      * fail silently against Firebase's own rules (there are none here, so it
      * would actually succeed, but a read-only display page has no business
@@ -828,7 +856,7 @@ export class Scoreboard {
         }
 
         if (!isExplicit && code && this.type === 'input' && this.user && this.user.channels.includes(Number(this.channel))) {
-            // Set locally right away so the next ~300ms tick already sees an
+            // Set locally right away so the next render already sees an
             // explicit value and doesn't fire the same write again while the
             // round-trip through Firebase is still in flight.
             this.teamFlags[team] = code;
@@ -1031,9 +1059,8 @@ export class Scoreboard {
      * to the Timers buttons) and, for output.html, the .timer_widget card -
      * both driven by this.timerState, which processDataAndUpdateFields()
      * keeps in sync with match-<channel>/timer. Also toggles input.html's
-     * Cancel button. Ticks down locally every updateUI() cycle (300ms)
-     * between the underlying ~500ms/2s data polls, then hides itself once
-     * time's up. Purely a reader: the RTDB node itself is only ever cleared
+     * Cancel button. Ticks down locally via syncTimerTicker() while a timer
+     * is running, then hides itself once time's up. Purely a reader: the RTDB node itself is only ever cleared
      * by whichever board/bridge is authoritative for it (fixed durations
      * mean the board that started/adopted a timer knows exactly when it
      * ends) - this never writes back on natural expiry.
@@ -1049,7 +1076,7 @@ export class Scoreboard {
 
         if (!active) {
             this.$timerWidget.removeClass('visible');
-            return;
+            return false;
         }
 
         const totalSec = Math.ceil(remainingMs / 1000);
@@ -1060,7 +1087,7 @@ export class Scoreboard {
 
         this.$timerStatus.text(`${label} ${timeText}`);
 
-        if (this.type !== 'output' || !this.$timerWidget.length) return;
+        if (this.type !== 'output' || !this.$timerWidget.length) return true;
 
         // Sit at the same vertical level as, and just to the right of,
         // whichever theme's .board is actually visible right now (setTheme()
@@ -1081,6 +1108,23 @@ export class Scoreboard {
             .addClass('visible');
         this.$timerWidget.find('.timer_widget_label').text(label);
         this.$timerWidget.find('.timer_widget_time').text(timeText);
+        return true;
+    }
+
+    /**
+     * Der Countdown muss auch ohne neue Daten weiterlaufen - dafür gibt es
+     * einen eigenen kleinen Takt, der nur updateTimerDisplay() aufruft und
+     * nur existiert, solange ein Timer läuft. Wird aus updateUI() aufgerufen.
+     */
+    syncTimerTicker() {
+        if (this.timerState && !this.timer_interval) {
+            this.timer_interval = setInterval(() => {
+                if (!this.updateTimerDisplay()) {
+                    clearInterval(this.timer_interval);
+                    this.timer_interval = null;
+                }
+            }, 250);
+        }
     }
 
     handleEventHistory() {
@@ -1481,7 +1525,7 @@ export class Scoreboard {
      * has no valid serve order and used to permanently freeze score input for
      * the set (see the guards in getServingPlayerAtPoint/getReceivingPlayerAtPoint).
      * Idempotent: no-op once the receiver is on the opposing team, so it's
-     * safe to call on every data poll as a self-healing pass against stale data.
+     * safe to call on every data update as a self-healing pass against stale data.
      * ============================================================================== */
     sanitizeStartingSelections() {
         if (this.type !== 'input') return;
@@ -1879,7 +1923,7 @@ export class Scoreboard {
      * method had when it measured .team: an un-sized flag briefly renders at
      * its raw SVG intrinsic size (large) on first paint, inflating the
      * measured container, which produces a too-large height that shrinks a
-     * bit on each ~300ms update tick instead of landing on the right size
+     * bit on each render instead of landing on the right size
      * immediately.
      * ============================================================================== */
     syncOutputFlagSizes() {
@@ -1983,38 +2027,43 @@ export class Scoreboard {
         // vertical_score themes either - it defers to this toggle).
         if (!this.supportsOverlays()) return;
 
-        const isVisible = this.settings.show_match_statistics === 1;
-
-        if (isVisible) {
-            // Add animation class first, then show
-            this.$matchStatisticsContainer.addClass('animate');
-
-            // Small delay to ensure CSS is applied before showing
-            setTimeout(() => {
-                this.$matchStatisticsContainer.addClass('show').removeClass('hidden');
-            }, 400);
-        } else {
-            this.$matchStatisticsContainer.removeClass('animate');
-            setTimeout(() => {
-                this.$matchStatisticsContainer.removeClass('animate show').addClass('hidden');
-            }, 300);
-        }
+        this.toggleOverlay(this.$matchStatisticsContainer, this.settings.show_match_statistics === 1);
     }
 
     updateMatchPreviewVisibility() {
         if (!this.supportsOverlays()) return;
 
-        const isVisible = this.settings.show_match_preview === 1;
+        this.toggleOverlay(this.$matchPreviewContainer, this.settings.show_match_preview === 1);
+    }
+
+    /**
+     * Blendet ein Overlay mit Animation ein/aus. Ein noch ausstehender
+     * Timeout eines vorherigen Aufrufs wird abgebrochen - sonst konnte ein
+     * schnelles Aus/An (z.B. erster Render mit Defaults, direkt danach die
+     * echten Daten) die Klasse 'animate' nachträglich wieder entfernen.
+     */
+    toggleOverlay($container, isVisible) {
+        const el = $container[0];
+        if (!el) return;
+        // Same target state as last call: leave its pending timeout alone,
+        // otherwise back-to-back renders would keep pushing the 'show' back.
+        const pending = this.overlayTimeouts.get(el);
+        if (pending && pending.isVisible === isVisible) return;
+        if (pending) clearTimeout(pending.id);
+
         if (isVisible) {
-            this.$matchPreviewContainer.addClass('animate');
-            setTimeout(() => {
-                this.$matchPreviewContainer.addClass('show').removeClass('hidden');
-            }, 400);
+            // Add animation class first, then show
+            $container.addClass('animate');
+
+            // Small delay to ensure CSS is applied before showing
+            this.overlayTimeouts.set(el, { isVisible, id: setTimeout(() => {
+                $container.addClass('show').removeClass('hidden');
+            }, 400) });
         } else {
-            this.$matchPreviewContainer.removeClass('animate');
-            setTimeout(() => {
-                this.$matchPreviewContainer.removeClass('animate show').addClass('hidden');
-            }, 300);
+            $container.removeClass('animate');
+            this.overlayTimeouts.set(el, { isVisible, id: setTimeout(() => {
+                $container.removeClass('animate show').addClass('hidden');
+            }, 300) });
         }
     }
 
@@ -2358,18 +2407,25 @@ export class Scoreboard {
      * Update Chart.js visualization of score progression
      * Creates line chart showing both teams' score progression over time
      * Uses team colors and provides visual feedback for score changes
+     * Das Chart wird nur einmal erzeugt; danach werden nur Daten getauscht.
+     * Die Farben sind scriptable und lesen die Team-Farben bei jedem update()
+     * frisch aus den CSS-Variablen, damit Farbwechsel trotzdem ankommen.
      * ============================================================================== */
     updateScoreHistoryChart() {
         const scoresTeamA = this.scoreHistoryToTeamPoints(this.getScoreHistory(), 'a');
         const scoresTeamB = this.scoreHistoryToTeamPoints(this.getScoreHistory(), 'b');
         const labels = scoresTeamA.map((_, i) => `${i + 1}`);
 
-        const ctx = document.getElementById('scoreChart').getContext('2d');
-
-        // Destroy existing chart if it exists
         if (this.scoreChart) {
-            this.scoreChart.destroy();
+            this.scoreChart.data.labels = labels;
+            this.scoreChart.data.datasets[0].data = scoresTeamA;
+            this.scoreChart.data.datasets[1].data = scoresTeamB;
+            this.scoreChart.update();
+            return;
         }
+
+        const ctx = document.getElementById('scoreChart').getContext('2d');
+        const teamColor = (team) => getComputedStyle(document.documentElement).getPropertyValue(`--${team}_Color`).trim();
 
         this.scoreChart = new Chart(ctx, {
             type: 'line',
@@ -2382,13 +2438,13 @@ export class Scoreboard {
                         pointRadius: 0,
                         pointHoverRadius: 0,
                         segment: {
-                            borderColor: getComputedStyle(document.documentElement).getPropertyValue("--A_Color").trim(),
+                            borderColor: () => teamColor('A'),
                             backgroundColor: ctx => {
                                 if (!ctx.p1 || !ctx.chart.data.datasets[1]) return '#000000';
                                 const dataset2Value = ctx.chart.data.datasets[1].data[ctx.p0DataIndex];
                                 return ctx.p1.parsed.y > dataset2Value ?
-                                    `${getComputedStyle(document.documentElement).getPropertyValue("--A_Color").trim()}44` :
-                                    `${getComputedStyle(document.documentElement).getPropertyValue("--B_Color").trim()}44`;
+                                    `${teamColor('A')}44` :
+                                    `${teamColor('B')}44`;
                             },
                         },
                         fill: '+1',
@@ -2396,8 +2452,8 @@ export class Scoreboard {
                     {
                         label: "Team B",
                         data: scoresTeamB,
-                        borderColor: getComputedStyle(document.documentElement).getPropertyValue("--B_Color").trim(),
-                        backgroundColor: `${getComputedStyle(document.documentElement).getPropertyValue("--B_Color").trim()}22`,
+                        borderColor: () => teamColor('B'),
+                        backgroundColor: () => `${teamColor('B')}22`,
                         pointRadius: 0,
                         pointHoverRadius: 0,
                         fill: "false"
@@ -2429,8 +2485,6 @@ export class Scoreboard {
                 }
             }
         });
-
-        this.scoreChart.update();
     }
 
 
