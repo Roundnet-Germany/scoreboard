@@ -877,7 +877,8 @@ select.small {
   margin-bottom: 2px;
 }
 
-select#Match_Stats_Type {
+select#Match_Stats_Type,
+select#Team_Indicator_Type {
   height: auto;
   padding: 0px 0px 3px 2px;
 }

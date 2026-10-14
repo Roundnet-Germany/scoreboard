@@ -383,25 +383,22 @@
                     <h3>Display Options</h3>
                     <div class="inner">
                         
-                        <div class="setting_entry boolean">
-                            <label>Colors:</label>
-                            <label class="toggle-switch" for="Show_Color">
-                                <input type="checkbox" id="Show_Color" fb-data="admin_settings.show_color">
-                            </label>
-                        </div>
-
-                        <div class="setting_entry boolean">
-                            <label>Show as Flags:</label>
-                            <label class="toggle-switch" for="Show_Flag">
-                                <input type="checkbox" id="Show_Flag" fb-data="admin_settings.show_flag">
-                            </label>
-                        </div>
-
-                        <div class="setting_entry boolean">
-                            <label>Show Club Logos:</label>
-                            <label class="toggle-switch" for="Show_Club_Logo">
-                                <input type="checkbox" id="Show_Club_Logo" fb-data="admin_settings.show_club_logo">
-                            </label>
+                        <div class="setting_entry boolean team_indicator">
+                            <label>Team Indicator:</label>
+                            <div class="right">
+                                <select id="Team_Indicator_Type" title="What to show next to the team names">
+                                    <option value="show_color">Color</option>
+                                    <option value="show_flag">Flag</option>
+                                    <option value="show_club_logo">Club Logo</option>
+                                </select>
+                                <label class="toggle-switch" for="Show_Team_Indicator">
+                                    <input type="checkbox" id="Show_Team_Indicator">
+                                </label>
+                                <!-- The stored settings - at most one is on, set by the select + toggle above -->
+                                <input type="checkbox" id="Show_Color" fb-data="admin_settings.show_color" hidden>
+                                <input type="checkbox" id="Show_Flag" fb-data="admin_settings.show_flag" hidden>
+                                <input type="checkbox" id="Show_Club_Logo" fb-data="admin_settings.show_club_logo" hidden>
+                            </div>
                         </div>
 
                         <div class="setting_entry boolean">

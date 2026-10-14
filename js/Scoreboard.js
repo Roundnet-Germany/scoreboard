@@ -7,6 +7,8 @@ import { themes, DEFAULT_BRAND_LOGO, subscribeToMatch, getPathsAndValues, getCol
 // only ever has to say *which* timer is running, not how long it lasts.
 const TIMER_DURATIONS_MS = { timeout: 60_000, medical: 300_000, break: 180_000 };
 const TIMER_LABELS = { timeout: 'Timeout', medical: 'Medical Timeout', break: 'Break' };
+// Mutually exclusive "team indicator" settings, see the Team Indicator handler
+const TEAM_INDICATOR_MODES = ['show_color', 'show_flag', 'show_club_logo'];
 import { resolveFlag, getCountryList } from "./flags.js?v=3";
 
 // Same convention as led_scoreboard/include/firebase.h's _parseSetMode() and
@@ -495,6 +497,8 @@ export class Scoreboard {
         // Settings entries handler
         this.$settingsEntries.click((event) => {
             const $trigger = $(event.target);
+            // Controls without their own setting (e.g. the team indicator toggle, handled below)
+            if (!$trigger.attr('fb-data')) return;
             const value = $trigger.prop('checked') ? 1 : 0;
             const part = $trigger.attr('fb-data').split('.').pop();
             this.settings[part] = value;
@@ -515,22 +519,8 @@ export class Scoreboard {
             // Update toggle switch appearance
             $toggleSwitch.toggleClass('active', $checkbox.prop('checked'));
 
-            // Colors, flags and club logos are mutually exclusive - turning
-            // one on turns the others off, rather than just picking a
-            // display-time priority, so the stored settings themselves never
-            // disagree with what's shown.
-            const indicatorModes = ['show_color', 'show_flag', 'show_club_logo'];
-            if (isAdminSetting && value === 1 && indicatorModes.includes(part)) {
-                indicatorModes.filter((otherPart) => otherPart !== part).forEach((otherPart) => {
-                    const $other = $(`.toggle-switch input[fb-data="admin_settings.${otherPart}"]`);
-                    if ($other.length && $other.prop('checked')) {
-                        $other.prop('checked', false);
-                        $other.closest('.toggle-switch').removeClass('active');
-                        this.settings[otherPart] = 0;
-                        uploadTargets.push($other);
-                    }
-                });
-            }
+            // No setting of its own (team indicator toggle, see below)
+            if (!fbData) return;
 
             if (isAdminSetting) {
                 this.settings[part] = value;
@@ -540,6 +530,20 @@ export class Scoreboard {
             this.uploadData(uploadTargets);
         });
         
+        // Team indicator: select (color / flag / club logo) + toggle. Stored as
+        // the three show_color / show_flag / show_club_logo settings, at most
+        // one of them on - so the stored settings never disagree with what's shown.
+        $('#Team_Indicator_Type, #Show_Team_Indicator').change(() => {
+            const mode = $('#Team_Indicator_Type').val();
+            const isOn = $('#Show_Team_Indicator').prop('checked');
+            const uploadTargets = TEAM_INDICATOR_MODES.map((key) => {
+                this.settings[key] = isOn && key === mode ? 1 : 0;
+                return $(`input[fb-data="admin_settings.${key}"]`).prop('checked', this.settings[key] === 1);
+            });
+            this.updateSettings();
+            this.uploadData(uploadTargets);
+        });
+
         // Match stats type selector handler
         $('#Match_Stats_Type').change((event) => {
             const value = $(event.target).val();
@@ -1856,6 +1860,13 @@ export class Scoreboard {
             const $toggleSwitch = $(`.toggle-switch input[fb-data*="${key}"]`).closest('.toggle-switch');
             $toggleSwitch.toggleClass('active', value === 1);
         });
+
+        // Team indicator row: the select shows the active mode; while none is
+        // on it keeps the last pick, so switching the toggle on restores it
+        const activeIndicator = TEAM_INDICATOR_MODES.find((key) => this.settings[key] === 1);
+        if (activeIndicator) $('#Team_Indicator_Type').val(activeIndicator);
+        $('#Show_Team_Indicator').prop('checked', !!activeIndicator)
+            .closest('.toggle-switch').toggleClass('active', !!activeIndicator);
 
         // Update visibility states
         this.updateGroupScoreVisibility();
