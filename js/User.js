@@ -1,32 +1,38 @@
 import { auth, signOut } from "./firebase_config.js?v=3";
 
 export class User {
-    constructor(username, channels = [], displayName = "") {
-        this.username = username;
-        this.isAuthenticated = true; // User is logged in
-        this.channels = channels.map(Number);
-        this.displayName = displayName;
-        this.init();
+    /**
+     * @param {Object} props
+     * @param {string} props.email
+     * @param {string|null} props.orgId - The account's org (accounts/<uid>/org)
+     * @param {string} props.orgName
+     * @param {Array<{org: string, orgName: string, court: number, channel: number}>} props.courts
+     *        Courts this account may operate - admins get all of them
+     * @param {boolean} props.isAdmin
+     */
+    constructor({ email, orgId, orgName, courts, isAdmin }) {
+        this.email = email;
+        this.orgId = orgId;
+        this.displayName = orgName || email;
+        this.courts = courts;
+        this.isAdmin = isAdmin;
+        // Internal channel numbers (match-<n>) for the permission checks in Scoreboard
+        this.channels = courts.map((c) => c.channel);
+        this.isAuthenticated = true;
     }
 
-    init() {
-        // Store user in localStorage (ohne Passwort – Session liegt bei Firebase Auth)
-        localStorage.setItem('currentUser', JSON.stringify({
-            username: this.username,
-            channels: this.channels,
-            displayName: this.displayName
-        }));
+    /** Court entry for an internal channel number, or null. */
+    courtForChannel(channel) {
+        return this.courts.find((c) => c.channel === Number(channel)) || null;
     }
 
     logout() {
         this.isAuthenticated = false;
         signOut(auth).then(() => {
-            localStorage.clear();
-            console.log(`${this.username} is now logged out.`);
+            console.log(`${this.email} is now logged out.`);
             location.reload();
         }).catch((err) => {
             console.error("Logout error:", err);
-            localStorage.clear();
             location.reload();
         });
     }
