@@ -1079,26 +1079,26 @@ select#Team_Indicator_Type {
 }
 
 
-/* "Show Club Logos" preview next to the team name (see ensureClubLogoIndicators()) */
-.club-logo-indicator {
-  --club-logo-size: 36px;
+/* Club logo / team logo preview next to the team name (see ensureLogoIndicators()) */
+.logo-indicator {
+  --logo-size: 36px;
   display: none;
   flex: none;
   align-items: center;
   align-self: center;
 }
 
-.club-logo-indicator.visible:not(.empty) {
+.logo-indicator.visible:not(.empty) {
   display: inline-flex;
 }
 
-.club-logo-indicator img {
+.logo-indicator img {
   flex: none;
-  width: var(--club-logo-size);
-  height: var(--club-logo-size);
+  width: var(--logo-size);
+  height: var(--logo-size);
   object-fit: contain;
 }
 
-.club-logo-indicator img + img {
-  margin-left: calc(var(--club-logo-size) * -0.4);
+.logo-indicator img + img {
+  margin-left: calc(var(--logo-size) * -0.4);
 }
