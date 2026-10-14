@@ -97,13 +97,13 @@ export class Scoreboard {
         this.timerState = null;
         this.scoreChart = null;
         this.event_history = [];
-        // Unsubscribe-Funktion des aktiven Firebase-Listeners (subscribeToChannel())
+        // Unsubscribe function of the active Firebase listener (subscribeToChannel())
         this.unsubscribeMatch = null;
-        // requestRender() bündelt mehrere Änderungen zu einem updateUI()
+        // requestRender() batches several changes into one updateUI()
         this.renderScheduled = false;
-        // Läuft nur, solange ein Timer aktiv ist (siehe syncTimerTicker())
+        // Only runs while a timer is active (see syncTimerTicker())
         this.timer_interval = null;
-        // Ausstehende Ein-/Ausblend-Timeouts der Overlays, siehe toggleOverlay()
+        // Pending show/hide timeouts of the overlays, see toggleOverlay()
         this.overlayTimeouts = new Map();
         
         // Game settings
@@ -121,9 +121,9 @@ export class Scoreboard {
 
     /* ==============================================================================
      * Initialize the scoreboard with event listeners and data synchronization
-     * Rendert nicht mehr im festen Takt, sondern nur bei Bedarf (requestRender()):
-     * bei neuen Daten aus Firebase, bei lokalen Eingaben, bei Resize und
-     * sobald Fonts geladen sind (die Flaggengrößen hängen an den Font-Metriken).
+     * Renders on demand instead of on a fixed tick (requestRender()): on new
+     * data from Firebase, on local input, on resize and once fonts have loaded
+     * (the flag sizes depend on the font metrics).
      * Input: Daten-Listener erst nach Login (startDataSync()), um Permission denied zu vermeiden
      * ============================================================================== */
     init() {
@@ -137,12 +137,12 @@ export class Scoreboard {
         }
 
         if (this.type === 'input') {
-            // Lokale Eingaben (Scores, Selects, Toggles, ...) sofort rendern -
-            // auch die, die (noch) nichts hochladen, z.B. vor dem Login.
+            // Render local input (scores, selects, toggles, ...) right away -
+            // including input that doesn't upload anything (yet), e.g. before login.
             $(document).on('input change', () => this.requestRender());
             // Input: Daten-Listener erst nach Login starten (main.js ruft startDataSync() auf)
         } else {
-            // Output: sofort live auf den Kanal hören
+            // Output: listen to the channel live right away
             this.subscribeToChannel();
         }
 
@@ -165,15 +165,17 @@ export class Scoreboard {
     }
 
     /**
-     * (Neu-)Anmelden des Firebase-Listeners auf den aktuellen Kanal. Ersetzt
-     * das frühere Polling per get() alle 500ms/2s: Firebase meldet Änderungen
-     * jetzt selbst, sobald sie passieren.
+     * (Re-)subscribe the Firebase listener to the current channel. Replaces the
+     * old polling via get() every 500ms/2s: Firebase now reports changes itself
+     * as soon as they happen.
      */
     subscribeToChannel() {
         if (this.unsubscribeMatch) this.unsubscribeMatch();
+        this.unsubscribeMatch = null;
         const channel = this.channel;
+        if (!channel) return;
         this.unsubscribeMatch = subscribeToMatch(channel, (data) => {
-            // Späte Events eines alten Kanals ignorieren
+            // Ignore late events from a previous channel
             if (channel !== this.channel) return;
             this.processDataAndUpdateFields(data);
             this.sanitizeStartingSelections();
@@ -182,12 +184,12 @@ export class Scoreboard {
     }
 
     /**
-     * Plant ein updateUI() direkt im Anschluss an den aktuellen Task. Mehrere
-     * Aufrufe davor (z.B. Firebase-Event + Input-Event im selben Moment)
-     * ergeben nur einen Render-Durchlauf. Bewusst kein requestAnimationFrame:
-     * das pausiert, sobald der Browser die Seite für unsichtbar hält
-     * (verdecktes Fenster bei OBS-Fensteraufnahme, inaktive Browserquelle),
-     * und das Scoreboard würde einfrieren.
+     * Schedules an updateUI() right after the current task. Several calls
+     * before that (e.g. a Firebase event and an input event at the same time)
+     * result in a single render pass. Deliberately not requestAnimationFrame:
+     * that pauses as soon as the browser considers the page invisible (covered
+     * window in an OBS window capture, inactive browser source), and the
+     * scoreboard would freeze.
      */
     requestRender() {
         if (this.renderScheduled) return;
@@ -971,7 +973,7 @@ export class Scoreboard {
         // Check if selected channel is allowed
         if (!this.user || !this.channel || !this.user.channels.includes(Number(this.channel))) {
             if (this.channel) {
-                showToast("❌", "You're not authenticated for this channel");
+                showToast("❌", "You don't have access to this court");
             }
             return;
         }
@@ -1032,7 +1034,7 @@ export class Scoreboard {
      * ============================================================================== */
     startTimer(type) {
         if (!this.user || !this.channel || !this.user.channels.includes(Number(this.channel))) {
-            showToast("❌", "You're not authenticated for this channel");
+            showToast("❌", "You don't have access to this court");
             return;
         }
         // Set locally right away, same reasoning as applyFlag(): the next UI
@@ -1047,7 +1049,7 @@ export class Scoreboard {
      * ============================================================================== */
     cancelTimer() {
         if (!this.user || !this.channel || !this.user.channels.includes(Number(this.channel))) {
-            showToast("❌", "You're not authenticated for this channel");
+            showToast("❌", "You don't have access to this court");
             return;
         }
         this.timerState = null;
@@ -1112,9 +1114,9 @@ export class Scoreboard {
     }
 
     /**
-     * Der Countdown muss auch ohne neue Daten weiterlaufen - dafür gibt es
-     * einen eigenen kleinen Takt, der nur updateTimerDisplay() aufruft und
-     * nur existiert, solange ein Timer läuft. Wird aus updateUI() aufgerufen.
+     * The countdown has to keep running without new data - so it gets its own
+     * small tick that only calls updateTimerDisplay() and only exists while a
+     * timer is running. Called from updateUI().
      */
     syncTimerTicker() {
         if (this.timerState && !this.timer_interval) {
@@ -2037,10 +2039,10 @@ export class Scoreboard {
     }
 
     /**
-     * Blendet ein Overlay mit Animation ein/aus. Ein noch ausstehender
-     * Timeout eines vorherigen Aufrufs wird abgebrochen - sonst konnte ein
-     * schnelles Aus/An (z.B. erster Render mit Defaults, direkt danach die
-     * echten Daten) die Klasse 'animate' nachträglich wieder entfernen.
+     * Shows/hides an overlay with its animation. A still pending timeout of a
+     * previous call is cancelled - otherwise a quick off/on (e.g. a first render
+     * with defaults, immediately followed by the real data) could remove the
+     * 'animate' class again afterwards.
      */
     toggleOverlay($container, isVisible) {
         const el = $container[0];
@@ -2070,7 +2072,12 @@ export class Scoreboard {
     updateUrlOutput() {
         const baseUrl = window.location.origin + window.location.pathname;
         const newUrl = baseUrl.replace("input.html", "index.html");
-        let urlOutput = `${newUrl}?channel=${this.channel}`;
+        // Org/court link as long as the channel belongs to a court - it stays
+        // valid even if the internal channel number changes at some point.
+        const court = this.user?.courtForChannel(this.channel);
+        let urlOutput = court
+            ? `${newUrl}?org=${encodeURIComponent(court.org)}&court=${court.court}`
+            : `${newUrl}?channel=${this.channel}`;
 
         if (this.theme) {
             urlOutput += `&theme=${this.theme}`;
@@ -2079,29 +2086,37 @@ export class Scoreboard {
         this.$urlOutput.text(urlOutput).attr('href', urlOutput);
     }
 
+    /**
+     * Court selection after login: one option per court (value = internal
+     * channel number). Admins see the courts of all orgs, grouped by org.
+     */
     updateAvailableChannels() {
         this.$channelInput.empty();
 
-        if (!this.user) return;
+        if (!this.user || this.user.courts.length === 0) return;
 
-        let channelExists = false;
-
-        $.each(this.user.channels, (i, channel) => {
-            this.$channelInput.append($('<option></option>').val(channel).html(channel));
-            if (channel === this.channel) {
-                channelExists = true;
-            }
+        const orgIds = [...new Set(this.user.courts.map((c) => c.org))];
+        orgIds.forEach((orgId) => {
+            const courts = this.user.courts.filter((c) => c.org === orgId);
+            const $target = orgIds.length > 1
+                ? $('<optgroup></optgroup>').attr('label', courts[0].orgName).appendTo(this.$channelInput)
+                : this.$channelInput;
+            courts.forEach((c) => {
+                $('<option></option>').val(c.channel).text(c.court).attr('title', `match-${c.channel}`).appendTo($target);
+            });
         });
 
-        if (channelExists) {
-            this.$channelInput.val(this.channel);
-        } else {
-            this.channel = this.user.channels[0];
-            this.$channelInput.val(this.channel);
-            setTimeout(() => {
-                showToast("ℹ️", `Due to authentification the channel got changed to "${this.user.channels[0]}".`, 2000);
-            }, 2200);
+        if (!this.user.courtForChannel(this.channel)) {
+            const requested = this.channel;
+            this.channel = this.user.courts[0].channel;
+            // Only report it if a specific channel was requested (e.g. via ?channel=)
+            if (requested) {
+                setTimeout(() => {
+                    showToast("ℹ️", `You don't have access to channel ${requested} - switched to Court ${this.user.courts[0].court}.`, 3000);
+                }, 2200);
+            }
         }
+        this.$channelInput.val(this.channel);
     }
 
     
@@ -2407,9 +2422,9 @@ export class Scoreboard {
      * Update Chart.js visualization of score progression
      * Creates line chart showing both teams' score progression over time
      * Uses team colors and provides visual feedback for score changes
-     * Das Chart wird nur einmal erzeugt; danach werden nur Daten getauscht.
-     * Die Farben sind scriptable und lesen die Team-Farben bei jedem update()
-     * frisch aus den CSS-Variablen, damit Farbwechsel trotzdem ankommen.
+     * The chart is created only once; after that only its data is swapped.
+     * The colors are scriptable and re-read the team colors from the CSS
+     * variables on every update(), so color changes still come through.
      * ============================================================================== */
     updateScoreHistoryChart() {
         const scoresTeamA = this.scoreHistoryToTeamPoints(this.getScoreHistory(), 'a');
