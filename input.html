@@ -86,42 +86,72 @@
                             <label for="Occasion">Event Name</label>
                             <input type="text" class="text" id="Occasion" value="Occasion" fb-data="tournament_name" placeholder="Event Name">
                         </div>
-                        <div class="input_group">
-                            <div class="input_container">
-                                <label for="Game_Description">Game Description</label>
-                                <div class="input-with-trailing-icon">
-                                    <input type="text" class="text" id="Game_Description" value="" placeholder="e.g. Semifinal" fb-data="phase">
-                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
-                                </div>
+                        <div class="input_container">
+                            <label for="Game_Description">Game Description</label>
+                            <div class="input-with-trailing-icon">
+                                <input type="text" class="text" id="Game_Description" value="" placeholder="e.g. Semifinal" fb-data="phase">
+                                <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
                             </div>
-                            <div class="input_group">
-                                <div class="input_container">
-                                    <label for="Max_Sets">Game Mode</label>
-                                    <input type="text" id="Max_Sets" value="3" fb-data="game_settings.set_mode" placeholder="e.g. 1 Set, BO3">
-                                </div>
-                                <div class="input_container">
-                                    <label for="win_points">Win Score</label>
-                                    <input type="number" id="win_points" value="15" min="1" max="50" fb-data="game_settings.win_points">
-                                </div>
-                                <div class="input_container">
-                                    <label for="Hardcap">Hardcap</label>
-                                    <input type="number" id="Hardcap" value="21" min="1" max="100" fb-data="game_settings.hardcap">
-                                </div>
+                        </div>
+                        <div class="input_group game_settings_row">
+                            <div class="input_container">
+                                <label for="Max_Sets">Game Mode</label>
+                                <input type="text" id="Max_Sets" value="3" fb-data="game_settings.set_mode" placeholder="e.g. 1 Set, BO3">
+                            </div>
+                            <div class="input_container">
+                                <label for="win_points">Win Score</label>
+                                <input type="number" id="win_points" value="15" min="1" max="50" fb-data="game_settings.win_points">
+                            </div>
+                            <div class="input_container">
+                                <label for="Hardcap">Hardcap</label>
+                                <input type="number" id="Hardcap" value="21" min="1" max="100" fb-data="game_settings.hardcap">
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="container data_import">
+                <div class="container playerzone">
                     <div class="heading_w_icon">
-                        <i class="material-symbols-rounded">place_item</i>
-                        <h3>Import Data (JSON)</h3>
+                        <img class="pz_logo" src="img/pz_logo.png" alt="">
+                        <h3>Connect Playerzone Game</h3>
                     </div>
                     <div class="inner">
-                        <div class="input_container">
-                            <label for="Occasion">Data from Playerzone</label>
-                            <textarea type="text" class="text" id="Data_Import" value="" placeholder="Paste data here..."></textarea>
+                        <!-- Game currently linked to this court (match-<channel>/playerzone) -->
+                        <div class="pz_linked hidden">
+                            <div class="pz_linked_details">
+                                <span class="pz_linked_teams"></span>
+                                <span class="pz_linked_id"></span>
+                            </div>
+                            <button id="pz_end_game" class="small neutral" title="Remove this game from the Playerzone live view">End game</button>
                         </div>
-                        <button id="import_data" class="primary">Import Data</button>
+                        <!-- Dropdowns are built by PlayerzoneDropdown (js/playerzone.js) -->
+                        <div class="pz_field">
+                            <label for="pz_event_trigger">Tournament</label>
+                            <div class="pz_dropdown" id="pz_event"></div>
+                        </div>
+                        <div class="pz_field">
+                            <label for="pz_phase_trigger">Phase</label>
+                            <div class="pz_dropdown" id="pz_phase"></div>
+                        </div>
+                        <div class="pz_games_section hidden">
+                            <div class="pz_games_header">
+                                <button type="button" class="pz_games_toggle pz_games_title" aria-expanded="true">
+                                    <span>Games</span>
+                                    <span class="pz_games_count"></span>
+                                </button>
+                                <div class="pz_games_actions">
+                                    <button type="button" id="pz_reload" class="small neutral" title="Reload games"><i class="material-symbols-rounded">refresh</i></button>
+                                    <button type="button" class="pz_games_toggle pz_games_chevron small neutral" aria-expanded="true" title="Show / hide games"><i class="material-symbols-rounded">expand_more</i></button>
+                                </div>
+                            </div>
+                            <div class="pz_games"></div>
+                        </div>
+                        <div class="input_container pz_manual">
+                            <label for="pz_game_id">Or manually connect with PZ Game ID</label>
+                            <div class="pz_id_row">
+                                <input type="text" id="pz_game_id" inputmode="numeric" placeholder="e.g. 323752" autocomplete="off">
+                                <button id="pz_load_id" class="primary">Load</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

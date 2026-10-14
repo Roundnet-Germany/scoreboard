@@ -1,7 +1,7 @@
 import { test, before, after, describe } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { ref, get, set, update, remove } from 'firebase/database';
+import { ref, get, set, update, remove, serverTimestamp } from 'firebase/database';
 
 // Runs against the local emulator: npm run test:rules (requires Java)
 const RULES = readFileSync(new URL('../database.rules.json', import.meta.url), 'utf8');
@@ -39,6 +39,11 @@ const SEED = {
   'match-20': { phase: '' },
   'match-23': { phase: '' },
   'match-40': { phase: '' },
+  // 500 is live on a France court, 501 on a Germany court
+  live_games: {
+    500: { channel: 6, main_game_id: 499, org: 'roundnetfrance', court: 1, since: 1 },
+    501: { channel: 1, org: 'roundnetgermany', court: 1, since: 1 },
+  },
 };
 
 let env;
@@ -57,7 +62,7 @@ const reseed = () => env.withSecurityRulesDisabled((ctx) => set(ref(ctx.database
 describe('read', () => {
   before(reseed);
   test('anyone reads matches, orgs, bridgeConfig', async () => {
-    for (const p of ['match-1', 'match-40', 'orgs', 'orgs/roundnetfrance/channels/23', 'bridgeConfig'])
+    for (const p of ['match-1', 'match-40', 'orgs', 'orgs/roundnetfrance/channels/23', 'bridgeConfig', 'live_games', 'live_games/500'])
       await assertSucceeds(get(ref(db(null), p)));
   });
   test('nobody reads root, old users or accounts anonymously', async () => {
@@ -148,5 +153,79 @@ describe('write config nodes', () => {
     await assertSucceeds(set(ref(db('admin'), 'bridgeConfig/fwango/eventName'), 'x'));
     await assertFails(set(ref(db('admin'), 'orgs/roundnetfrance/channels/1'), 13));
     await assertFails(set(ref(db('admin'), `accounts/${UID.france}/role`), 'admin'));
+  });
+});
+
+describe('write live_games (Playerzone live view)', () => {
+  before(reseed);
+  const entry = (channel, extra = {}) => ({ channel, org: 'roundnetfrance', court: 1, since: serverTimestamp(), ...extra });
+
+  test('anonymous and accounts without org cannot write', async () => {
+    await assertFails(set(ref(db(null), 'live_games/600'), entry(6)));
+    await assertFails(remove(ref(db(null), 'live_games/500')));
+    for (const who of ['orphan', 'stranger']) {
+      await assertFails(set(ref(db(who), 'live_games/600'), entry(6)));
+      await assertFails(remove(ref(db(who), 'live_games/500')));
+    }
+  });
+  test('operator sets and removes entries on its own channels', async () => {
+    await assertSucceeds(set(ref(db('france'), 'live_games/600'), entry(6, { main_game_id: 599 })));
+    await assertSucceeds(set(ref(db('france'), 'live_games/600'), entry(23)));
+    await assertSucceeds(remove(ref(db('france'), 'live_games/600')));
+    await assertSucceeds(set(ref(db('germany2'), 'live_games/601'), entry(20, { org: 'roundnetgermany' })));
+  });
+  test('operator cannot write entries for foreign channels', async () => {
+    await assertFails(set(ref(db('france'), 'live_games/602'), entry(1)));
+    await assertFails(set(ref(db('france'), 'live_games/602'), entry(40)));
+    await assertFails(remove(ref(db('france'), 'live_games/501')));
+    await assertFails(set(ref(db('france'), 'live_games/501/court'), 2));
+  });
+  test("operator cannot bend a foreign entry onto its channel, or its own onto a foreign one", async () => {
+    await assertFails(set(ref(db('france'), 'live_games/501'), entry(6)));
+    await assertFails(set(ref(db('france'), 'live_games/501/channel'), 6));
+    await assertFails(set(ref(db('germany2'), 'live_games/500'), entry(1)));
+    await assertFails(set(ref(db('france'), 'live_games/500/channel'), 1));
+  });
+  test('validation: numeric id, numeric channel, since required, no unknown keys', async () => {
+    await assertFails(set(ref(db('france'), 'live_games/abc'), entry(6)));
+    await assertFails(set(ref(db('france'), 'live_games/603'), entry('6')));
+    await assertFails(set(ref(db('france'), 'live_games/603'), { channel: 6, court: 1 }));
+    await assertFails(set(ref(db('france'), 'live_games/603'), entry(6, { court: 'one' })));
+    await assertFails(set(ref(db('france'), 'live_games/603'), entry(6, { hacked: true })));
+    await assertFails(set(ref(db('admin'), 'live_games/abc'), entry(6)));
+  });
+  test('admin writes and removes any entry', async () => {
+    await assertSucceeds(set(ref(db('admin'), 'live_games/501'), entry(6)));
+    await assertSucceeds(set(ref(db('admin'), 'live_games/604'), entry(40)));
+    await assertSucceeds(remove(ref(db('admin'), 'live_games/604')));
+  });
+});
+
+describe('Playerzone link: app-style updates', () => {
+  before(reseed);
+  test('loading a game: match playerzone + new entry + old entry removed in one update', async () => {
+    await assertSucceeds(update(ref(db('france')), {
+      '/match-6/playerzone': { game_id: 700, main_game_id: null, event_id: 12 },
+      '/match-6/updated_at': serverTimestamp(),
+      '/live_games/700': { channel: 6, main_game_id: null, org: 'roundnetfrance', court: 1, since: serverTimestamp() },
+      '/live_games/500': null,
+    }));
+    const d = db(null);
+    const [link, gone] = await Promise.all([get(ref(d, 'match-6/playerzone/game_id')), get(ref(d, 'live_games/500'))]);
+    if (link.val() !== 700 || gone.exists()) throw new Error('unexpected live_games state');
+  });
+  test('the whole update fails if it touches a foreign entry', async () => {
+    await assertFails(update(ref(db('france')), {
+      '/match-6/playerzone': { game_id: 701, main_game_id: null, event_id: 12 },
+      '/live_games/701': { channel: 6, since: serverTimestamp() },
+      '/live_games/501': null,
+    }));
+  });
+  test('score writes with updated_at, and ending a game', async () => {
+    await assertSucceeds(update(ref(db('france')), {
+      '/match-6/score/set_1/team_a_score': 4, '/match-6/active_set': 1, '/match-6/updated_at': serverTimestamp() }));
+    await assertSucceeds(update(ref(db('france')), { '/match-6/playerzone': null, '/live_games/700': null }));
+    await assertFails(update(ref(db('france')), { '/match-1/playerzone': null }));
+    await assertFails(set(ref(db('france'), 'match-1/updated_at'), serverTimestamp()));
   });
 });

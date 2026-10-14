@@ -1,5 +1,5 @@
 // import firebase config
-import { get, ref, update, remove, onValue, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-database.js";
+import { get, ref, update, onValue, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-database.js";
 import { db, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase_config.js?v=3";
 
 import { User } from "./User.js?v=3";
@@ -193,17 +193,27 @@ async function loadAccount(firebaseUser) {
     });
 }
 
+/** Multi-path update at the root. Resolves to true if it was saved. */
 export async function writeData(newData) {
     try {
         await update(ref(db), newData);
         console.log("Data updated successfully.");
+        return true;
     } catch (error) {
         console.error("Error updating user data:", error);
         if (error?.code === 'PERMISSION_DENIED') {
             showToast("❌", "Not saved - this account has no write access to this court.");
         }
+        return false;
     }
 }
+
+/** One-off read of a path, null if it doesn't exist. */
+export async function readData(path) {
+    return (await get(ref(db, path))).val();
+}
+
+export { serverTimestamp };
 
 // Shared timeout/medical/break timer, synced through match-<channel>/timer -
 // same node the LED scoreboard firmware and its manager server read/write
@@ -217,14 +227,15 @@ export async function writeData(newData) {
 // device's local clock started it.
 export async function writeTimerState(channel, type) {
     try {
-        if (type) {
-            await update(ref(db), {
-                [`/match-${channel}/timer/type`]: type,
-                [`/match-${channel}/timer/started_at`]: serverTimestamp(),
-            });
-        } else {
-            await remove(ref(db, `match-${channel}/timer`));
-        }
+        // updated_at: the Playerzone hides a live game whose court hasn't changed for a while
+        await update(ref(db), type ? {
+            [`/match-${channel}/timer/type`]: type,
+            [`/match-${channel}/timer/started_at`]: serverTimestamp(),
+            [`/match-${channel}/updated_at`]: serverTimestamp(),
+        } : {
+            [`/match-${channel}/timer`]: null,
+            [`/match-${channel}/updated_at`]: serverTimestamp(),
+        });
         console.log("Timer state updated:", type || "(cleared)");
     } catch (error) {
         console.error("Error updating timer state:", error);
@@ -293,6 +304,7 @@ async function handleAuthentication(scoreboard) {
             scoreboard.user = user;
             scoreboard.updateAvailableChannels();
             scoreboard.startDataSync();
+            scoreboard.playerzonePicker?.start();
             $('#auth').hide();
             $userString.text(user.displayName);
             $('header #user_email').text(user.email);

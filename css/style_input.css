@@ -554,32 +554,441 @@ select.small {
   flex-wrap: wrap-reverse;
 }
 
-#Max_Sets {
-  max-width: 82px; 
+/* Game details and the PZ connection share the row equally - same basis and
+   growth for both, so they wrap below 2 x 320px like before */
+.game_details,
+.playerzone {
+  flex: 1 1 320px;
 }
 
-.game_details {
-  flex-basis: 340px;
+.game_details .game_settings_row {
+  gap: 8px;
 }
 
-.data_import {
+.game_details .game_settings_row .input_container {
+  flex: 1 1 0;
+}
+
+/* Keep the fields at the top when the Playerzone container next to it grows */
+.game_details > .inner > * {
+  flex-grow: 0;
+}
+
+.playerzone .pz_logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+}
+
+.playerzone {
   background-color: var(--light-2);
-  flex-basis: 196px;
-  /* max-width: 230px; */
 }
 
-.data_import .input_container {
-  flex-grow: 1;
-}
-
-.data_import .input_container textarea {
-  flex-grow: 1;
+.playerzone input:not([type='color']) {
   background-color: var(--white);
 }
 
-.data_import:has(textarea:placeholder-shown ) button#import_data {
+.playerzone .pz_id_row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.playerzone .pz_id_row input {
+  flex-grow: 1;
+}
+
+/* Same height as the input next to it */
+.playerzone .pz_id_row button {
+  height: auto;
+}
+
+.playerzone .pz_field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Dropdown with search (PlayerzoneDropdown in js/playerzone.js) */
+.pz_dropdown {
+  position: relative;
+  min-width: 0;
+}
+
+.pz_dropdown_trigger {
+  width: 100%;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px 8px 8px 12px;
+  border-radius: 4px;
+  background-color: var(--white);
+  font-size: 1.075rem;
+  font-weight: 400;
+  text-align: left;
+}
+
+.pz_dropdown_trigger:hover {
   opacity: 1;
-  /* cursor: default; */
+}
+
+.pz_dropdown_trigger:active {
+  transform: none;
+}
+
+.pz_dropdown_trigger:focus-visible,
+.pz_dropdown.open .pz_dropdown_trigger {
+  outline: none;
+  box-shadow: inset 0px 0px 0px 2px var(--primary);
+}
+
+.pz_dropdown_trigger:disabled {
+  cursor: default;
+  opacity: .6;
+}
+
+.pz_dropdown_value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pz_dropdown_value.placeholder {
+  color: var(--text-secondary);
+}
+
+.pz_dropdown_trigger i {
+  font-size: 1.25rem;
+  transition: transform .2s ease;
+}
+
+.pz_dropdown.open .pz_dropdown_trigger i {
+  transform: rotate(180deg);
+}
+
+.pz_dropdown_panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 6px;
+  background-color: var(--white);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .25);
+}
+
+.pz_dropdown.open .pz_dropdown_panel {
+  display: flex;
+}
+
+.playerzone input.pz_dropdown_search {
+  width: 100%;
+  font-size: 1rem;
+  padding: 6px 10px 7px 10px;
+  background-color: #00000011;
+}
+
+.pz_dropdown_list {
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  overflow-y: auto;
+  outline: none;
+}
+
+.pz_dropdown_group {
+  padding: 6px 8px 2px 8px;
+  font-size: .8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.pz_dropdown_option {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 8px 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pz_dropdown_option.grouped {
+  padding-left: 16px;
+}
+
+.pz_dropdown_option.active {
+  background-color: var(--light-2);
+}
+
+.pz_dropdown_option.selected {
+  font-weight: 600;
+}
+
+.pz_dropdown_sublabel {
+  flex-shrink: 0;
+  font-size: .85rem;
+  color: var(--text-secondary);
+}
+
+.pz_dropdown_list .pz_hint {
+  padding: 6px 8px;
+}
+
+/* Collapsible game list */
+.playerzone .pz_games_section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.playerzone .pz_games_header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.playerzone .pz_games_title {
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 4px 3px 0;
+  background-color: transparent;
+  font-weight: 600;
+}
+
+.playerzone .pz_games_title:active {
+  transform: none;
+}
+
+.playerzone .pz_games_actions {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+}
+
+.playerzone .pz_games_chevron i {
+  transition: transform .2s ease;
+}
+
+/* Down while collapsed, up while open - like the dropdowns */
+.playerzone .pz_games_section:not(.collapsed) .pz_games_chevron i {
+  transform: rotate(180deg);
+}
+
+.playerzone .pz_games_count {
+  font-size: .85rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.playerzone .pz_games_section.collapsed .pz_games {
+  display: none;
+}
+
+.playerzone .pz_games_actions button {
+  padding: 2px 6px;
+}
+
+.playerzone .pz_games_actions button i {
+  font-size: 1.15rem;
+}
+
+/* Manual game id, set apart from the picker */
+.playerzone .pz_manual {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid #0000001a;
+  overflow: visible;
+}
+
+/* Spinner while a game is loading (game rows and the Load button) */
+@keyframes pz-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.playerzone .pz_spinner,
+.playerzone #pz_load_id.loading::after {
+  content: "";
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: pz-spin .7s linear infinite;
+}
+
+.playerzone .pz_spinner {
+  display: none;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.playerzone .pz_game.loading .pz_spinner {
+  display: block;
+}
+
+.playerzone .pz_game.loading i {
+  display: none;
+}
+
+.playerzone .pz_game.loading,
+.playerzone #pz_load_id.loading {
+  pointer-events: none;
+}
+
+.playerzone #pz_load_id {
+  position: relative;
+}
+
+.playerzone #pz_load_id.loading {
+  color: transparent;
+}
+
+.playerzone #pz_load_id.loading::after {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  border-color: var(--text-primary);
+  border-top-color: transparent;
+}
+
+/* Liga games: chevron to open their subgames */
+.playerzone .pz_liga_chevron {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-size: 1.25rem;
+  transition: transform .2s ease;
+}
+
+.playerzone .pz_liga[open] .pz_liga_chevron {
+  transform: rotate(180deg);
+}
+
+.playerzone .pz_linked {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background-color: var(--light-3);
+}
+
+.playerzone .pz_linked.hidden {
+  display: none;
+}
+
+.playerzone .pz_linked_details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.playerzone .pz_linked_teams {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerzone .pz_linked_id,
+.playerzone .pz_game_meta,
+.playerzone .pz_hint {
+  font-size: .85rem;
+  color: var(--text-secondary);
+}
+
+.playerzone .pz_games {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.playerzone .pz_games:empty {
+  display: none;
+}
+
+.playerzone .pz_games.loading {
+  opacity: .5;
+}
+
+.playerzone .pz_game,
+.playerzone .pz_liga > summary {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 6px;
+  width: 100%;
+  padding: 4px 8px 5px 8px;
+  border-radius: 4px;
+  background-color: var(--white);
+  text-align: left;
+  white-space: normal;
+  font-size: .95rem;
+}
+
+.playerzone .pz_game .pz_game_meta,
+.playerzone .pz_liga > summary .pz_game_meta {
+  grid-column: 1;
+}
+
+.playerzone .pz_game .pz_game_teams,
+.playerzone .pz_liga > summary .pz_game_teams {
+  grid-column: 1;
+}
+
+.playerzone .pz_game i {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-size: 1.1rem;
+}
+
+.playerzone .pz_game:active {
+  transform: none;
+}
+
+.playerzone .pz_game.done,
+.playerzone .pz_liga.done > summary {
+  opacity: .5;
+}
+
+.playerzone .pz_game.linked {
+  box-shadow: inset 0px 0px 0px 2px var(--primary);
+}
+
+.playerzone .pz_liga > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.playerzone .pz_liga > summary::-webkit-details-marker {
+  display: none;
+}
+
+.playerzone .pz_liga[open] > summary {
+  background-color: var(--light-3);
+}
+
+.playerzone .pz_liga > .pz_game,
+.playerzone .pz_liga > .pz_hint {
+  margin: 4px 0 0 12px;
+  width: calc(100% - 12px);
 }
 
 .scores .set_counter_container {

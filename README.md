@@ -40,9 +40,22 @@ Jede Org (Verband/Veranstalter) bedient ihre eigenen **Courts 1..n**. Gespeicher
 | `match-<kanal>` | Spielstand | alle | Admins + Accounts, deren Org den Kanal in `channels` hat |
 | `orgs/<org>` | `{ name, channels: { <kanal>: <court> } }` | alle | nur Console |
 | `accounts/<uid>` | `{ org, role: "operator" \| "admin", email }` | der Account selbst, Admins | nur Console |
+| `match-<kanal>/playerzone` | `{ game_id, main_game_id, event_id }` des geladenen Playerzone-Spiels | alle | wie `match-<kanal>` |
+| `match-<kanal>/updated_at` | Server-Zeitstempel des letzten Schreibens (Score, Timer) | alle | wie `match-<kanal>` |
+| `live_games/<game_id>` | `{ channel, main_game_id, org, court, since }` – Spiele, die gerade auf einem Court laufen | alle | Admins + Accounts, deren Org den Kanal hat – für den alten **und** den neuen `channel` |
 | `bridgeConfig` | Bridge-Konfiguration | alle | Admins |
 
 Output-Links: `index.html?org=<org>&court=<court>&theme=<theme>` (alt, weiterhin gültig: `?channel=<kanal>`). Login nur per E-Mail.
+
+### Playerzone-Anbindung
+Im Input-Panel unter *Playerzone* ein Turnier, eine Phase und ein Spiel auswählen – oder die Game-ID einfügen, die der Button auf der Spielkarte in der Playerzone kopiert. Das Spiel wird über `GET /api/games/<id>/scoreboard` geladen und wie ein Import übernommen (gesperrte Felder bleiben). Zusätzlich wird es für die Live-Anzeige der Playerzone verknüpft:
+
+- `match-<kanal>/playerzone` und `live_games/<game_id>` werden gesetzt, der `live_games`-Eintrag des vorherigen Spiels auf diesem Court entfernt (nur, solange er noch auf diesen Kanal zeigt).
+- Die Playerzone liest daraus `match-<kanal>/score/set_N/team_a_score|team_b_score` und `active_set` (`team_a` = PZ-Team 1) und blendet ein Spiel aus, wenn sich `updated_at` 20 Minuten nicht geändert hat.
+- *End game* entfernt `live_games/<game_id>` und `match-<kanal>/playerzone`.
+- Zwischenergebnis: `POST /api/games/<id>/scoreboard-sync` lässt die Playerzone den aktuellen Stand aus Firebase speichern – nach jedem Satzende, vor dem Laden eines anderen Spiels, vor *End game* und vor *Reset Scores* (Game-ID jeweils aus `match-<kanal>/playerzone/game_id`), beim Schließen des Tabs per `sendBeacon`. Max. 5 s, schlägt er fehl, gibt es nur einen Hinweis.
+
+Zum Testen gegen eine lokale Playerzone: `input.html?pz=http://localhost:8000` (wird im Browser gemerkt, zurück mit `?pz=default`).
 
 ### Neue Org anlegen
 1. Account in der Firebase Console unter *Authentication → Users* anlegen und die **User UID** kopieren.

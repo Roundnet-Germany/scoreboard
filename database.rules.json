@@ -21,6 +21,25 @@
       }
     },
 
+    // Playerzone games currently loaded onto a court (read by the PZ for its
+    // live view): live_games/<game_id> = { channel, main_game_id, org, court, since }.
+    // Written like the match itself - the channel being replaced (data) and the
+    // one written (newData) both have to be the account's, so nobody can take
+    // over another org's entry or point an entry at a foreign court.
+    "live_games": {
+      ".read": true,
+      "$gameId": {
+        ".write": "auth != null && (root.child('accounts/' + auth.uid + '/role').val() === 'admin' || ((!data.exists() || root.child('orgs/' + root.child('accounts/' + auth.uid + '/org').val() + '/channels/' + data.child('channel').val()).exists()) && (!newData.exists() || root.child('orgs/' + root.child('accounts/' + auth.uid + '/org').val() + '/channels/' + newData.child('channel').val()).exists())))",
+        ".validate": "$gameId.matches(/^[0-9]+$/) && newData.hasChildren(['channel', 'since'])",
+        "channel": { ".validate": "newData.isNumber()" },
+        "since": { ".validate": "newData.isNumber()" },
+        "main_game_id": { ".validate": "newData.isNumber()" },
+        "org": { ".validate": "newData.isString()" },
+        "court": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
+      }
+    },
+
     // Config for the Fwango/Playerzone bridge: publicly readable, admins write.
     "bridgeConfig": {
       ".read": true,
