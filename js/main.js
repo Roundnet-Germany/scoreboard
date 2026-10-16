@@ -1,9 +1,9 @@
 // import firebase config
-import { get, ref, update, onValue, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-database.js";
-import { db, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase_config.js?v=3";
+import { get, ref, update, onValue, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+import { db, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase_config.js?v=4";
 
-import { User } from "./User.js?v=3";
-import { Scoreboard } from "./Scoreboard.js?v=3";
+import { User } from "./User.js?v=4";
+import { Scoreboard } from "./Scoreboard.js?v=4";
 
 /**
  * Theme registry.
@@ -15,31 +15,31 @@ import { Scoreboard } from "./Scoreboard.js?v=3";
 export const themes = {
     'full': {
         'html_structure': 'full',
-        'css_path': 'css/style-v3.css?v=3'
+        'css_path': 'css/style-v3.css?v=4'
     },
     'small': {
         'html_structure': 'vertical_score',
-        'css_path': 'css/style-v5.css?v=3'
+        'css_path': 'css/style-v5.css?v=4'
     },
     'rg': {
         'html_structure': 'vertical_score',
-        'css_path': 'css/style-v1.css?v=3'
+        'css_path': 'css/style-v1.css?v=4'
     },
     'tops': {
         'html_structure': 'horizontal_score',
-        'css_path': 'css/style-v2.css?v=3'
+        'css_path': 'css/style-v2.css?v=4'
     },
     'france': {
         'html_structure': 'vertical_score',
-        'css_path': 'css/style-v4-france.css?v=3'
+        'css_path': 'css/style-v4-france.css?v=4'
     },
     'eura': {
         'html_structure': 'vertical_score',
-        'css_path': 'css/style-v5-eura.css?v=3'
+        'css_path': 'css/style-v5-eura.css?v=4'
     },
     'irf': {
         'html_structure': 'vertical_score',
-        'css_path': 'css/style-irf.css?v=3',
+        'css_path': 'css/style-irf.css?v=4',
         // The overlay headers run light in this theme, so the mark with its
         // original black lettering is the one that reads there.
         // img/irf_logo_white.png is the same mark with that lettering
@@ -59,8 +59,8 @@ export const themes = {
 /** Fallback for themes without their own `brand_logo` (matches index.html). */
 export const DEFAULT_BRAND_LOGO = 'img/rg_logo_white.png';
 
-// Debug: auf true setzen für Console-Logs (Auth/Daten-Flow); wird auch für Scoreboard exponiert
-const AUTH_DEBUG = true;
+// Debug: set to true for console logs of the auth/data flow; also exposed to Scoreboard
+const AUTH_DEBUG = false;
 if (typeof window !== 'undefined') window.AUTH_DEBUG = AUTH_DEBUG;
 
 // Initialize variables for global usage
@@ -208,6 +208,97 @@ export async function writeData(newData) {
     }
 }
 
+/** Events kept per match: everything before the last reset is dropped, and at most this many after it. */
+const EVENT_HISTORY_MAX = 1000;
+
+/** event_history as an array - Firebase hands back an object instead once indices have gaps. */
+export function normalizeEventHistory(value) {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (value && typeof value === 'object') {
+        return Object.keys(value).sort((a, b) => Number(a) - Number(b)).map((key) => value[key]).filter(Boolean);
+    }
+    return [];
+}
+
+/**
+ * Changes match-<channel>/event_history atomically: `mutate` gets the current
+ * list (from the server, re-run if another device wrote in between) and
+ * changes it in place. Two operators on the same court therefore never
+ * overwrite each other's events, unlike writing the whole list. Resolves to
+ * true if it was saved.
+ */
+export async function changeEventHistory(channel, mutate) {
+    try {
+        await runTransaction(ref(db, `match-${channel}/event_history`), (current) => {
+            const list = normalizeEventHistory(current);
+            mutate(list);
+            let lastReset = -1;
+            list.forEach((event, index) => { if (event.type === 'reset') lastReset = index; });
+            const kept = list.slice(Math.max(lastReset, 0));
+            return kept.slice(-EVENT_HISTORY_MAX);
+        });
+        return true;
+    } catch (error) {
+        console.error("Error updating the event history:", error);
+        return false;
+    }
+}
+
+/**
+ * Calls onChange('connecting' | 'online' | 'offline') whenever the connection
+ * to Firebase changes. Writes made while offline are kept and sent once it's
+ * back - but only as long as the tab stays open.
+ */
+/** A round trip slower than this (or a ping that doesn't answer in time) counts as a poor connection. */
+const POOR_RTT_MS = 1000;
+const PING_TIMEOUT_MS = 3000;
+const PING_INTERVAL_MS = 8000;
+
+export function watchConnection(onChange) {
+    let connected = false;
+    let wasConnected = false;
+    let poor = false;
+    let last = null;
+    const report = () => {
+        const state = connected ? (poor ? 'poor' : 'online') : (wasConnected || !navigator.onLine ? 'offline' : 'connecting');
+        if (state !== last) onChange(last = state);
+    };
+
+    // Firebase's own view: socket to the database up or not
+    onValue(ref(db, '.info/connected'), (snapshot) => {
+        connected = snapshot.val() === true;
+        if (connected) wasConnected = true;
+        report();
+    });
+    // The first "not connected" right after loading only means "not yet"
+    setTimeout(() => { wasConnected = true; report(); }, 5000);
+
+    // The browser notices a lost network faster than the socket does
+    window.addEventListener('offline', () => { connected = false; wasConnected = true; report(); });
+    window.addEventListener('online', report);
+
+    // Quality: time a tiny read now and then (orgs/__ping doesn't exist and
+    // nothing listens to it, so it always goes to the server), plus the
+    // browser's own estimate where there is one (Chrome)
+    const ping = async () => {
+        if (!connected) return;
+        const started = performance.now();
+        let rtt;
+        try {
+            await withTimeout(get(ref(db, 'orgs/__ping')), PING_TIMEOUT_MS);
+            rtt = performance.now() - started;
+        } catch {
+            rtt = Infinity;
+        }
+        const slowNetwork = ['slow-2g', '2g'].includes(navigator.connection?.effectiveType);
+        poor = rtt > POOR_RTT_MS || slowNetwork;
+        report();
+    };
+    setInterval(ping, PING_INTERVAL_MS);
+    navigator.connection?.addEventListener?.('change', ping);
+    report();
+}
+
 /** One-off read of a path, null if it doesn't exist. */
 export async function readData(path) {
     return (await get(ref(db, path))).val();
@@ -282,6 +373,7 @@ async function handleAuthentication(scoreboard) {
                 $('header #user_email').text('');
                 $('header #admin_tag').hide();
                 $('#auth').show();
+                scoreboard.setInputLoading(false);
                 return;
             }
 
@@ -305,6 +397,7 @@ async function handleAuthentication(scoreboard) {
             scoreboard.updateAvailableChannels();
             scoreboard.startDataSync();
             scoreboard.playerzonePicker?.start();
+            startConnectionStatus();
             $('#auth').hide();
             $userString.text(user.displayName);
             $('header #user_email').text(user.email);
@@ -317,7 +410,31 @@ async function handleAuthentication(scoreboard) {
     });
 }
 
-/** Max. Wartezeit für Firebase Auth (danach Abbruch mit Timeout-Meldung). */
+/** Connection badge in the input panel's header: [icon, label, tooltip] per state. */
+const CONNECTION_STATES = {
+    connecting: ['wifi', 'Connecting…', 'Connecting to the database'],
+    online: ['wifi', 'Connected', 'Connected - changes are saved right away'],
+    poor: ['wifi_2_bar', 'Poor connection', 'Slow connection - changes may take a moment to be saved'],
+    offline: ['wifi_off', 'No connection', 'No connection - changes are saved once it is back, as long as this tab stays open'],
+};
+
+export function renderConnectionStatus(state) {
+    const [icon, label, title] = CONNECTION_STATES[state];
+    const $status = $('#connection_status');
+    $status.attr('data-state', state).attr('title', title).removeClass('hidden');
+    $status.find('.connection_icon').text(icon);
+    $status.find('.connection_label').text(label);
+}
+
+/** Started once after login. */
+let connectionStatusStarted = false;
+function startConnectionStatus() {
+    if (connectionStatusStarted) return;
+    connectionStatusStarted = true;
+    watchConnection(renderConnectionStatus);
+}
+
+/** Max. wait for Firebase Auth (then aborted with a timeout message). */
 const AUTH_TIMEOUT_MS = 10_000;
 
 function withTimeout(promise, ms, timeoutMessage = 'Zeitüberschreitung') {
@@ -360,17 +477,22 @@ async function login(email, password) {
     }
 }
 
+// Toasts often carry text from outside (URL parameters, Playerzone team names
+// and error messages) - always set as text, never as HTML.
+let toastTimeout = null;
 export function showToast(emoji, message, duration) {
     try {
         // Set the animation-duration of the cooldown ring to the show duration
         const showDuration = duration || 5000;
-        $banner.find('.icon').html(emoji);
+        $banner.find('.icon').text(emoji);
         $banner.find('.progress-ring_circle').css('animation-duration', `${showDuration / 1000}s`);
-        $banner.find('p').html(message);
+        $banner.find('p').text(message);
         $banner.fadeIn(100);
-        
-        // Fade out banner after the set show duration if not already closed manually
-        setTimeout(() => {
+
+        // Fade out banner after the set show duration if not already closed manually -
+        // a newer toast restarts the countdown instead of being cut short by the older one's
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
             $banner.fadeOut(100);
         }, showDuration);
     } catch (error) {
@@ -379,6 +501,12 @@ export function showToast(emoji, message, duration) {
 }
 
 // ========================================= Helper Functions ===================================== //
+
+// The only easing the scoreboard uses (chart slide in/out) - defined here
+// instead of loading all of jQuery UI for it.
+if (typeof $ !== 'undefined' && !$.easing.easeOutCubic) {
+    $.easing.easeOutCubic = (p) => 1 - Math.pow(1 - p, 3);
+}
 
 export function rgb2hex(rgb) {
     if (/^#[0-9A-F]{6}$/i.test(rgb)) return rgb;

@@ -131,6 +131,42 @@ describe('write matches', () => {
   });
 });
 
+describe('match shape', () => {
+  before(reseed);
+  const d = () => db('france');
+  test('scores: numbers 0..999 or short numeric strings, starting server/receiver free', async () => {
+    await assertSucceeds(set(ref(d(), 'match-6/score/set_2/team_a_score'), 21));
+    await assertSucceeds(set(ref(d(), 'match-6/score/set_2/team_b_score'), '7'));
+    await assertSucceeds(set(ref(d(), 'match-6/score/set_2/starting_server'), 'a'));
+    await assertFails(set(ref(d(), 'match-6/score/set_2/team_a_score'), -1));
+    await assertFails(set(ref(d(), 'match-6/score/set_2/team_a_score'), 'abc'));
+    await assertFails(set(ref(d(), 'match-6/score/set_2/team_a_score'), { x: 1 }));
+  });
+  test('active_set 1..7, updated_at a number', async () => {
+    await assertSucceeds(set(ref(d(), 'match-6/active_set'), 3));
+    await assertSucceeds(set(ref(d(), 'match-6/active_set'), '2'));
+    await assertFails(set(ref(d(), 'match-6/active_set'), 0));
+    await assertFails(set(ref(d(), 'match-6/active_set'), 'x'));
+    await assertFails(set(ref(d(), 'match-6/updated_at'), 'yesterday'));
+  });
+  test('timer and playerzone link are typed', async () => {
+    await assertSucceeds(set(ref(d(), 'match-6/timer'), { type: 'timeout', started_at: serverTimestamp() }));
+    await assertFails(set(ref(d(), 'match-6/timer'), { type: 'timeout', started_at: 'now' }));
+    await assertSucceeds(set(ref(d(), 'match-6/playerzone'), { game_id: 1, main_game_id: 2, event_id: 3 }));
+    await assertFails(set(ref(d(), 'match-6/playerzone'), { game_id: '1' }));
+    await assertFails(set(ref(d(), 'match-6/playerzone'), { game_id: 1, extra: 'x' }));
+  });
+  test('no strings over 2000 characters, at any depth', async () => {
+    const long = 'x'.repeat(2001);
+    await assertSucceeds(set(ref(d(), 'match-6/teams_info/team_a/player_1_image'), 'x'.repeat(2000)));
+    for (const p of ['match-6/phase', 'match-6/teams_info/team_a/name', 'match-6/teams_info/team_a/logos/0', 'match-6/event_history/0/type', 'match-6/score/set_1/starting_server'])
+      await assertFails(set(ref(d(), p), long));
+  });
+  test('deleting is always allowed', async () => {
+    await assertSucceeds(update(ref(d()), { '/match-6/score': null, '/match-6/timer': null, '/match-6/playerzone': null }));
+  });
+});
+
 describe('write config nodes', () => {
   before(reseed);
   test('operators cannot change mappings, orgs or roles', async () => {

@@ -4,7 +4,41 @@
     // accounts whose org lists the channel in orgs/<org>/channels may write.
     "$node": {
       ".read": "$node.matches(/^match-[0-9]+$/)",
-      ".write": "$node.matches(/^match-[0-9]+$/) && auth != null && (root.child('accounts/' + auth.uid + '/role').val() === 'admin' || root.child('orgs/' + root.child('accounts/' + auth.uid + '/org').val() + '/channels/' + $node.replace('match-', '')).exists())"
+      ".write": "$node.matches(/^match-[0-9]+$/) && auth != null && (root.child('accounts/' + auth.uid + '/role').val() === 'admin' || root.child('orgs/' + root.child('accounts/' + auth.uid + '/org').val() + '/channels/' + $node.replace('match-', '')).exists())",
+
+      // Shape of a match - deliberately loose, since LED boards and bridges
+      // write here too: types only where the Playerzone or the boards rely on
+      // them, and no string longer than 2000 characters anywhere (image URLs
+      // are the longest legit values). Deleting is always allowed.
+      "active_set": { ".validate": "(newData.isNumber() && newData.val() >= 1 && newData.val() <= 7) || (newData.isString() && newData.val().matches(/^[1-7]$/))" },
+      "updated_at": { ".validate": "newData.isNumber()" },
+      "score": {
+        "$set": {
+          ".validate": "!newData.isString() || newData.val().length <= 2000",
+          "$field": { ".validate": "$field.endsWith('_score') ? ((newData.isNumber() && newData.val() >= 0 && newData.val() <= 999) || (newData.isString() && newData.val().matches(/^[0-9]{0,3}$/))) : (!newData.isString() || newData.val().length <= 2000)" }
+        }
+      },
+      "timer": {
+        "type": { ".validate": "newData.isString() && newData.val().length <= 20" },
+        "started_at": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": "!newData.isString() || newData.val().length <= 2000" }
+      },
+      "playerzone": {
+        "game_id": { ".validate": "newData.isNumber()" },
+        "main_game_id": { ".validate": "newData.isNumber()" },
+        "event_id": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
+      },
+      "$k1": {
+        ".validate": "!newData.isString() || newData.val().length <= 2000",
+        "$k2": {
+          ".validate": "!newData.isString() || newData.val().length <= 2000",
+          "$k3": {
+            ".validate": "!newData.isString() || newData.val().length <= 2000",
+            "$k4": { ".validate": "!newData.isString() || newData.val().length <= 2000" }
+          }
+        }
+      }
     },
 
     // Org name and channel -> court mapping, public for ?org=&court= links.

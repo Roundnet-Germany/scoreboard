@@ -92,7 +92,7 @@ html, body {
 #auth button {
   min-height: 40px;
   margin-top: 18px;
-  color: #ffffff;
+  color: var(--text-primary, #111111);
 }
 
 #auth #submit.is-loading {

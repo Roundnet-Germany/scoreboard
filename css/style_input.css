@@ -12,6 +12,8 @@
   --ui-success-light: #04b90433;
   --ui-error: #e14c62;
   --ui-error-light: #e14c6233;
+  --ui-warning: #e07b00;
+  --ui-warning-light: #f5a62333;
 }
 
 * {
@@ -357,6 +359,42 @@ header h1 {
   color: var(--white);
 }
 
+/* Loading state (html.is-loading): until the selected court's data is in -
+   on page load, after login and on a court switch. Content is dimmed and
+   can't be used yet, so nothing is typed over data that's still coming. */
+header h1 .page_spinner {
+  display: none;
+  width: 16px;
+  height: 16px;
+  margin-left: 8px;
+  vertical-align: middle;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--white);
+  animation: page-spinner-spin 800ms linear infinite;
+}
+
+html.is-loading header h1 .page_spinner {
+  display: inline-block;
+}
+
+/* Only what's inside the boxes is greyed out - the boxes keep their background */
+html.is-loading .scoreboard > .inner > :not(header) {
+  pointer-events: none;
+}
+
+.scoreboard > .inner > :not(header) .container > * {
+  transition: opacity 150ms;
+}
+
+html.is-loading .scoreboard > .inner > :not(header) .container > * {
+  opacity: 0.5;
+}
+
+@keyframes page-spinner-spin {
+  to { transform: rotate(360deg); }
+}
+
 header .header_right {
   display: flex;
   flex-direction: row;
@@ -406,6 +444,44 @@ header .header_right .user #admin_tag {
   border-radius: 4px;
   background-color: var(--light-3);
   color: var(--text-primary);
+}
+
+/* Connection badge next to the court select (see renderConnectionStatus() in main.js) */
+.connection_status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  background-color: var(--light-3);
+}
+
+.connection_status.hidden {
+  display: none;
+}
+
+.connection_status .connection_icon {
+  font-size: 18px;
+  font-variation-settings: 'FILL' 1, 'wght' 500;
+}
+
+.connection_status[data-state="online"] {
+  color: var(--ui-success);
+  background-color: var(--ui-success-light);
+}
+
+.connection_status[data-state="poor"] {
+  color: var(--ui-warning);
+  background-color: var(--ui-warning-light);
+}
+
+.connection_status[data-state="offline"] {
+  color: var(--ui-error);
+  background-color: var(--ui-error-light);
 }
 
 .row_section {
@@ -1472,6 +1548,8 @@ select#Match_Stats_Type {
   flex-direction: column;
   gap: 12px;
   align-items: flex-start;
+  min-width: 210px;
+  flex-basis: 220px;
 }
 
 .container.player_extras .inner .input_group {

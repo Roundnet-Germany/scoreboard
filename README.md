@@ -55,7 +55,7 @@ Im Input-Panel unter *Playerzone* ein Turnier, eine Phase und ein Spiel auswähl
 - *End game* entfernt `live_games/<game_id>` und `match-<kanal>/playerzone`.
 - Zwischenergebnis: `POST /api/games/<id>/scoreboard-sync` lässt die Playerzone den aktuellen Stand aus Firebase speichern – nach jedem Satzende, vor dem Laden eines anderen Spiels, vor *End game* und vor *Reset Scores* (Game-ID jeweils aus `match-<kanal>/playerzone/game_id`), beim Schließen des Tabs per `sendBeacon`. Max. 5 s, schlägt er fehl, gibt es nur einen Hinweis.
 
-Zum Testen gegen eine lokale Playerzone: `input.html?pz=http://localhost:8000` (wird im Browser gemerkt, zurück mit `?pz=default`).
+Zum Testen gegen eine lokale Playerzone: `input.html?pz=http://localhost:8000` (wird im Browser gemerkt, zurück mit `?pz=default`). Wirkt nur, wenn das Scoreboard selbst auf `localhost` läuft – auf der Live-Seite wird `?pz=` ignoriert.
 
 ### Neue Org anlegen
 1. Account in der Firebase Console unter *Authentication → Users* anlegen und die **User UID** kopieren.
@@ -76,6 +76,13 @@ Vor jeder Regeländerung lokal gegen den Firebase-Emulator testen (braucht Java,
 ```bash
 npm install
 npm run test:rules
+```
+
+### Score-History
+`match-<kanal>/event_history` hält pro Team und Satz eine lückenlose Folge 1, 2, 3, … bis zum aktuellen Score (Logik in `js/scoreHistory.js`). Jede Score-Änderung „gleicht ab“ statt Events anzuhängen: niedriger entfernt alle Punkte darüber, höher füllt jeden fehlenden Punkt auf – idempotent, also auch bei Tippfehlern und zwei Geräten auf einem Court konsistent. Getippte Werte (z. B. „15“ über eine 10) zählen erst nach 0,7 s Tipp-Pause oder beim Verlassen des Feldes; ±1-Buttons und Pfeiltasten sofort. Die Anzeigen lesen die History zusätzlich bereinigt (nur steigende Scores, keiner über dem tatsächlichen). Tests ohne Emulator:
+
+```bash
+npm run test:unit
 ```
 
 ### Regeln deployen

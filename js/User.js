@@ -1,4 +1,4 @@
-import { auth, signOut } from "./firebase_config.js?v=3";
+import { auth, signOut } from "./firebase_config.js?v=4";
 
 export class User {
     /**

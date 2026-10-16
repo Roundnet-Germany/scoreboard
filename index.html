@@ -1,25 +1,51 @@
 <!DOCTYPE html>
-<html lang="en" type="output">
+<html lang="en" type="output" class="is-loading">
 
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scoreboards</title>
-    <link rel="stylesheet" href="css/base.css?v=3">
-    <link rel="stylesheet" href="css/style-output.css?v=3">
+    <link rel="stylesheet" href="css/base.css?v=4">
+    <link rel="stylesheet" href="css/style-output.css?v=4">
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.14.1/jquery-ui.min.js" integrity="sha512-MSOo1aY+3pXCOCdGAYoBZ6YGI0aragoQsg1mKKBHXCYPIWxamwOE7Drh+N5CPgGI5SA9IEKJiPjdfqWFWmZtRA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Everything stays hidden until the theme's stylesheet and the first match data are in
+         (Scoreboard.markLoaded()), so nothing shows unstyled, in the wrong theme or empty.
+         Meanwhile a small spinner - only after 400ms, so a fast load doesn't flash it. -->
+    <style>
+        html.is-loading body > :not(.page_loader) { visibility: hidden !important; }
+        .page_loader { display: none; }
+        html.is-loading .page_loader {
+            display: block;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 36px;
+            height: 36px;
+            margin: -18px 0 0 -18px;
+            border-radius: 50%;
+            /* Neutral grey: readable on a white page and on the transparent/dark background of a stream */
+            border: 3px solid rgba(128, 128, 128, 0.22);
+            border-top-color: rgba(128, 128, 128, 0.9);
+            animation: page-loader-in 200ms ease-out 400ms both, page-loader-spin 800ms linear infinite;
+        }
+        @keyframes page-loader-in { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes page-loader-spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) {
+            html.is-loading .page_loader { animation: page-loader-in 200ms ease-out 400ms both, page-loader-spin 2400ms linear infinite; }
+        }
+    </style>
 
-    <script type="module" src="js/firebase_config.js?v=3"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha384-vtXRMe3mGCbOeY7l30aIg8H9p3GdeSe4IFlP6G8JMa7o7lXvnz3GFKzPxzJdPfGK" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-    <link rel="stylesheet" href="css/style-v1.css?v=3">
+    <script type="module" src="js/firebase_config.js?v=4"></script>
 
 </head>
 
 <body>
+
+    <div class="page_loader" role="status" aria-label="Loading"></div>
 
     <div class="wrapper scoreboard" theme="vertical_score">
         <div class="board">
@@ -1061,7 +1087,7 @@
         <p class="timer_widget_time"></p>
     </div>
 
-    <script type="module" src="js/main.js?v=3"></script>
+    <script type="module" src="js/main.js?v=4"></script>
 
 </body>
 
