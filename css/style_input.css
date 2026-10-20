@@ -1392,7 +1392,8 @@ select.small {
 }
 
 select#Match_Stats_Type,
-select#Team_Indicator_Type {
+select#Team_Indicator_Type,
+select#Squad_Score_Mode {
   height: auto;
   padding: 0px 0px 3px 2px;
 }
@@ -1617,4 +1618,10 @@ select#Team_Indicator_Type {
 
 .logo-indicator img + img {
   margin-left: calc(var(--logo-size) * -0.4);
+}
+
+/* Squad score while it's counted automatically (see updateAutoSquadScore()) */
+.group_score .counter[readonly] {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

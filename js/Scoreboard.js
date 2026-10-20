@@ -7,6 +7,8 @@ import { resolveFlag, getCountryList } from "./flags.js?v=4";
 import { historyScore, reconcileScore, recordSquadScore, cleanScoreEvents } from "./scoreHistory.js?v=4";
 // Timer durations and the set-mode convention are shared with the live overview
 import { TIMER_DURATIONS_MS, TIMER_LABELS, setModeToFormat, serveInfo } from "./matchStatus.js?v=4";
+import { squadScoreFromResults } from "./squadGroups.js?v=4";
+import { AutoSquadScore } from "./autoSquadScore.js?v=4";
 
 /** A typed score that jumps by more than one point waits this long for the next keystroke. */
 const SCORE_TYPING_DELAY_MS = 700;
@@ -80,6 +82,8 @@ export class Scoreboard {
             "show_match_statistics": 0,
             "show_match_preview": 0,
             "match_stats_type": "match",
+            // "manual" (typed in) or "auto" (counted from the linked squad subgames, see AutoSquadScore)
+            "group_score_mode": "manual",
         };
         // Raw teams_info.team_x.name/flag as last received from Firebase -
         // kept independently of the DOM so applyFlag() can fall back to
@@ -112,6 +116,8 @@ export class Scoreboard {
         this.remoteActiveSet = null;
         // Input only: game picker of the "Playerzone" container (see playerzone.js)
         this.playerzonePicker = null;
+        // Input only: watches the subgames of the linked squad game while the squad score is automatic
+        this.autoSquad = null;
         // Live data as last applied to the page, per flattened path - an
         // update only touches the fields whose value actually changed
         // (processDataAndUpdateFields()). Cleared on a channel switch.
@@ -159,6 +165,7 @@ export class Scoreboard {
 
         if (this.type === 'input') {
             this.playerzonePicker = new PlayerzonePicker($('.container.playerzone'), (gameId) => this.loadPlayerzoneGame(gameId));
+            this.autoSquad = new AutoSquadScore((update) => this.applyAutoSquadScore(update));
             // Closing the tab: best-effort interim result for the linked game
             window.addEventListener('pagehide', () => {
                 this.flushPendingUploads();
@@ -217,6 +224,7 @@ export class Scoreboard {
             if (this.type === 'input') {
                 this.remoteActiveSet = Number(data?.active_set) || null;
                 this.updatePlayerzoneLink(data);
+                this.updateAutoSquadScore();
             }
             this.sanitizeStartingSelections();
             this.requestRender();
@@ -612,15 +620,29 @@ export class Scoreboard {
         // Team indicator: select (color / flag / club logo) + toggle. Stored as
         // the show_color / show_flag / show_club_logo / show_team_logo settings, at most
         // one of them on - so the stored settings never disagree with what's shown.
-        $('#Team_Indicator_Type, #Show_Team_Indicator').change(() => {
+        // Already on 'input': a real click renders in between 'input' and 'change'
+        // (requestRender() runs as a microtask), and that render would set the
+        // controls back from the not yet updated settings - 'change' then saw the
+        // old state and the toggle couldn't be switched. 'change' stays for
+        // browsers without 'input' on checkboxes; an unchanged state uploads nothing.
+        $('#Team_Indicator_Type, #Show_Team_Indicator').on('input change', () => {
             const mode = $('#Team_Indicator_Type').val();
             const isOn = $('#Show_Team_Indicator').prop('checked');
-            const uploadTargets = TEAM_INDICATOR_MODES.map((key) => {
-                this.settings[key] = isOn && key === mode ? 1 : 0;
-                return $(`input[fb-data="admin_settings.${key}"]`).prop('checked', this.settings[key] === 1);
+            const next = TEAM_INDICATOR_MODES.map((key) => (isOn && key === mode ? 1 : 0));
+            if (TEAM_INDICATOR_MODES.every((key, i) => Number(this.settings[key] || 0) === next[i])) return;
+            const uploadTargets = TEAM_INDICATOR_MODES.map((key, i) => {
+                this.settings[key] = next[i];
+                return $(`input[fb-data="admin_settings.${key}"]`).prop('checked', next[i] === 1);
             });
             this.updateSettings();
             this.uploadData(uploadTargets);
+        });
+
+        // Squad score mode: typed in or counted from the linked subgames
+        $('#Squad_Score_Mode').change((event) => {
+            this.settings.group_score_mode = $(event.target).val();
+            this.uploadData([$(event.target)]);
+            this.updateAutoSquadScore();
         });
 
         // Match stats type selector handler
@@ -711,6 +733,60 @@ export class Scoreboard {
         return updatedElements;
     }
 
+
+    /* ==============================================================================
+     * Automatic squad score: while admin_settings.group_score_mode is 'auto' and
+     * the court carries a Playerzone subgame, AutoSquadScore watches the other
+     * subgames of its main game, and the result is written as this court's
+     * score.squad_score - so every display shows it like a typed-in one. The
+     * subgame results are kept in match-<channel>/squad_auto as well, so a
+     * subgame still counts after "End game" (see squadGroups.js).
+     * ============================================================================== */
+    autoSquadMainGame() {
+        if (this.type !== 'input' || this.settings.group_score_mode !== 'auto' || !this.canWriteChannel()) return null;
+        return Number(this.playerzoneLink?.main_game_id) || null;
+    }
+
+    /** (Re)starts or stops the watcher and locks the squad score fields while it's automatic. */
+    updateAutoSquadScore() {
+        if (!this.autoSquad) return;
+        const mainGameId = this.autoSquadMainGame();
+        this.autoSquad.watch(mainGameId ? this.channel : null, mainGameId);
+        const auto = this.settings.group_score_mode === 'auto';
+        $('#A_Score_Team, #B_Score_Team')
+            .prop('readonly', !!mainGameId)
+            .attr('title', !auto ? null : mainGameId
+                ? 'Counted automatically from the squad game\'s subgames'
+                : 'Automatic needs a Playerzone subgame on this court - typed in until then');
+    }
+
+    /** Writes the counted squad score (and the known subgame results) if they changed. */
+    applyAutoSquadScore({ channel, mainGameId, results, own }) {
+        if (channel !== this.channel || mainGameId !== this.autoSquadMainGame()) return;
+        const names = { a: own.teams_info?.team_a?.name, b: own.teams_info?.team_b?.name };
+        const score = squadScoreFromResults(results, names);
+        const current = own.score?.squad_score || {};
+        const updates = {};
+
+        if (Number(current.team_a_score) !== score.a || Number(current.team_b_score) !== score.b) {
+            updates[`/match-${channel}/score/squad_score/team_a_score`] = score.a;
+            updates[`/match-${channel}/score/squad_score/team_b_score`] = score.b;
+            this.updateEventHistory((list) => {
+                recordSquadScore(list, { team: 'a', score: score.a });
+                recordSquadScore(list, { team: 'b', score: score.b });
+            });
+        }
+
+        // Key order differs between Firebase and here - compare a canonical form
+        const canonical = (list) => Object.entries(list || {})
+            .map(([gameId, result]) => `${gameId}:${result?.side}:${result?.winner || ''}`).sort().join('|');
+        const stored = own.squad_auto;
+        if (Number(stored?.main_game_id) !== mainGameId || canonical(stored?.results) !== canonical(results)) {
+            updates[`/match-${channel}/squad_auto`] = { main_game_id: mainGameId, results };
+        }
+
+        if (Object.keys(updates).length) writeData(updates);
+    }
 
     /** True if the signed-in account may write the selected court. */
     canWriteChannel() {
@@ -1163,6 +1239,9 @@ export class Scoreboard {
         // Special handling for match statistics type
         if (part === 'match_stats_type') {
             $('#Match_Stats_Type').val(value);
+        }
+        if (part === 'group_score_mode') {
+            $('#Squad_Score_Mode').val(value === 'auto' ? 'auto' : 'manual');
         }
     }
 

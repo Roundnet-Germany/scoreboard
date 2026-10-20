@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupSquadGames, isFlipped, normalizeTeamName, squadScore } from '../js/squadGroups.js';
+import { groupSquadGames, isFlipped, normalizeTeamName, squadScore, mergeSquadResults, squadScoreFromResults } from '../js/squadGroups.js';
 import { summarizeMatch } from '../js/matchStatus.js';
 
 // Runs without the emulator: npm run test:unit
@@ -91,5 +91,51 @@ describe('squad score', () => {
 
   test('a 1:1 in 2-set mode has no winner and counts for nobody', () => {
     assert.deepEqual(squadScore([{ view: { winner: null }, flipped: false }]), { a: 0, b: 0 });
+  });
+});
+
+describe('automatic squad score', () => {
+  const NOW = 1_800_000_000_000;
+  const summarize = (match) => summarizeMatch(match, NOW);
+  const court = (gameId, a, b, [scoreA, scoreB], extra = {}) => ({
+    playerzone: { game_id: gameId, main_game_id: 77 },
+    teams_info: { team_a: { name: a }, team_b: { name: b } },
+    game_settings: { set_mode: '1 Set', win_points: 15, hardcap: 21 },
+    score: { set_1: { team_a_score: scoreA, team_b_score: scoreB } },
+    updated_at: NOW,
+    ...extra,
+  });
+
+  test('decided subgames on the courts count, running ones not', () => {
+    const results = mergeSquadResults(77, [
+      court(1, 'Rhein', 'Isar', [15, 10]),
+      court(2, 'Rhein', 'Isar', [8, 15]),
+      court(3, 'Rhein', 'Isar', [5, 3]),
+    ], summarize);
+    assert.deepEqual(Object.keys(results).sort(), ['1', '2']);
+    assert.deepEqual(squadScoreFromResults(results, { a: 'Rhein', b: 'Isar' }), { a: 1, b: 1 });
+  });
+
+  test('results stored by a court survive "End game"', () => {
+    const ended = { squad_auto: { main_game_id: 77, results: { 1: { winner: 'Rhein', side: 'a' } } } };
+    const results = mergeSquadResults(77, [ended, court(2, 'Rhein', 'Isar', [15, 2])], summarize);
+    assert.deepEqual(squadScoreFromResults(results, { a: 'Rhein', b: 'Isar' }), { a: 2, b: 0 });
+  });
+
+  test('a court carrying the game overrides a stored result (score corrected)', () => {
+    const stored = { squad_auto: { main_game_id: 77, results: { 2: { winner: 'Rhein', side: 'a' } } } };
+    const results = mergeSquadResults(77, [stored, court(2, 'Rhein', 'Isar', [14, 12])], summarize);
+    assert.deepEqual(results, {});
+  });
+
+  test('results of another main game are ignored', () => {
+    const other = { squad_auto: { main_game_id: 5, results: { 9: { winner: 'Rhein', side: 'a' } } } };
+    assert.deepEqual(mergeSquadResults(77, [other], summarize), {});
+  });
+
+  test('names decide the side, also on a court with the teams the other way round', () => {
+    const results = { 1: { winner: 'Rhein', side: 'a' }, 2: { winner: 'Isar', side: 'a' } };
+    assert.deepEqual(squadScoreFromResults(results, { a: 'Isar', b: 'Rhein' }), { a: 1, b: 1 });
+    assert.deepEqual(squadScoreFromResults({ 1: { winner: '', side: 'b' } }, { a: 'Isar', b: 'Rhein' }), { a: 0, b: 1 });
   });
 });

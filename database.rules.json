@@ -62,6 +62,8 @@
     // over another org's entry or point an entry at a foreign court.
     "live_games": {
       ".read": true,
+      // Subgames of a squad game, for the automatic squad score (js/autoSquadScore.js)
+      ".indexOn": ["main_game_id"],
       "$gameId": {
         ".write": "auth != null && (root.child('accounts/' + auth.uid + '/role').val() === 'admin' || ((!data.exists() || root.child('orgs/' + root.child('accounts/' + auth.uid + '/org').val() + '/channels/' + data.child('channel').val()).exists()) && (!newData.exists() || root.child('orgs/' + root.child('accounts/' + auth.uid + '/org').val() + '/channels/' + newData.child('channel').val()).exists())))",
         ".validate": "$gameId.matches(/^[0-9]+$/) && newData.hasChildren(['channel', 'since'])",

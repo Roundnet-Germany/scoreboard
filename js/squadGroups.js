@@ -99,3 +99,65 @@ export function groupSquadGames(views) {
     }
     return entries;
 }
+
+// ------------------------------- Automatic squad score ------------------------------- //
+//
+// With admin_settings.group_score_mode = 'auto' the input panel counts the
+// squad score itself from the subgames of its main game. A subgame drops out
+// of live_games and match-<channel>/playerzone on "End game", so every court
+// keeps the results it has seen under match-<channel>/squad_auto =
+// { main_game_id, results: { <game_id>: { winner: <team name>, side: 'a'|'b' } } }
+// and the courts share them through each other's squad_auto.
+
+/**
+ * All known subgame results of a main game, from the courts' data.
+ * Stored results (any court's squad_auto for this main game) come first; a
+ * court that currently carries a subgame overrides them for that game - with
+ * its winner once decided, or removing it while it isn't (a corrected score).
+ * @param {number} mainGameId
+ * @param {Array<Object>} matches - match-<channel> data of the courts involved
+ * @param {Function} summarize - summarizeMatch(match) for the current time
+ * @returns {Object<string, { winner: string, side: 'a'|'b' }>}
+ */
+export function mergeSquadResults(mainGameId, matches, summarize) {
+    const results = {};
+    for (const match of matches) {
+        const stored = match?.squad_auto;
+        if (Number(stored?.main_game_id) !== mainGameId) continue;
+        for (const [gameId, result] of Object.entries(stored.results || {})) {
+            if (result?.side === 'a' || result?.side === 'b') {
+                results[gameId] = { winner: String(result.winner || ''), side: result.side };
+            }
+        }
+    }
+    for (const match of matches) {
+        const link = match?.playerzone;
+        if (Number(link?.main_game_id) !== mainGameId || !link?.game_id) continue;
+        const gameId = String(link.game_id);
+        const summary = summarize(match);
+        if (summary.matchOver && summary.winner) {
+            const winner = String(match.teams_info?.[`team_${summary.winner}`]?.name || '');
+            results[gameId] = { winner, side: summary.winner };
+        } else {
+            delete results[gameId];
+        }
+    }
+    return results;
+}
+
+/**
+ * Squad score of a court from the subgame results: a result counts for the
+ * team whose name won it, and only falls back to its side when the names
+ * don't tell (subgames carry the squads' names, see the top of this file).
+ */
+export function squadScoreFromResults(results, names) {
+    const own = { a: normalizeTeamName(names?.a), b: normalizeTeamName(names?.b) };
+    const score = { a: 0, b: 0 };
+    for (const { winner, side } of Object.values(results || {})) {
+        const name = normalizeTeamName(winner);
+        if (name && own.a !== own.b && name === own.a) score.a++;
+        else if (name && own.a !== own.b && name === own.b) score.b++;
+        else score[side]++;
+    }
+    return score;
+}

@@ -451,9 +451,16 @@
             
                         <div class="setting_entry boolean">
                             <label>Squad Score:</label>
-                            <label class="toggle-switch" for="Show_Team_Score">
-                                <input type="checkbox" id="Show_Team_Score" fb-data="admin_settings.show_group_score">
-                            </label>
+                            <div class="right">
+                                <!-- Automatic: counted from the subgames of the linked Playerzone squad game -->
+                                <select id="Squad_Score_Mode" fb-data="admin_settings.group_score_mode" title="Type the squad score in, or count it from the squad game's subgames on the other courts">
+                                    <option value="manual">Manual</option>
+                                    <option value="auto">Automatic</option>
+                                </select>
+                                <label class="toggle-switch" for="Show_Team_Score">
+                                    <input type="checkbox" id="Show_Team_Score" fb-data="admin_settings.show_group_score">
+                                </label>
+                            </div>
                         </div>
             
                         <div class="setting_entry boolean">

@@ -58,6 +58,7 @@ Jede Org (Verband/Veranstalter) bedient ihre eigenen **Courts 1..n**. Gespeicher
 | `match-<kanal>/playerzone` | `{ game_id, main_game_id, event_id }` des geladenen Playerzone-Spiels | alle | wie `match-<kanal>` |
 | `match-<kanal>/updated_at` | Server-Zeitstempel des letzten Schreibens (Score, Timer) | alle | wie `match-<kanal>` |
 | `live_games/<game_id>` | `{ channel, main_game_id, org, court, since }` – Spiele, die gerade auf einem Court laufen | alle | Admins + Accounts, deren Org den Kanal hat – für den alten **und** den neuen `channel` |
+| `match-<kanal>/squad_auto` | `{ main_game_id, results: { <game_id>: { winner, side } } }` – bekannte Teilspiel-Ergebnisse für den automatischen Squad-Score | alle | wie `match-<kanal>` |
 | `bridgeConfig` | Bridge-Konfiguration | alle | Admins |
 
 Output-Links: `index.html?org=<org>&court=<court>&theme=<theme>` (alt, weiterhin gültig: `?channel=<kanal>`). Login nur per E-Mail.
@@ -92,6 +93,14 @@ Vor jeder Regeländerung lokal gegen den Firebase-Emulator testen (braucht Java,
 npm install
 npm run test:rules
 ```
+
+### Automatischer Squad-Score
+Im Input-Panel unter *Display Options → Squad Score* zwischen *Manual* und *Automatic* wählen (`admin_settings.group_score_mode`). Automatisch zählt das Panel die entschiedenen Teilspiele des verknüpften PZ-Squad-Spiels und schreibt sie als normalen Squad-Score (`score.squad_score`) – Boards, Overlays, LED-Boards und Übersicht zeigen ihn also ohne Änderung. Logik in `js/autoSquadScore.js` und `js/squadGroups.js`:
+
+- Die anderen Teilspiele findet es über `live_games` (gleiche `main_game_id`, braucht `.indexOn` in den Regeln).
+- Ein Teilspiel zählt, sobald es laut Spielmodus entschieden ist; der Sieger wird über den Teamnamen zugeordnet (Teilspiele tragen die Squad-Namen), sonst über die Seite.
+- Weil *End game* die Verknüpfung löscht, merkt sich jeder Court die bekannten Ergebnisse unter `squad_auto`; die Courts lesen sie gegenseitig. Ein Court, der ein Teilspiel gerade trägt, überschreibt das gespeicherte Ergebnis (z. B. nach einer Korrektur).
+- Gerechnet wird nur, solange ein Panel für den Court offen ist; ohne PZ-Teilspiel auf dem Court bleibt der Score manuell. Die Felder sind gesperrt, solange automatisch gezählt wird.
 
 ### Score-History
 `match-<kanal>/event_history` hält pro Team und Satz eine lückenlose Folge 1, 2, 3, … bis zum aktuellen Score (Logik in `js/scoreHistory.js`). Jede Score-Änderung „gleicht ab“ statt Events anzuhängen: niedriger entfernt alle Punkte darüber, höher füllt jeden fehlenden Punkt auf – idempotent, also auch bei Tippfehlern und zwei Geräten auf einem Court konsistent. Getippte Werte (z. B. „15“ über eine 10) zählen erst nach 0,7 s Tipp-Pause oder beim Verlassen des Feldes; ±1-Buttons und Pfeiltasten sofort. Die Anzeigen lesen die History zusätzlich bereinigt (nur steigende Scores, keiner über dem tatsächlichen). Tests ohne Emulator:
