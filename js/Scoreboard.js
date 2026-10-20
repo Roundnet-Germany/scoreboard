@@ -630,12 +630,19 @@ export class Scoreboard {
         // Team indicator: select (color / flag / club logo) + toggle. Stored as
         // the show_color / show_flag / show_club_logo / show_team_logo settings, at most
         // one of them on - so the stored settings never disagree with what's shown.
-        $('#Team_Indicator_Type, #Show_Team_Indicator').change(() => {
+        // Already on 'input': a real click renders in between 'input' and 'change'
+        // (requestRender() runs as a microtask), and that render would set the
+        // controls back from the not yet updated settings - 'change' then saw the
+        // old state and the toggle couldn't be switched. 'change' stays for
+        // browsers without 'input' on checkboxes; an unchanged state uploads nothing.
+        $('#Team_Indicator_Type, #Show_Team_Indicator').on('input change', () => {
             const mode = $('#Team_Indicator_Type').val();
             const isOn = $('#Show_Team_Indicator').prop('checked');
-            const uploadTargets = TEAM_INDICATOR_MODES.map((key) => {
-                this.settings[key] = isOn && key === mode ? 1 : 0;
-                return $(`input[fb-data="admin_settings.${key}"]`).prop('checked', this.settings[key] === 1);
+            const next = TEAM_INDICATOR_MODES.map((key) => (isOn && key === mode ? 1 : 0));
+            if (TEAM_INDICATOR_MODES.every((key, i) => Number(this.settings[key] || 0) === next[i])) return;
+            const uploadTargets = TEAM_INDICATOR_MODES.map((key, i) => {
+                this.settings[key] = next[i];
+                return $(`input[fb-data="admin_settings.${key}"]`).prop('checked', next[i] === 1);
             });
             this.updateSettings();
             this.uploadData(uploadTargets);
