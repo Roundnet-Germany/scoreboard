@@ -1,4 +1,5 @@
-import { themes, DEFAULT_BRAND_LOGO, subscribeToMatch, getPathsAndValues, getColorBrightness, rgb2hex, writeData, writeTimerState, showToast, copyToClipboard } from "./main.js?v=3";
+import { themes, DEFAULT_BRAND_LOGO, subscribeToMatch, getPathsAndValues, getColorBrightness, rgb2hex, writeData, readData, serverTimestamp, writeTimerState, showToast, copyToClipboard, changeEventHistory, normalizeEventHistory } from "./main.js?v=4";
+import { PlayerzonePicker, fetchGame, syncToPlayerzone, sendSyncBeacon } from "./playerzone.js?v=4";
 
 // Fixed durations for the shared timeout/medical/break timer - matches
 // led_scoreboard/include/score_actions.h's BREAK/TIMEOUT/MEDICAL_*_MS
@@ -7,7 +8,8 @@ import { themes, DEFAULT_BRAND_LOGO, subscribeToMatch, getPathsAndValues, getCol
 // only ever has to say *which* timer is running, not how long it lasts.
 const TIMER_DURATIONS_MS = { timeout: 60_000, medical: 300_000, break: 180_000 };
 const TIMER_LABELS = { timeout: 'Timeout', medical: 'Medical Timeout', break: 'Break' };
-import { resolveFlag, getCountryList } from "./flags.js?v=3";
+import { resolveFlag, getCountryList } from "./flags.js?v=4";
+import { historyScore, reconcileScore, recordSquadScore, cleanScoreEvents } from "./scoreHistory.js?v=4";
 
 // Same convention as led_scoreboard/include/firebase.h's _parseSetMode() and
 // the manager server's setModeToFormat() (firebaseBridge.js): 0=BO1 (never
@@ -21,6 +23,13 @@ function setModeToFormat(raw) {
     if (text === '2' || /\b2\s*sets?\b/.test(lower)) return 1;
     return 2; // any other value (e.g. "3", "Best of 3") -> BO3
 }
+
+/** A typed score that jumps by more than one point waits this long for the next keystroke. */
+const SCORE_TYPING_DELAY_MS = 700;
+
+/** Text-like fields upload after a short pause in typing instead of on every keystroke. */
+const TEXT_UPLOAD_DELAY_MS = 300;
+const isTextField = ($elem) => $elem.is('textarea, input:not([type]), input[type="text"], input[type="url"], input[type="color"]');
 
 
 /* ==============================================================================
@@ -45,7 +54,8 @@ export class Scoreboard {
         this.$channelInput = $('#channel');
         this.$scoreChangeButtons = $('.button[team][change]');
         this.$setChangeButtons = $('.set_controls_container .button');
-        this.$scoreboardInputs = this.$html_frame.find($('input:not([type=submit]), textarea'));
+        // Only inputs bound to match data - the Playerzone picker's own fields must not upload
+        this.$scoreboardInputs = this.$html_frame.find($('input:not([type=submit])[fb-data], textarea[fb-data]'));
         this.$setCounter = $('#Set_Count');
         this.$winPoints = $('#win_points');
         this.$hardcap = $('#Hardcap');
@@ -105,6 +115,23 @@ export class Scoreboard {
         this.timer_interval = null;
         // Pending show/hide timeouts of the overlays, see toggleOverlay()
         this.overlayTimeouts = new Map();
+        // match-<channel>/playerzone = { game_id, main_game_id, event_id } of the selected court, or null
+        this.playerzoneLink = null;
+        // match-<channel>/active_set as last seen from Firebase - a write that
+        // raises it ends a set (see uploadData())
+        this.remoteActiveSet = null;
+        // Input only: game picker of the "Playerzone" container (see playerzone.js)
+        this.playerzonePicker = null;
+        // Live data as last applied to the page, per flattened path - an
+        // update only touches the fields whose value actually changed
+        // (processDataAndUpdateFields()). Cleared on a channel switch.
+        this.lastAppliedValues = new Map();
+        // [fb-data] elements by path, collected once (fieldElements())
+        this.fieldElementsByPath = null;
+        // Text fields waiting for their debounced upload: element -> timeout
+        this.pendingUploads = new Map();
+        // Flag sizes are measured from the layout - only redone when that may have changed
+        this.layoutDirty = true;
         
         // Game settings
         this.gameSettings = {
@@ -130,13 +157,23 @@ export class Scoreboard {
         this.initEventListeners();
         this.populateFlagSelects();
 
-        $(window).on('resize', () => this.requestRender());
+        const relayout = () => {
+            this.layoutDirty = true;
+            this.requestRender();
+        };
+        $(window).on('resize', relayout);
         if (document.fonts) {
-            document.fonts.ready.then(() => this.requestRender());
-            document.fonts.addEventListener('loadingdone', () => this.requestRender());
+            document.fonts.ready.then(relayout);
+            document.fonts.addEventListener('loadingdone', relayout);
         }
 
         if (this.type === 'input') {
+            this.playerzonePicker = new PlayerzonePicker($('.container.playerzone'), (gameId) => this.loadPlayerzoneGame(gameId));
+            // Closing the tab: best-effort interim result for the linked game
+            window.addEventListener('pagehide', () => {
+                this.flushPendingUploads();
+                if (this.playerzoneLink?.game_id && this.canWriteChannel()) sendSyncBeacon(this.playerzoneLink.game_id);
+            });
             // Render local input (scores, selects, toggles, ...) right away -
             // including input that doesn't upload anything (yet), e.g. before login.
             $(document).on('input change', () => this.requestRender());
@@ -144,6 +181,10 @@ export class Scoreboard {
         } else {
             // Output: listen to the channel live right away
             this.subscribeToChannel();
+            // No match to show (invalid ?org=&court= link): nothing to wait for
+            if (!this.channel) this.markLoaded('data');
+            // Whatever is missing by then, show the page anyway
+            setTimeout(() => $('html').removeClass('is-loading'), 6000);
         }
 
         // Set theme for output type
@@ -172,15 +213,48 @@ export class Scoreboard {
     subscribeToChannel() {
         if (this.unsubscribeMatch) this.unsubscribeMatch();
         this.unsubscribeMatch = null;
+        // The new channel's data has to be applied in full
+        this.lastAppliedValues.clear();
+        // Input: dimmed with a spinner until this channel's data is in
+        if (this.type === 'input' && this.channel) this.setInputLoading(true);
+        this.layoutDirty = true;
         const channel = this.channel;
         if (!channel) return;
         this.unsubscribeMatch = subscribeToMatch(channel, (data) => {
             // Ignore late events from a previous channel
             if (channel !== this.channel) return;
             this.processDataAndUpdateFields(data);
+            if (this.type === 'input') {
+                this.remoteActiveSet = Number(data?.active_set) || null;
+                this.updatePlayerzoneLink(data);
+            }
             this.sanitizeStartingSelections();
             this.requestRender();
+            // Shown once this first data is rendered
+            if (this.type === 'output') queueMicrotask(() => this.markLoaded('data'));
+            else queueMicrotask(() => this.setInputLoading(false));
         });
+    }
+
+    /**
+     * Input page: loading state (html.is-loading - spinner next to the title,
+     * content dimmed and locked, see style_input.css). Lifted after 8s at the
+     * latest, so a slow or failing connection never locks the panel for good.
+     */
+    setInputLoading(loading) {
+        clearTimeout(this.inputLoadingTimeout);
+        $('html').toggleClass('is-loading', loading);
+        if (loading) this.inputLoadingTimeout = setTimeout(() => this.setInputLoading(false), 8000);
+    }
+
+    /**
+     * Output page: reveals it (removes html.is-loading, see index.html) once
+     * both the theme's stylesheet and the first match data are in.
+     */
+    markLoaded(part) {
+        this.loaded = this.loaded || new Set();
+        this.loaded.add(part);
+        if (this.loaded.has('theme') && this.loaded.has('data')) $('html').removeClass('is-loading');
     }
 
     /**
@@ -211,7 +285,6 @@ export class Scoreboard {
         this.updateIndicators();
         this.updateSettings();
         this.updateTimerDisplay();
-        this.handleEventHistory();
         this.updateCurrentPlayersDisplay();
         this.syncTimerTicker();
         
@@ -258,8 +331,15 @@ export class Scoreboard {
         $('link[rel="stylesheet"][href*="css/style-v"], link[theme-stylesheet]').remove();
         // Once the sheet is in, layout and fonts change - re-render so the
         // JS-measured sizes (flags, timer widget position) pick that up.
+        // index.html stays hidden (html.is-loading) until the theme's sheet
+        // is in, instead of first loading a default theme and then swapping
         $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('theme-stylesheet', '').attr('href', css_path)
-            .on('load', () => this.requestRender())
+            .on('load', () => {
+                this.markLoaded('theme');
+                this.layoutDirty = true;
+                this.requestRender();
+            })
+            .on('error', () => this.markLoaded('theme'))
             .appendTo('head');
 
         // Federation logo in the overlay headers - per-theme, falling back to
@@ -302,15 +382,15 @@ export class Scoreboard {
     initEventListeners() {
         // Channel input dropdown listener
         this.$channelInput.change((event) => {
+            // Text still being typed belongs to the court it was typed on
+            this.flushPendingUploads();
             this.channel = Number($(event.target).val());
             this.subscribeToChannel();
             this.requestRender();
         });
 
-        // Data import button handler
-        $('#import_data').click(() => {
-            this.importDataFromJson();
-        });
+        // Playerzone: remove the linked game from the PZ live view
+        $('#pz_end_game').click(() => this.endPlayerzoneGame());
 
         // Starting team dropdown listener
         this.$html_frame.find('.starting_team_selector select').change((event) => {
@@ -386,50 +466,59 @@ export class Scoreboard {
         });
 
         // Score input handler
-        this.$scoreboardInputs.filter('[fb-data*="score"]').on('input', (event) => {
+        // Score fields only - not the "Show Score History" toggles, whose paths contain "score" too.
+        // +1/-1 buttons and the number field's arrows (keys or spinner) count
+        // right away; typed digits wait for the next keystroke, so typing "15"
+        // over a 10 doesn't first record a 1 (see SCORE_TYPING_DELAY_MS).
+        // Typing comes as an InputEvent with an inputType, the arrows don't.
+        const $scoreFields = this.$scoreboardInputs.filter('[fb-data^="score."][fb-data$="_score"]');
+        $scoreFields.on('input', (event) => {
             const $target = $(event.target);
-            const { team, set } = this.getScoreElemDetails($target);
-            const newScore = Number($target.val()) || 0; // Default to 0 if NaN
-            const isSquadScore = $target.attr('fb-data').includes('squad_score');
-            const eventType = isSquadScore ? 'squad_score' : 'score';
+            const elem = event.target;
+            clearTimeout(this.pendingUploads.get(elem));
+            this.pendingUploads.delete(elem);
+            // An emptied field (operator about to type a new number) isn't a score yet
+            if ($target.val().trim() === '') return;
 
-            // Get oldScore from event history for this set and team
-            let oldScore = 0;
-            for (let i = this.event_history.length - 1; i >= 0; i--) {
-                const ev = this.event_history[i];
-                if (
-                    ev.type === eventType &&
-                    ev.team === team &&
-                    (isSquadScore || ev.set == set)
-                ) {
-                    oldScore = Number(ev.score) || 0;
-                    break;
-                }
+            const typed = !!event.originalEvent?.inputType;
+            if (event.isTrigger || !typed) {
+                this.commitScore($target);
+            } else {
+                this.pendingUploads.set(elem, setTimeout(() => {
+                    this.pendingUploads.delete(elem);
+                    this.commitScore($target);
+                }, SCORE_TYPING_DELAY_MS));
             }
-
-            // Add or remove from event history
-            if (!isNaN(newScore) && !isNaN(oldScore)) {
-                // Handle score decrease (remove history events)
-                if (newScore < oldScore && !isSquadScore) {
-                    this.removeEventHistoryEvents(team, newScore, set);
-                } else { // Add new event to history
-                    const eventData = {
-                        type: eventType,
-                        team: team,
-                        score: newScore,
-                        set: isSquadScore ? 'squad' : Number(set)
-                    };
-                    this.event_history.push(eventData);
-                }
+        });
+        // Leaving the field (or Enter) counts a typed score right away - an
+        // empty field gets its last score back instead
+        $scoreFields.on('change', (event) => {
+            const $target = $(event.target);
+            const elem = event.target;
+            const pending = this.pendingUploads.has(elem);
+            clearTimeout(this.pendingUploads.get(elem));
+            this.pendingUploads.delete(elem);
+            if ($target.val().trim() === '') {
+                $target.val(this.recordedScore($target));
+                this.requestRender();
+            } else if (pending) {
+                this.commitScore($target);
             }
-
-            this.updateCurrentPlayersDisplay();
-            this.uploadData([$target]);
         });
 
         // Non-score input handler
         this.$scoreboardInputs.not('[fb-data*="score"]').on('input', (event) => {
-            this.uploadData([$(event.target)]);
+            const $target = $(event.target);
+            if (isTextField($target)) this.scheduleUpload($target);
+            else this.uploadData([$target]);
+        });
+        // Leaving a text field saves it right away
+        this.$scoreboardInputs.not('[fb-data*="score"]').on('change', (event) => {
+            const elem = event.target;
+            if (!this.pendingUploads.has(elem)) return;
+            clearTimeout(this.pendingUploads.get(elem));
+            this.pendingUploads.delete(elem);
+            this.uploadData([$(elem)]);
         });
 
         // Score change buttons handler
@@ -446,13 +535,14 @@ export class Scoreboard {
             }
         });
 
-        // Set counter input handler
+        // Set counter input handler - the counter's value is the new active set
+        // (typed, or set by the +1/-1 buttons below before they trigger this)
         this.$setCounter.on('input', () => {
+            const value = Number(this.$setCounter.val());
+            if (value >= 1 && value <= 7) this.active_set = value;
             this.updateSets();
-            this.event_history.push({
-                type: 'set',
-                set: this.active_set,
-            });
+            const set = this.active_set;
+            this.updateEventHistory((list) => list.push({ type: 'set', set }));
         });
 
         // Set change buttons handler
@@ -482,8 +572,12 @@ export class Scoreboard {
                     }
                 }
 
+                // Set the counter first: trigger('input') also runs the generic
+                // input handler, which uploads the counter's current value -
+                // a stale one there would be written back and, via the
+                // listener, reset active_set.
                 this.active_set = newSet;
-                this.$setCounter.trigger('input');
+                this.$setCounter.val(newSet).trigger('input');
                 this.updateSets();
                 this.uploadData([this.$setCounter]);
             }
@@ -556,14 +650,14 @@ export class Scoreboard {
         });
 
         // Reset scores button handler
-        this.$resetScoresButton.click(() => {
-            let $elems = $('[fb-data*="score"]:not(select)');
-            $elems.val(0);
-            this.active_set = 1;
-            this.updateSets();
-            this.event_history = [];
-            this.event_history.push({ type: 'reset' });
-            this.uploadData();
+        this.$resetScoresButton.click(async () => {
+            if (!this.canWriteChannel()) {
+                showToast("❌", "You don't have access to this court");
+                return;
+            }
+            // Keep the linked game's score in the PZ before it's gone
+            await this.syncLinkedPlayerzoneGame(this.channel);
+            this.resetScores();
         });
 
         // Shared timer buttons - see writeTimerState() in main.js for the
@@ -586,55 +680,275 @@ export class Scoreboard {
 
 
     /* ==============================================================================
-     * Import data from JSON format in the textarea
-     * Parses JSON data and applies it to the form fields
+     * Reset all scores and the event history, then upload everything
+     * ("Reset Scores & New Game", also offered when loading another PZ game)
      * ============================================================================== */
-    importDataFromJson() {
-        const jsonText = $('#Data_Import').val().trim();
-        
-        if (!jsonText) {
-            showToast("❌", "Please enter JSON data in the textarea");
+    resetScores() {
+        let $elems = $('[fb-data*="score"]:not(select)');
+        $elems.val(0);
+        this.active_set = 1;
+        this.updateSets();
+        this.updateEventHistory((list) => {
+            list.length = 0;
+            list.push({ type: 'reset' });
+        });
+        this.uploadData();
+    }
+
+
+    /* ==============================================================================
+     * Import a game data object (match-<channel> format, e.g. from the Playerzone)
+     * into the form fields - locked fields are skipped - and return the
+     * elements it touched, for uploadData()
+     * @param {Object} data - Data object to import
+     * @returns {Array} jQuery elements matching the imported paths
+     * ============================================================================== */
+    importData(data) {
+        this.processDataAndUpdateFields(data, true);
+
+        const updatedElements = [];
+        $.each(Object.keys(getPathsAndValues(data)), (_, path) => {
+            const $elem = this.fieldElements(path);
+            if ($elem.length > 0) {
+                updatedElements.push($elem);
+            }
+        });
+        return updatedElements;
+    }
+
+
+    /** True if the signed-in account may write the selected court. */
+    canWriteChannel() {
+        return !!(this.user && this.channel && this.user.channels.includes(Number(this.channel)));
+    }
+
+    /**
+     * Changes the event history: right away on this page, and atomically in
+     * Firebase (see changeEventHistory() in main.js) if this account may
+     * write the selected court.
+     */
+    updateEventHistory(mutate) {
+        mutate(this.event_history);
+        if (this.canWriteChannel()) changeEventHistory(this.channel, mutate);
+    }
+
+    /** Score of a score field as last recorded (event history, squad score: last stored value). */
+    recordedScore($field) {
+        const path = $field.attr('fb-data');
+        const { team, set } = this.getScoreElemDetails($field);
+        if (!path.includes('squad_score') && team && set) return historyScore(this.event_history, team, set);
+        return Number(this.lastAppliedValues.get(path)) || 0;
+    }
+
+    /** Records a score field's value: event history first, then the score itself. */
+    commitScore($field) {
+        if ($field.val().trim() === '') return;
+        const { team, set } = this.getScoreElemDetails($field);
+        const score = Number($field.val()) || 0;
+        if ($field.attr('fb-data').includes('squad_score')) {
+            this.updateEventHistory((list) => recordSquadScore(list, { team, score }));
+        } else {
+            this.updateEventHistory((list) => reconcileScore(list, { team, set, score }));
+        }
+        this.updateCurrentPlayersDisplay();
+        this.uploadData([$field]);
+    }
+
+    /** Uploads a text field after a short pause in typing - see TEXT_UPLOAD_DELAY_MS. */
+    scheduleUpload($elem) {
+        const elem = $elem[0];
+        clearTimeout(this.pendingUploads.get(elem));
+        this.pendingUploads.set(elem, setTimeout(() => {
+            this.pendingUploads.delete(elem);
+            this.uploadData([$elem]);
+        }, TEXT_UPLOAD_DELAY_MS));
+    }
+
+    /** Uploads every field still waiting for its debounced upload (text or typed score), now. */
+    flushPendingUploads() {
+        if (!this.pendingUploads.size) return;
+        const elems = [...this.pendingUploads.keys()];
+        this.pendingUploads.forEach((timeout) => clearTimeout(timeout));
+        this.pendingUploads.clear();
+        const isScore = (elem) => /^score\..*_score$/.test(elem.getAttribute('fb-data') || '');
+        elems.filter(isScore).forEach((elem) => this.commitScore($(elem)));
+        const others = elems.filter((elem) => !isScore(elem));
+        if (others.length) this.uploadData(others.map((elem) => $(elem)));
+    }
+
+    /** True if any set on the selected court has points. */
+    hasPoints() {
+        return this.$html_frame.find('input[fb-data^="score.set_"][fb-data$="_score"]').toArray()
+            .some((elem) => Number($(elem).val()) > 0);
+    }
+
+
+    /* ==============================================================================
+     * Load a Playerzone game onto the selected court: fetch it, import it
+     * like a manual import (locked fields stay) and link it for the PZ live
+     * view (match-<channel>/playerzone, live_games/<game_id>)
+     * @param {number} gameId - PZ game id (from the picker or pasted)
+     * @returns {Promise<boolean>} true once loaded and linked
+     * ============================================================================== */
+    async loadPlayerzoneGame(gameId) {
+        if (!this.canWriteChannel()) {
+            showToast("❌", "You don't have access to this court");
+            return false;
+        }
+        const channel = this.channel;
+
+        let data;
+        try {
+            data = await fetchGame(gameId);
+        } catch (err) {
+            showToast("❌", err.message);
+            return false;
+        }
+        const { playerzone, ...gameData } = data || {};
+        if (!playerzone?.game_id) {
+            showToast("❌", "Invalid response from Playerzone");
+            return false;
+        }
+
+        // Game currently on this court, and wherever the new game is listed as live right now
+        let oldGameId, existingEntry;
+        try {
+            [oldGameId, existingEntry] = await Promise.all([
+                readData(`match-${channel}/playerzone/game_id`),
+                readData(`live_games/${playerzone.game_id}`),
+            ]);
+        } catch (err) {
+            console.error("[Playerzone] reading the current link failed", err);
+            showToast("❌", "Couldn't read the current court data - please try again.");
+            return false;
+        }
+        // The court was switched while loading
+        if (channel !== this.channel) return false;
+
+        const isOtherGame = Number(oldGameId) !== Number(playerzone.game_id);
+        const reset = isOtherGame && this.hasPoints()
+            && confirm('There are still points on this court. Reset the scores for the new game?');
+
+        // Save the previous game's score in the PZ while the court still carries it
+        if (isOtherGame && oldGameId) {
+            await syncToPlayerzone(oldGameId);
+            if (channel !== this.channel) return false;
+        }
+
+        const updatedElements = this.importData(gameData);
+        if (reset) {
+            this.resetScores(); // uploads every field, the imported ones included
+        } else if (updatedElements.length > 0) {
+            this.uploadData(updatedElements);
+        }
+
+        const linked = await this.linkPlayerzoneGame(channel, playerzone, oldGameId, existingEntry);
+        const teams = `${gameData.teams_info?.team_a?.name || '?'} – ${gameData.teams_info?.team_b?.name || '?'}`;
+        if (linked === 'foreign') {
+            showToast("⚠️", `Loaded ${teams} - but it's already live on another organisation's court, so the Playerzone won't show it as live here.`, 8000);
+        } else if (linked) {
+            showToast("✅", `Loaded ${teams}`, 3000);
+        }
+        return !!linked;
+    }
+
+    /**
+     * One multi-path update: match-<channel>/playerzone and live_games/<game_id>
+     * for the new game, and the old game's live_games entry removed - but only
+     * if it still points at this court (it may be running on another one by now).
+     * @returns {Promise<boolean|'foreign'>} true if saved, 'foreign' if saved without
+     *          the live_games entry because another org's court holds it
+     */
+    async linkPlayerzoneGame(channel, playerzone, oldGameId, existingEntry) {
+        const gameId = Number(playerzone.game_id);
+        const mainGameId = playerzone.main_game_id ?? null;
+        const court = this.user.courtForChannel(channel);
+        const updates = {
+            [`/match-${channel}/playerzone`]: { game_id: gameId, main_game_id: mainGameId, event_id: playerzone.event_id ?? null },
+            // Otherwise the PZ would go by the previous game's last change and could hide this one right away
+            [`/match-${channel}/updated_at`]: serverTimestamp(),
+        };
+
+        // Listed as live on a court of another org: that entry isn't ours to take over
+        const foreignChannel = existingEntry && Number(existingEntry.channel) !== channel
+            && !this.user.isAdmin && !this.user.channels.includes(Number(existingEntry.channel));
+        if (!foreignChannel) {
+            updates[`/live_games/${gameId}`] = {
+                channel,
+                main_game_id: mainGameId,
+                org: court?.org ?? null,
+                court: court?.court ?? null,
+                since: serverTimestamp(),
+            };
+        }
+
+        if (oldGameId != null && Number(oldGameId) !== gameId) {
+            try {
+                const oldEntry = await readData(`live_games/${Number(oldGameId)}`);
+                if (oldEntry && Number(oldEntry.channel) === channel) updates[`/live_games/${Number(oldGameId)}`] = null;
+            } catch (err) {
+                console.warn("[Playerzone] reading the old live_games entry failed", err);
+            }
+        }
+
+        const saved = await writeData(updates);
+        return saved && foreignChannel ? 'foreign' : saved;
+    }
+
+    /* ==============================================================================
+     * "End game": remove the linked game from the PZ live view of this court
+     * ============================================================================== */
+    async endPlayerzoneGame() {
+        if (!this.canWriteChannel()) {
+            showToast("❌", "You don't have access to this court");
             return;
         }
-
-        try {
-            const data = JSON.parse(jsonText);
-            
-            // Check if data has the expected structure
-            if (!data || typeof data !== 'object') {
-                showToast("❌", "Invalid JSON format");
-                return;
+        const channel = this.channel;
+        // From Firebase rather than this tab's state - the game may have been loaded elsewhere
+        const gameId = await this.syncLinkedPlayerzoneGame(channel);
+        const updates = { [`/match-${channel}/playerzone`]: null };
+        if (gameId) {
+            try {
+                const entry = await readData(`live_games/${gameId}`);
+                if (entry && Number(entry.channel) === channel) updates[`/live_games/${gameId}`] = null;
+            } catch (err) {
+                console.warn("[Playerzone] reading the live_games entry failed", err);
             }
-
-            // Process the data and update form fields using the common function
-            this.processDataAndUpdateFields(data, true);
-
-            // Find all updated elements for database upload
-            const updatedElements = [];
-            const pathsAndValues = getPathsAndValues(data);
-
-            $.each(Object.entries(pathsAndValues), (_, [path, value]) => {
-                const $elem = $(`[fb-data="${path}"]`);
-                if ($elem.length > 0) {
-                    updatedElements.push($elem);
-                }
-            });
-
-            // Upload the imported data to database
-            if (updatedElements.length > 0) {
-                this.uploadData(updatedElements);
-                showToast("✅", `Successfully imported ${updatedElements.length} fields`);
-                
-                // Clear the textarea after successful import
-                $('#Data_Import').val('');
-            } else {
-                showToast("⚠️", "No matching fields found for the imported data");
-            }
-
-        } catch (error) {
-            console.error("JSON parsing error:", error);
-            showToast("❌", "Invalid JSON format: " + error.message);
         }
+        if (await writeData(updates)) showToast("✅", "Game ended - no longer shown as live in the Playerzone", 3000);
+    }
+
+    /**
+     * Store the score of the game linked to a court as interim result in the
+     * PZ. The game id is read from Firebase, not this tab's state, so a game
+     * loaded in another tab or on another device is saved too.
+     * @returns {Promise<number|null>} the linked game id
+     */
+    async syncLinkedPlayerzoneGame(channel) {
+        let gameId = null;
+        try {
+            gameId = Number(await readData(`match-${channel}/playerzone/game_id`)) || null;
+        } catch (err) {
+            console.warn("[Playerzone] reading the linked game failed", err);
+            gameId = Number(this.playerzoneLink?.game_id) || null;
+        }
+        if (gameId) await syncToPlayerzone(gameId);
+        return gameId;
+    }
+
+    /** Shows the PZ game linked to the selected court (from the live match data). */
+    updatePlayerzoneLink(data) {
+        const link = data?.playerzone?.game_id ? data.playerzone : null;
+        this.playerzoneLink = link;
+        const $linked = $('.playerzone .pz_linked');
+        $linked.toggleClass('hidden', !link);
+        if (link) {
+            const teamA = data.teams_info?.team_a?.name || 'Team A';
+            const teamB = data.teams_info?.team_b?.name || 'Team B';
+            $linked.find('.pz_linked_teams').text(`${teamA} – ${teamB}`).attr('title', `${teamA} – ${teamB}`);
+            $linked.find('.pz_linked_id').text(`Game ID ${link.game_id}`);
+        }
+        this.playerzonePicker?.setLinkedGame(link?.game_id);
     }
 
 
@@ -659,15 +973,24 @@ export class Scoreboard {
                 : null;
         }
 
-        const pathsAndValues = getPathsAndValues(data);
+        // event_history is taken as a whole (array, or object once it has gaps) -
+        // a court without one has none, rather than keeping the previous court's
+        const { event_history: eventHistory, ...fields } = data || {};
+        if (!isImport) this.event_history = normalizeEventHistory(eventHistory);
 
-        // Process each path and value
+        const pathsAndValues = getPathsAndValues(fields);
+
+        // Process each path and value - live data only where it changed since the last update
         $.each(Object.entries(pathsAndValues), (_, [path, value]) => {
-            const $allElements = $(`[fb-data="${path}"]`);
+            if (!isImport) {
+                const key = value !== null && typeof value === 'object' ? JSON.stringify(value) : value;
+                if (this.lastAppliedValues.has(path) && this.lastAppliedValues.get(path) === key) return;
+                this.lastAppliedValues.set(path, key);
+                if (path.startsWith('teams_info') || path.startsWith('admin_settings')) this.layoutDirty = true;
+            }
+            const $allElements = this.fieldElements(path);
 
-            if (path.includes('event_history')) {
-                this.event_history = Array.isArray(value) ? value : [];
-            } else if (path.includes('admin_settings')) {
+            if (path.includes('admin_settings')) {
                 this.insertAdminSetting(path, value);
             } else if (path.includes('teams_info') && path.includes('color')) {
                 this.insertColor($allElements.first(), path, value);
@@ -723,7 +1046,7 @@ export class Scoreboard {
                     }
                 });
             } else if (path.includes('_is_pro')) {
-                let $rgxElem = $(`[fb-data="${path.replace('_is_pro', '_rgx')}"]`)
+                let $rgxElem = this.fieldElements(path.replace('_is_pro', '_rgx'));
                 $rgxElem.toggleClass('pro', value === 1 || value === true);
                 $rgxElem.closest('.rgx').toggleClass('pro', value === 1 || value === true);
 
@@ -754,6 +1077,24 @@ export class Scoreboard {
         });        
     }
 
+
+    /**
+     * The [fb-data] elements for a data path. Collected once into a lookup
+     * table: cheaper than an attribute selector per field and update, and a
+     * key from the database never ends up inside a selector.
+     */
+    fieldElements(path) {
+        if (!this.fieldElementsByPath) {
+            const byPath = new Map();
+            $('[fb-data]').each((_, elem) => {
+                const key = elem.getAttribute('fb-data');
+                if (!byPath.has(key)) byPath.set(key, []);
+                byPath.get(key).push(elem);
+            });
+            this.fieldElementsByPath = new Map([...byPath].map(([key, elems]) => [key, $(elems)]));
+        }
+        return this.fieldElementsByPath.get(path) || $();
+    }
 
     /** ============================================================================== 
      * Set value on an element based on its type
@@ -852,7 +1193,14 @@ export class Scoreboard {
         // confirmed flags should be visible right now - this only decides
         // per-team whether there's actually a flag to show.
         if (code) {
-            $flagElems.attr('src', `https://flagcdn.com/${code.toLowerCase()}.svg`).show();
+            const src = `https://flagcdn.com/${code.toLowerCase()}.svg`;
+            $flagElems.each((_, el) => {
+                if (el.getAttribute('src') !== src) {
+                    el.setAttribute('src', src);
+                    this.layoutDirty = true;
+                }
+            });
+            $flagElems.show();
         } else {
             $flagElems.removeAttr('src').hide();
         }
@@ -985,8 +1333,11 @@ export class Scoreboard {
 
         // Prepare data for upload
         const newData = {};
-        this.handleEventHistory();
-        newData[`/match-${this.channel}/event_history`] = this.event_history;
+        const channel = this.channel;
+        const previousActiveSet = this.remoteActiveSet;
+        // event_history isn't part of this - it's changed atomically on its own (updateEventHistory())
+        // The Playerzone hides a live game whose court hasn't changed for a while
+        newData[`/match-${this.channel}/updated_at`] = serverTimestamp();
 
         // Process each element
         $.each(elemList, (_, elem) => {
@@ -1008,19 +1359,21 @@ export class Scoreboard {
                 !pathToVariable.includes('starting_server') && 
                 !pathToVariable.includes('starting_receiver') && 
                 !pathToVariable.includes('admin_settings')) {
-                try {
-                    finalValue = parseInt(value);
-                } catch (error) {
-                    console.error(value, " can't be converted to integer");
-                    return;
-                }
+                finalValue = parseInt(value, 10);
+                // An emptied field: leave the stored value alone - NaN would make Firebase reject the whole update
+                if (Number.isNaN(finalValue)) return;
             }
 
             newData[pathToVariable] = finalValue;
         });
 
-        writeData(newData);
-        // console.log(newData)
+        const saved = await writeData(newData);
+
+        // A set just ended (active_set raised): interim result for the linked PZ game
+        const activeSet = newData[`/match-${channel}/active_set`];
+        if (saved && previousActiveSet && activeSet > previousActiveSet && this.playerzoneLink?.game_id && channel === this.channel) {
+            syncToPlayerzone(this.playerzoneLink.game_id);
+        }
     }
 
     /** ==============================================================================
@@ -1129,28 +1482,6 @@ export class Scoreboard {
         }
     }
 
-    handleEventHistory() {
-        if (this.event_history.length > 200) {
-            this.event_history = this.event_history.slice(-200);
-        }
-    }
-
-    /** ==============================================================================
-     * Remove score history events when score is decreased
-     * This maintains accurate event history for undo functionality
-     * @param {string} team - Team identifier ('a' or 'b')
-     * @param {number} newScore - The new score value
-     * ============================================================================== */
-    removeEventHistoryEvents(team, newScore, set = this.active_set) {
-        const reversedHistory = this.event_history.slice().reverse();
-        $.each(reversedHistory, (index, event) => {
-            if (event.type === 'score' && event.team === team && event.score > newScore && event.set == set) {
-                this.event_history.splice(this.event_history.length - 1 - index, 1);
-                return false; // break the loop
-            }
-        });
-    }
-
     /** ==============================================================================
      * Get score history for a specific set, filtering from last reset event
      * @param {number} set - Set number to get history for (defaults to active set)
@@ -1161,13 +1492,22 @@ export class Scoreboard {
         let startIndex = this.getLastResetIndex();
 
         const slicedEventHistory = this.event_history.slice(startIndex + 1);
-        return slicedEventHistory.filter(event => 
-            event.type === 'score' && 
-            event.set == set && 
-            event.team && 
+        const events = slicedEventHistory.filter(event =>
+            event.type === 'score' &&
+            event.set == set &&
+            event.team &&
             typeof event.team === 'string' &&
             event.score !== undefined
         );
+        // Read robustly even if the stored history is off (old data, a board
+        // scoring without events): rising scores only, none above the actual one
+        // (no limit while a field is empty or missing - NaN, not 0)
+        const finalScore = (team) => {
+            const $elem = this.getScoreElem(set, team).first();
+            const raw = String($elem.is('input') ? $elem.val() : $elem.text()).trim();
+            return raw === '' ? NaN : Number(raw);
+        };
+        return cleanScoreEvents(events, { a: finalScore('a'), b: finalScore('b') });
     }
 
     /** ==============================================================================
@@ -1891,10 +2231,16 @@ export class Scoreboard {
             this.applyFlag('a');
             this.applyFlag('b');
             // Explicit pixel sizing, not CSS - see syncFlagWrapHeights()/
-            // syncOutputFlagSizes().
-            this.syncFlagWrapHeights();
-            this.syncOutputFlagSizes();
+            // syncOutputFlagSizes(). Measuring forces a layout, so only when
+            // something it depends on may have changed (resize, fonts, theme,
+            // team data, settings - see layoutDirty).
+            if (this.layoutDirty || !this.flagsWereOn) {
+                this.syncFlagWrapHeights();
+                this.syncOutputFlagSizes();
+                this.layoutDirty = false;
+            }
         }
+        this.flagsWereOn = flagsOn;
     }
 
     /** ==============================================================================
@@ -2632,7 +2978,8 @@ export class Scoreboard {
                 eventsBySet[event.set].push(event);
             });
             Object.keys(eventsBySet).forEach(setKey => {
-                const setEvents = eventsBySet[setKey];
+                // Same cleaned events as the single-set view
+                const setEvents = this.getScoreHistory(setKey);
                 setEvents.forEach((event, setIndex) => {
                     // Wir merken uns den Index innerhalb des Satzes
                     eventsToProcess.push({ event, index: setIndex, set: event.set });
