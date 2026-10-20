@@ -359,6 +359,35 @@ header h1 {
   color: var(--white);
 }
 
+header .header_left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Link to overview.html - quiet, it's a secondary destination */
+header .overview_link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 4px 6px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: #ffffffb3;
+  text-decoration: none;
+  background-color: #ffffff12;
+  transition: background-color .2s ease, color .2s ease;
+}
+
+header .overview_link:hover {
+  color: var(--white);
+  background-color: #ffffff22;
+}
+
+header .overview_link i {
+  font-size: 16px;
+}
+
 /* Loading state (html.is-loading): until the selected court's data is in -
    on page load, after login and on a court switch. Content is dimmed and
    can't be used yet, so nothing is typed over data that's still coming. */

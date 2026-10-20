@@ -25,6 +25,21 @@ Das **Live-Display** für Zuschauer und Livestream:
   - Match-Statistiken-Overlay
   - Score-Historie und Charts
 
+### `overview.html` - Live-Übersicht
+**Alle Courts aller Orgs** auf einen Blick, öffentlich und ohne Login (liest nur, was die Output-Displays auch lesen):
+
+- **Was läuft?** Entscheidet `summarizeMatch()` in `js/matchStatus.js` allein aus den Match-Daten:
+  - *Live* – `updated_at` jünger als 10 Minuten und schon Punkte (die Playerzone blendet erst nach 20 Minuten aus)
+  - *Not started* – kürzlich geändert, aber noch 0:0 (z. B. gerade ein PZ-Spiel geladen)
+  - *Just finished* – laut Spielmodus (`game_settings.set_mode`) entschieden und in den letzten 20 Minuten geändert
+  - *Inactive* – alles andere: ein laufendes Spiel nach 10, ein entschiedenes nach 20 Minuten ohne Änderung, oder nie ein `updated_at`
+- **Pro Court:** Spieltitel (`phase`) und Event, darunter Org · Court; Teams mit Farbe, Flagge, Club- oder Team-Logo und Spielern – so, wie es in den Einstellungen des Courts (`admin_settings`) eingeschaltet ist –, Aufschlag (aus Score und `starting_server`, wie die Boards), Squad-Score (nur wenn *Group Score* für den Court an ist) und alle Satzstände (aktueller Satz hervorgehoben), laufender Timeout/Medical/Break mit Countdown, „On court since“ (aus `live_games`) bzw. letzte Änderung.
+- **Squad-Spiele (Liga):** Courts, deren `match-<kanal>/playerzone.main_game_id` gleich ist (ab zwei Courts), erscheinen als ein Block (`js/squadGroups.js`): oben beide Squads mit einem **berechneten Squad-Stand** – Anzahl der entschiedenen Teilspiele je Squad (`summarizeMatch().winner`), nur lesend, nichts wird nach Firebase geschrieben –, darunter die Teilspiele mit Court, Paarungen und Satzständen. Zählt nur, was gerade auf den Courts steht: ein Teilspiel, dessen Court schon das nächste Spiel geladen hat, fehlt. Die Seiten: die Playerzone setzt in jedem Teilspiel team1 des Hauptspiels als `team_a`; wurden die Namen auf einem Court vertauscht, wird das Teilspiel über die Namen gedreht. Der Block steht in der Gruppe seines aktivsten Teilspiels; ein Suchtreffer in einem Teilspiel zeigt den ganzen Block.
+- **Gruppen:** *On court* ist immer offen, *Just finished* und *Inactive courts* lassen sich über den Chevron auf- und zuklappen (Inactive ist anfangs zu; wird pro Browser gemerkt).
+- **Links:** *Playerzone* (nur bei verknüpftem Spiel, öffnet `…/tournaments/game-info/<game_id>`), Live-Display und Input-Panel des Courts.
+- **Filter:** Suche (Team, Spieler, Court, Event), Org-Auswahl – auch als Link: `overview.html?org=<org>`.
+- Liest pro Court nur die Knoten, die eine Karte braucht – nie `event_history`.
+
 ## 🔄 Workflow
 
 1. **Admin** öffnet `input.html` und loggt sich ein

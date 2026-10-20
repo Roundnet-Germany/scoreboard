@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:unit": "node --test tests/score-history.test.mjs",
+    "test:unit": "node --test tests/score-history.test.mjs tests/match-status.test.mjs tests/squad-groups.test.mjs",
     "test:rules": "firebase emulators:exec --only database --project demo-scoreboard \"node --test tests/*.test.mjs\""
   },
   "devDependencies": {

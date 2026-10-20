@@ -1,28 +1,10 @@
 import { themes, DEFAULT_BRAND_LOGO, subscribeToMatch, getPathsAndValues, getColorBrightness, rgb2hex, writeData, readData, serverTimestamp, writeTimerState, showToast, copyToClipboard, changeEventHistory, normalizeEventHistory } from "./main.js?v=4";
 import { PlayerzonePicker, fetchGame, syncToPlayerzone, sendSyncBeacon } from "./playerzone.js?v=4";
 
-// Fixed durations for the shared timeout/medical/break timer - matches
-// led_scoreboard/include/score_actions.h's BREAK/TIMEOUT/MEDICAL_*_MS
-// exactly. Never sent over the wire; every reader (this page, the LED
-// board, the manager server) keeps its own copy so match-<channel>/timer
-// only ever has to say *which* timer is running, not how long it lasts.
-const TIMER_DURATIONS_MS = { timeout: 60_000, medical: 300_000, break: 180_000 };
-const TIMER_LABELS = { timeout: 'Timeout', medical: 'Medical Timeout', break: 'Break' };
 import { resolveFlag, getCountryList } from "./flags.js?v=4";
 import { historyScore, reconcileScore, recordSquadScore, cleanScoreEvents } from "./scoreHistory.js?v=4";
-
-// Same convention as led_scoreboard/include/firebase.h's _parseSetMode() and
-// the manager server's setModeToFormat() (firebaseBridge.js): 0=BO1 (never
-// auto-starts a break), 1=2 sets (always does), 2=BO3 (only while the match
-// isn't already decided) - see startTimer('break') callers below.
-function setModeToFormat(raw) {
-    const text = String(raw || '').trim();
-    if (!text) return 2;
-    const lower = text.toLowerCase();
-    if (text === '1' || /\b1\s*set\b/.test(lower)) return 0;
-    if (text === '2' || /\b2\s*sets?\b/.test(lower)) return 1;
-    return 2; // any other value (e.g. "3", "Best of 3") -> BO3
-}
+// Timer durations and the set-mode convention are shared with the live overview
+import { TIMER_DURATIONS_MS, TIMER_LABELS, setModeToFormat, serveInfo } from "./matchStatus.js?v=4";
 
 /** A typed score that jumps by more than one point waits this long for the next keystroke. */
 const SCORE_TYPING_DELAY_MS = 700;
@@ -2008,44 +1990,14 @@ export class Scoreboard {
      * @returns {Object|null} Object with team and serve number, or null if no serve data
      * ============================================================================== */
     getServeInfo() {
-        // Get the starting team for this set from database
-        const startingTeam = this.getStartingTeam(this.active_set);
-        if (!startingTeam) return null;
-        
-        // Count total points in this set
-        const totalPoints = this.getTotalPointsInSet(this.active_set);
-        
-        // Check if we're in overtime mode
-        const isOvertime = this.isInOvertime(this.active_set);
-        
-        if (isOvertime) {
-            // Overtime rules: serve changes after every point
-            const servingTeam = totalPoints % 2 === 0 ? startingTeam : (startingTeam === 'a' ? 'b' : 'a');
-            return {
-                team: servingTeam,
-                serveNumber: 1, // Always single serve in overtime
-                isOvertime: true
-            };
-        } else {
-            // Normal rules: first serve is single, then alternates every 2 points
-            let servingTeam, serveNumber;
-            if (totalPoints === 0) {
-                servingTeam = startingTeam;
-                serveNumber = 1;
-            } else {
-                const servesAfterFirst = totalPoints - 1;
-                const serveGroup = Math.floor(servesAfterFirst / 2);
-                const isStartingTeamServe = serveGroup % 2 === 0;
-                servingTeam = isStartingTeamServe ? (startingTeam === 'a' ? 'b' : 'a') : startingTeam;
-                serveNumber = (servesAfterFirst % 2) + 1;
-            }
-
-            return {
-                team: servingTeam,
-                serveNumber: serveNumber,
-                isOvertime: false
-            };
-        }        
+        // Shared with the live overview (matchStatus.js)
+        const set = this.active_set;
+        const info = serveInfo(this.getScore(set, 'a'), this.getScore(set, 'b'), this.getStartingServer(set), {
+            winPoints: this.gameSettings.win_points,
+            hardcap: this.gameSettings.hardcap,
+            minMargin: this.gameSettings.min_win_margin,
+        });
+        return info && { team: info.team, serveNumber: info.serveNumber, isOvertime: info.single && this.getTotalPointsInSet(set) > 0 };
     }
 
     /** ==============================================================================

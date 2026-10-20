@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en" type="overview" class="is-loading">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Matches</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha384-vtXRMe3mGCbOeY7l30aIg8H9p3GdeSe4IFlP6G8JMa7o7lXvnz3GFKzPxzJdPfGK" crossorigin="anonymous"></script>
+    <script type="module" src="js/overview.js?v=4"></script>
+    <link rel="stylesheet" href="css/style_overview.css?v=4">
+</head>
+
+<body>
+    <div class="wrapper">
+        <div class="inner">
+            <header class="page_head">
+                <div class="title">
+                    <h1>Live Matches <span class="page_spinner" role="status" aria-label="Loading"></span></h1>
+                    <span id="overview_subtitle" class="subtitle"></span>
+                </div>
+                <div class="controls">
+                    <div class="filter search">
+                        <i class="material-symbols-rounded" aria-hidden="true">search</i>
+                        <input type="search" id="search" placeholder="Team, player, court…" autocomplete="off" aria-label="Search">
+                    </div>
+                    <div class="filter select">
+                        <!-- Filled from orgs; also settable via ?org=<org> -->
+                        <select id="org_filter" aria-label="Organisation"></select>
+                    </div>
+                </div>
+            </header>
+
+            <div id="summary" class="summary" aria-live="polite"></div>
+            <p id="overview_error" class="error hidden" role="alert"></p>
+
+            <section id="section_live" class="section">
+                <h2>On court <span class="section_count"></span></h2>
+                <p class="empty_state hidden"></p>
+                <div class="card_grid"></div>
+            </section>
+
+            <section id="section_finished" class="section hidden">
+                <h2>
+                    <button type="button" class="section_toggle" aria-expanded="true" aria-controls="grid_finished">
+                        Just finished <span class="section_count"></span>
+                        <i class="material-symbols-rounded chevron" aria-hidden="true">expand_more</i>
+                    </button>
+                </h2>
+                <div class="card_grid" id="grid_finished"></div>
+            </section>
+
+            <section id="section_idle" class="section hidden">
+                <h2>
+                    <button type="button" class="section_toggle" aria-expanded="false" aria-controls="grid_idle">
+                        Inactive courts <span class="section_count"></span>
+                        <i class="material-symbols-rounded chevron" aria-hidden="true">expand_more</i>
+                    </button>
+                </h2>
+                <div class="card_grid" id="grid_idle"></div>
+            </section>
+
+            <footer class="page_foot">
+                A court counts as running while its score changes at least every 10 minutes.
+            </footer>
+        </div>
+    </div>
+</body>
+
+</html>

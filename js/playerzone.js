@@ -9,33 +9,9 @@
 // carry that game when it's called.
 
 import { showToast } from "./main.js?v=4";
+import { PZ_BASE } from "./pzBase.js?v=4";
 
-const DEFAULT_PZ_BASE = 'https://playerzone.roundnetgermany.de';
-const PZ_BASE_KEY = 'pz_base';
 const SELECTION_KEY = 'pz_selection';
-
-/**
- * PZ base URL. Overridable for testing against a local PZ: ?pz=http://localhost:8000
- * (remembered in localStorage), ?pz=default goes back to production.
- * Only while the scoreboard itself runs on localhost - on the live site a link
- * with ?pz= could otherwise point an operator's panel at any server for good.
- */
-const IS_LOCAL = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-export const PZ_BASE = (() => {
-    const param = new URLSearchParams(window.location.search).get('pz');
-    try {
-        if (!IS_LOCAL) {
-            localStorage.removeItem(PZ_BASE_KEY);
-            return DEFAULT_PZ_BASE;
-        }
-        if (param === 'default' || param === '') localStorage.removeItem(PZ_BASE_KEY);
-        else if (param && /^https?:\/\/[^\s]+$/.test(param)) localStorage.setItem(PZ_BASE_KEY, param.replace(/\/+$/, ''));
-        return localStorage.getItem(PZ_BASE_KEY) || DEFAULT_PZ_BASE;
-    } catch {
-        return DEFAULT_PZ_BASE;
-    }
-})();
-if (PZ_BASE !== DEFAULT_PZ_BASE) console.info(`[Playerzone] using ${PZ_BASE}`);
 
 /** Every PZ endpoint the scoreboard uses - all calls (and the pagehide beacon) build their URL here. */
 export const pzUrl = {
