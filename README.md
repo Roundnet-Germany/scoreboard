@@ -2,31 +2,19 @@
 
 Ein interaktives Live-Scoreboard-System für Roundnet-Spiele mit Echtzeit-Synchronisation über Firebase.
 
-## 📁 HTML-Dateien
+## 📁 Seiten & Navigation
 
-### `input.html` - Admin-Interface
-Das **Admin-Interface** für die Spielleitung und Turnierorganisatoren:
+```
+index.html  „Live Matches“ (Übersicht, Startseite)  ⇄  input.html „Input Panel“   (Links neben dem Titel)
+ ├─ Karte anklicken ────────► display.html?org=&court=&theme=spectator  (Zuschauer-Ansicht, ← zurück)
+ ├─ ✎ (Login, eigene Courts) ► input.html?org=&court=
+ └─ ⧉ (Login, eigene Courts) ► kopiert den Stream-Link display.html?org=&court=&theme=<Theme der Org>
+```
 
-- **Zweck**: Eingabe und Verwaltung aller Spielerdaten, Scores und Einstellungen
-- **Funktionen**:
-  - Live-Score-Eingabe für beide Teams
-  - Theme-Auswahl für verschiedene Nutzer und Anwendungsfälle
-  - Channel-Management für mehrere Spielfelder
-  - Match-Statistiken einblenden
+Der **Login ist seitenübergreifend** (`js/auth.js`): Firebase merkt sich die Sitzung pro Domain – wer sich in der Übersicht anmeldet, ist auch im Input-Panel angemeldet und umgekehrt (gleiche Feldnamen, Passwort-Manager füllen beide). Nach dem Login filtert die Übersicht auf die eigene Org. Ohne Login ist alles außer dem Input-Panel nutzbar.
 
-### `index.html` - Live-Display
-Das **Live-Display** für Zuschauer und Livestream:
-
-- **Zweck**: Anzeige der aktuellen Spielstände und Statistiken für das Publikum
-- **Funktionen**:
-  - Live-Score-Anzeige
-  - Spieler-Namen und Team-Farben
-  - Serve-Indikatoren
-  - Match-Statistiken-Overlay
-  - Score-Historie und Charts
-
-### `overview.html` - Live-Übersicht
-**Alle Courts aller Orgs** auf einen Blick, öffentlich und ohne Login (liest nur, was die Output-Displays auch lesen):
+### `index.html` - Übersicht (Startseite)
+**Alle Courts aller Orgs** auf einen Blick, öffentlich. Angemeldete Accounts sehen bei ihren Courts zusätzlich den Weg ins Input-Panel und zum Output. Alte Links auf den Court (`index.html?org=&court=`, `?channel=`, `?theme=`) leiten automatisch auf `display.html` weiter – Stream-, OBS- und Playerzone-Links bleiben gültig; `?org=` allein ist der Org-Filter der Übersicht.
 
 - **Was läuft?** Entscheidet `summarizeMatch()` in `js/matchStatus.js` allein aus den Match-Daten:
   - *Live* – `updated_at` jünger als 10 Minuten und schon Punkte (die Playerzone blendet erst nach 20 Minuten aus)
@@ -36,16 +24,18 @@ Das **Live-Display** für Zuschauer und Livestream:
 - **Pro Court:** Spieltitel (`phase`) und Event, darunter Org · Court; Teams mit Farbe, Flagge, Club- oder Team-Logo und Spielern – so, wie es in den Einstellungen des Courts (`admin_settings`) eingeschaltet ist –, Aufschlag (aus Score und `starting_server`, wie die Boards), Squad-Score (nur wenn *Group Score* für den Court an ist) und alle Satzstände (aktueller Satz hervorgehoben), laufender Timeout/Medical/Break mit Countdown, „On court since“ (aus `live_games`) bzw. letzte Änderung.
 - **Squad-Spiele (Liga):** Courts, deren `match-<kanal>/playerzone.main_game_id` gleich ist (ab zwei Courts), erscheinen als ein Block (`js/squadGroups.js`): oben beide Squads mit einem **berechneten Squad-Stand** – Anzahl der entschiedenen Teilspiele je Squad (`summarizeMatch().winner`), nur lesend, nichts wird nach Firebase geschrieben –, darunter die Teilspiele mit Court, Paarungen und Satzständen. Zählt nur, was gerade auf den Courts steht: ein Teilspiel, dessen Court schon das nächste Spiel geladen hat, fehlt. Die Seiten: die Playerzone setzt in jedem Teilspiel team1 des Hauptspiels als `team_a`; wurden die Namen auf einem Court vertauscht, wird das Teilspiel über die Namen gedreht. Der Block steht in der Gruppe seines aktivsten Teilspiels; ein Suchtreffer in einem Teilspiel zeigt den ganzen Block.
 - **Gruppen:** *On court* ist immer offen, *Just finished* und *Inactive courts* lassen sich über den Chevron auf- und zuklappen (Inactive ist anfangs zu; wird pro Browser gemerkt).
-- **Links:** *Playerzone* (nur bei verknüpftem Spiel, öffnet `…/tournaments/game-info/<game_id>`), Live-Display und Input-Panel des Courts.
-- **Filter:** Suche (Team, Spieler, Court, Event), Org-Auswahl – auch als Link: `overview.html?org=<org>`.
+- **Links:** Karte → Zuschauer-Ansicht; *Playerzone* (nur bei verknüpftem Spiel, öffnet `…/tournaments/game-info/<game_id>`); mit Login für die eigenen Courts Input-Panel und Output.
+- **Filter:** Suche (Team, Spieler, Court, Event), Org-Auswahl – auch als Link: `index.html?org=<org>`.
 - Liest pro Court nur die Knoten, die eine Karte braucht – nie `event_history`.
 
-## 🔄 Workflow
+### `display.html` - Live-Display
+Das **Scoreboard eines Courts** – für Livestream/OBS (Themes `rg`, `small`, `tops`, `france`, `eura`, `irf`; transparent) und für Zuschauer und Bildschirme am Court (`spectator`, auch ohne `theme` und für alte `theme=full`-Links): `display.html?org=<org>&court=<court>&theme=<theme>`. Ein neues Stream-Theme gehört auch in `streamThemes` in `display.html` (sonst lädt es mit dunklem Hintergrund).
 
-1. **Admin** öffnet `input.html` und loggt sich ein
-2. **Spieldaten** werden über das Admin-Interface eingegeben
-3. **Live-Display** (`index.html`) zeigt automatisch alle Änderungen in Echtzeit
-4. **Zuschauer** sehen das Live-Display auf Großbildschirmen oder im Livestream
+**Theme `spectator`** (`css/style-spectator.css`, `js/spectator.js`): großes Board in Teamfarben (Oswald) mit Flagge bzw. Club-/Team-Logos und Aufschlag-Punkten wie in den Stream-Themes, darüber ein Header: zurück zur Übersicht, Spiel, Event · Org · Court · Modus und rechts *Statistics* (Match / aktueller Satz; Score-Verlauf und Match-Preview sind vorerst raus). Die öffnet jede:r Zuschauer:in für sich – die Overlay-Einstellungen des Courts für den Stream (`admin_settings.show_…`) gelten dort nicht. Größen über Container-Queries: Teams nebeneinander im Querformat, untereinander im Hochformat, vom Handy bis zum TV.
+
+### `input.html` - Input-Panel
+Bedienung eines Courts (Login nötig): Scores, Spieldaten, Playerzone-Anbindung, Anzeige-Einstellungen, Output-URL für den Stream.
+
 ## 🔐 Orgs, Courts & Rechte
 
 Jede Org (Verband/Veranstalter) bedient ihre eigenen **Courts 1..n**. Gespeichert wird weiterhin unter `match-<kanal>`, damit LED-Boards und Bridges unverändert bleiben – welcher Court welcher Kanal ist, steht in `orgs`.
@@ -53,7 +43,7 @@ Jede Org (Verband/Veranstalter) bedient ihre eigenen **Courts 1..n**. Gespeicher
 | Knoten | Inhalt | Lesen | Schreiben |
 |---|---|---|---|
 | `match-<kanal>` | Spielstand | alle | Admins + Accounts, deren Org den Kanal in `channels` hat |
-| `orgs/<org>` | `{ name, channels: { <kanal>: <court> } }` | alle | nur Console |
+| `orgs/<org>` | `{ name, channels: { <kanal>: <court> }, theme? }` – `theme` = Stream-Theme der Org für kopierte Stream-Links (Standard `rg`) | alle | nur Console |
 | `accounts/<uid>` | `{ org, role: "operator" \| "admin", email }` | der Account selbst, Admins | nur Console |
 | `match-<kanal>/playerzone` | `{ game_id, main_game_id, event_id }` des geladenen Playerzone-Spiels | alle | wie `match-<kanal>` |
 | `match-<kanal>/updated_at` | Server-Zeitstempel des letzten Schreibens (Score, Timer) | alle | wie `match-<kanal>` |
@@ -61,7 +51,7 @@ Jede Org (Verband/Veranstalter) bedient ihre eigenen **Courts 1..n**. Gespeicher
 | `match-<kanal>/squad_auto` | `{ main_game_id, results: { <game_id>: { winner, side } } }` – bekannte Teilspiel-Ergebnisse für den automatischen Squad-Score | alle | wie `match-<kanal>` |
 | `bridgeConfig` | Bridge-Konfiguration | alle | Admins |
 
-Output-Links: `index.html?org=<org>&court=<court>&theme=<theme>` (alt, weiterhin gültig: `?channel=<kanal>`). Login nur per E-Mail.
+Output-Links: `display.html?org=<org>&court=<court>&theme=<theme>` (alt, weiterhin gültig: `?channel=<kanal>`). Login nur per E-Mail.
 
 ### Playerzone-Anbindung
 Im Input-Panel unter *Playerzone* ein Turnier, eine Phase und ein Spiel auswählen – oder die Game-ID einfügen, die der Button auf der Spielkarte in der Playerzone kopiert. Das Spiel wird über `GET /api/games/<id>/scoreboard` geladen und wie ein Import übernommen (gesperrte Felder bleiben). Zusätzlich wird es für die Live-Anzeige der Playerzone verknüpft:

@@ -356,7 +356,11 @@ header {
 }
 
 header h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--white);
+  line-height: 1.1;
 }
 
 header .header_left {
@@ -365,12 +369,12 @@ header .header_left {
   gap: 12px;
 }
 
-/* Link to overview.html - quiet, it's a secondary destination */
-header .overview_link {
+/* Link to the other page (Input panel | Live matches) - same look as on the overview */
+header .tab_link {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px 4px 6px;
+  padding: 3px 9px 4px 7px;
   border-radius: 4px;
   font-size: 0.9rem;
   color: #ffffffb3;
@@ -379,13 +383,27 @@ header .overview_link {
   transition: background-color .2s ease, color .2s ease;
 }
 
-header .overview_link:hover {
+header .tab_link:hover {
   color: var(--white);
   background-color: #ffffff22;
 }
 
-header .overview_link i {
+header .tab_link i {
   font-size: 16px;
+}
+
+/* Logout inside the account element - same as on the overview (style_overview.css) */
+header .account_logout {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 5px;
+  background-color: #00000011;
+  color: var(--text-primary);
+}
+
+header .account_logout i {
+  font-size: 18px;
 }
 
 /* Loading state (html.is-loading): until the selected court's data is in -
@@ -395,8 +413,6 @@ header h1 .page_spinner {
   display: none;
   width: 16px;
   height: 16px;
-  margin-left: 8px;
-  vertical-align: middle;
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.25);
   border-top-color: var(--white);
@@ -1624,4 +1640,12 @@ select#Squad_Score_Mode {
 .group_score .counter[readonly] {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Login box: way out for anyone who only wants to watch */
+#auth .auth_back {
+  margin-top: 16px;
+  font-size: 0.9rem;
+  text-align: center;
+  color: #00000099;
 }

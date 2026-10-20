@@ -517,7 +517,9 @@
 
   /* RGX chips */
   --ov-chip-bg: rgba(255, 255, 255, 0.95);
-  --ov-chip-text: var(--text-primary);
+  /* Always dark: the chip is near-white, and --text-primary is white in the
+     dark themes (tops, spectator) - the RGX number was unreadable there */
+  --ov-chip-text: #111111;
   --ov-chip-pro-bg: #000000;
   --ov-chip-pro-text: #ffffff;
 
@@ -1625,7 +1627,7 @@
   color: var(--ov-accent);
 }
 
-/* Shared timeout/medical/break countdown (index.html) - see
+/* Shared timeout/medical/break countdown (display.html) - see
    Scoreboard.js's updateTimerDisplay(). `top`/`left` are set inline by JS
    every tick (getBoundingClientRect() on whichever .board is currently
    visible), so the card sits at the same vertical level as the scoreboard
@@ -1709,4 +1711,8 @@
   font-weight: 600;
   line-height: 1;
   color: var(--timer-time-color);
+}
+/* Spectator view chrome (display.html) - only shown by css/style-spectator.css */
+.spectator_only {
+  display: none !important;
 }

@@ -1,8 +1,7 @@
 // import firebase config
 import { get, ref, update, onValue, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
-import { db, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase_config.js?v=4";
-
-import { User } from "./User.js?v=4";
+import { db, auth, signOut } from "./firebase_config.js?v=4";
+import { resolveCourt, watchAccount, login, withTimeout } from "./auth.js?v=4";
 import { Scoreboard } from "./Scoreboard.js?v=4";
 
 /**
@@ -10,12 +9,20 @@ import { Scoreboard } from "./Scoreboard.js?v=4";
  *
  * `brand_logo` is optional and overrides the federation logo in the top-right
  * of the overlay headers (see setTheme() in Scoreboard.js); themes that omit
- * it keep the Roundnet Germany badge that is hardcoded in index.html.
+ * it keep the Roundnet Germany badge that is hardcoded in display.html.
  */
+// A new stream theme also goes into display.html's streamThemes (keeps the
+// page transparent while loading instead of the spectator board's dark).
 export const themes = {
-    'full': {
+    // The big board for spectators, opened from the overview, and the display
+    // without a stream theme (e.g. a screen at the court): one header back to
+    // the overview, plus the stream overlays (score history, statistics,
+    // preview) to open per viewer - see js/spectator.js. Replaces the old
+    // "full" theme; ?theme=full links show this one (see Scoreboard.setTheme()).
+    'spectator': {
         'html_structure': 'full',
-        'css_path': 'css/style-v3.css?v=4'
+        'css_path': 'css/style-spectator.css?v=4',
+        'spectator': true
     },
     'small': {
         'html_structure': 'vertical_score',
@@ -56,7 +63,7 @@ export const themes = {
     },
 }
 
-/** Fallback for themes without their own `brand_logo` (matches index.html). */
+/** Fallback for themes without their own `brand_logo` (matches display.html). */
 export const DEFAULT_BRAND_LOGO = 'img/rg_logo_white.png';
 
 // Debug: set to true for console logs of the auth/data flow; also exposed to Scoreboard
@@ -102,6 +109,13 @@ $(document).ready(async function () {
     // Create scoreboard immediately
     scoreboard = new Scoreboard(type, $('.scoreboard'), channelSelection, themeSelection);
 
+    // Spectator view: bar, overlay buttons and the shared login (for the input panel link)
+    if (type === 'output' && themes[scoreboard.theme]?.spectator) {
+        import("./spectator.js?v=4").then(({ initSpectator }) => initSpectator(scoreboard, {
+            org: urlOrg, court: urlCourt, channel: channelSelection,
+        }));
+    }
+
     // Wait for authentication and set user for input type
     if (type === 'input') {
         await handleAuthentication(scoreboard);
@@ -128,68 +142,6 @@ export function subscribeToMatch(channel, onData) {
         onData(snapshot.val());
     }, (err) => {
         console.warn("[Data] subscribeToMatch error, channel:", channel, err?.code || err?.message, err);
-    });
-}
-
-// ========================================= Orgs & Courts ===================================== //
-//
-// Every org (federation/organiser) operates its own courts 1..n. Data is still
-// stored under match-<channel>, so LED boards and bridges don't need to know
-// about any of this - the mapping lives in orgs/<org>/channels/<channel> = <court>.
-// Structure and read access: see database.rules.json.
-
-/**
- * Courts of an org as [{ org, orgName, court, channel }], sorted by court.
- * Firebase sometimes returns objects with numeric keys as a sparse array
- * (index = channel) - Object.entries plus the null filter covers both.
- */
-function courtsOfOrg(orgId, org) {
-    return Object.entries(org?.channels || {})
-        .filter(([, court]) => court != null)
-        .map(([channel, court]) => ({ org: orgId, orgName: org.name || orgId, court: Number(court), channel: Number(channel) }))
-        .sort((a, b) => a.court - b.court);
-}
-
-/** Internal channel number for a court of an org, or null. */
-async function resolveCourt(orgId, court) {
-    if (!/^[\w-]+$/.test(orgId) || !/^\d+$/.test(court)) return null;
-    try {
-        const snap = await get(ref(db, `orgs/${orgId}`));
-        const match = courtsOfOrg(orgId, snap.val()).find((c) => c.court === Number(court));
-        return match ? match.channel : null;
-    } catch (err) {
-        console.warn("[Data] resolveCourt error", orgId, court, err?.code || err?.message);
-        return null;
-    }
-}
-
-/**
- * Loads org, role and courts of the signed-in Firebase user. Admins get the
- * courts of all orgs (their own first). Returns null if the account has no
- * entry, or neither an org nor the admin role.
- */
-async function loadAccount(firebaseUser) {
-    const [accountSnap, orgsSnap] = await Promise.all([
-        get(ref(db, `accounts/${firebaseUser.uid}`)),
-        get(ref(db, 'orgs')),
-    ]);
-    const orgId = accountSnap.val()?.org || null;
-    const isAdmin = accountSnap.val()?.role === 'admin';
-    const orgs = orgsSnap.val() || {};
-    if (!orgId && !isAdmin) return null;
-
-    let courts = courtsOfOrg(orgId, orgs[orgId]);
-    if (isAdmin) {
-        const otherOrgs = Object.keys(orgs).filter((id) => id !== orgId).sort();
-        courts = courts.concat(otherOrgs.flatMap((id) => courtsOfOrg(id, orgs[id])));
-    }
-
-    return new User({
-        email: firebaseUser.email,
-        orgId,
-        orgName: orgs[orgId]?.name || (isAdmin ? 'Admin' : orgId),
-        courts,
-        isAdmin,
     });
 }
 
@@ -343,17 +295,20 @@ async function handleAuthentication(scoreboard) {
     let signedInViaForm = false;
 
     // The form only signs in - loading the account and switching the UI happens
-    // in onAuthStateChanged, whether the session is new or from an earlier visit.
+    // in watchAccount(), whether the session is new or from an earlier visit
+    // (also one started on the overview - the session is shared, see auth.js).
     $('form#login').on('submit', async function (e) {
         e.preventDefault();
         const $submitBtn = $('#auth #submit');
         const originalText = $submitBtn.text();
         $submitBtn.prop('disabled', true).addClass('is-loading').text('Signing in…');
-        // Set beforehand: onAuthStateChanged often fires before login() returns
+        // Set beforehand: watchAccount() often fires before login() returns
         signedInViaForm = true;
         try {
-            if (!await login($('#auth #email').val().trim(), $('#auth #password').val())) {
+            const error = await login($('#auth #email').val().trim(), $('#auth #password').val());
+            if (error) {
                 signedInViaForm = false;
+                showToast("❌", error);
             }
         } finally {
             $submitBtn.prop('disabled', false).removeClass('is-loading').text(originalText);
@@ -361,10 +316,10 @@ async function handleAuthentication(scoreboard) {
     });
 
     return new Promise((resolve) => {
-        onAuthStateChanged(auth, async (firebaseUser) => {
-            if (AUTH_DEBUG) console.log("[Auth] onAuthStateChanged", firebaseUser ? "user=" + firebaseUser.email : "user=null");
+        watchAccount((user, reason) => {
+            if (AUTH_DEBUG) console.log("[Auth] watchAccount", user ? "user=" + user.email : reason);
 
-            if (!firebaseUser) {
+            if (reason === 'signed-out') {
                 // Also covers an expired/revoked session without reload: drop the previous user's courts
                 loggedInUser = null;
                 scoreboard.user = null;
@@ -377,17 +332,11 @@ async function handleAuthentication(scoreboard) {
                 return;
             }
 
-            let user = null;
-            try {
-                user = await loadAccount(firebaseUser);
-            } catch (err) {
-                console.error("[Auth] loadAccount error", err?.code || err?.message, err);
-            }
-
             if (!user || user.courts.length === 0) {
                 showToast("⚠️", user
                     ? "No courts are assigned to this account yet."
-                    : "This account isn't linked to an organisation yet.");
+                    : reason === 'error' ? "Couldn't load this account - please try again."
+                        : "This account isn't linked to an organisation yet.");
                 signOut(auth);
                 return;
             }
@@ -402,7 +351,6 @@ async function handleAuthentication(scoreboard) {
             $userString.text(user.displayName);
             $('header #user_email').text(user.email);
             $('header #admin_tag').toggle(user.isAdmin);
-            $logoutButton.text('Logout');
             if (signedInViaForm) showToast("✅", `Signed in as ${user.displayName}`, 2000);
             if (AUTH_DEBUG) console.log("[Auth] eingeloggt:", user.orgId, user.isAdmin ? "(admin)" : "", user.channels);
             resolve(user);
@@ -432,49 +380,6 @@ function startConnectionStatus() {
     if (connectionStatusStarted) return;
     connectionStatusStarted = true;
     watchConnection(renderConnectionStatus);
-}
-
-/** Max. wait for Firebase Auth (then aborted with a timeout message). */
-const AUTH_TIMEOUT_MS = 10_000;
-
-function withTimeout(promise, ms, timeoutMessage = 'Zeitüberschreitung') {
-    return Promise.race([
-        promise,
-        new Promise((_, reject) =>
-            setTimeout(() => reject(Object.assign(new Error(timeoutMessage), { code: 'auth/timeout' })), ms)
-        )
-    ]);
-}
-
-/**
- * Sign in via Firebase Auth (email + password). Returns true if signing in
- * worked - onAuthStateChanged takes care of the rest.
- */
-async function login(email, password) {
-    if (!email.includes('@')) {
-        showToast("❌", "Please sign in with your email address.");
-        return false;
-    }
-
-    if (AUTH_DEBUG) console.log("[Auth] login: signInWithEmailAndPassword start, email=" + email);
-    try {
-        await withTimeout(
-            signInWithEmailAndPassword(auth, email, password),
-            AUTH_TIMEOUT_MS,
-            'Sign-in is taking too long.'
-        );
-        return true;
-    } catch (err) {
-        if (AUTH_DEBUG) console.warn("[Auth] login: signInWithEmailAndPassword error", err?.code, err?.message);
-        if (err.code === 'auth/timeout') {
-            showToast("⏱️", "Sign-in is taking too long. Please try again.");
-        } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-            showToast("❌", "Wrong email or password. Please try again.");
-        } else {
-            showToast("❌", err.message || "Sign-in failed.");
-        }
-        return false;
-    }
 }
 
 // Toasts often carry text from outside (URL parameters, Playerzone team names

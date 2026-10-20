@@ -1,5 +1,5 @@
 // What a court is doing right now, derived from its match-<channel> data alone -
-// shared by the live overview (overview.html) and the input panel. No DOM,
+// shared by the live overview (index.html) and the input panel. No DOM,
 // no Firebase, so it runs under `node --test` as well.
 
 /**

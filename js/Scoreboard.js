@@ -10,6 +10,9 @@ import { TIMER_DURATIONS_MS, TIMER_LABELS, setModeToFormat, serveInfo } from "./
 import { squadScoreFromResults } from "./squadGroups.js?v=4";
 import { AutoSquadScore } from "./autoSquadScore.js?v=4";
 
+/** Settings a spectator picks for themselves (setViewerSettings()) instead of taking the court's. */
+const VIEWER_SETTINGS = ['show_score_history', 'show_score_history_chart', 'show_match_statistics', 'show_match_preview', 'match_stats_type'];
+
 /** A typed score that jumps by more than one point waits this long for the next keystroke. */
 const SCORE_TYPING_DELAY_MS = 700;
 
@@ -246,7 +249,7 @@ export class Scoreboard {
     }
 
     /**
-     * Output page: reveals it (removes html.is-loading, see index.html) once
+     * Output page: reveals it (removes html.is-loading, see display.html) once
      * both the theme's stylesheet and the first match data are in.
      */
     markLoaded(part) {
@@ -300,14 +303,18 @@ export class Scoreboard {
      * Apply theme styling and HTML structure based on theme configuration
      * ============================================================================== */
     setTheme(theme) {
-        // Simplified fallback logic
+        // Displays without a (known) theme show the spectator board - also old
+        // ?theme=full links, the theme it replaced
         if (!(theme in themes)) {
-            theme = this.type === 'output' ? 'full' : 'rg';
+            theme = this.type === 'output' ? 'spectator' : 'rg';
             this.theme = theme;
         }
 
         const html_structure = themes[theme].html_structure;
         const css_path = themes[theme].css_path;
+        // Spectator view: overlays opened by the viewer, not the court's settings (see setViewerSettings())
+        this.isSpectator = this.type === 'output' && !!themes[theme].spectator;
+        $('html').attr('data-theme', theme);
         const extensionIndex = css_path.lastIndexOf('.');
         const css_path_input = css_path.slice(0, extensionIndex) + "_input" + css_path.slice(extensionIndex);
 
@@ -322,14 +329,14 @@ export class Scoreboard {
         // the page unstyled (raw HTML, in normal flow, no opacity:0/
         // position:fixed on .overlay) while the new links load.
         // The 'css/style-v' half of the selector is what clears the theme link
-        // that index.html ships in its own <head>; [theme-stylesheet] catches
+        // that display.html ships in its own <head>; [theme-stylesheet] catches
         // the ones this method appended on an earlier call, whatever they're
         // named (style-irf.css doesn't match the 'style-v' pattern, and
         // without this a theme switch would leave the old sheet behind).
         $('link[rel="stylesheet"][href*="css/style-v"], link[theme-stylesheet]').remove();
         // Once the sheet is in, layout and fonts change - re-render so the
         // JS-measured sizes (flags, timer widget position) pick that up.
-        // index.html stays hidden (html.is-loading) until the theme's sheet
+        // display.html stays hidden (html.is-loading) until the theme's sheet
         // is in, instead of first loading a default theme and then swapping
         $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('theme-stylesheet', '').attr('href', css_path)
             .on('load', () => {
@@ -366,9 +373,15 @@ export class Scoreboard {
             $('.scoreboard').hide();
             $(`.scoreboard[theme="${html_structure}"]`).show();
 
-            $('.score_history').toggleClass('hidden', html_structure !== 'vertical_score');
-            $('.match_statistics').toggleClass('hidden', html_structure !== 'vertical_score');
-            $('.match_preview').toggleClass('hidden', html_structure !== 'vertical_score');
+            // Spectator view: the overlays' placeholder texts (player clubs, RGX, ...)
+            // would show as real data wherever a court has none - start them empty.
+            // Runs before the first data is applied (the listener answers asynchronously).
+            if (this.isSpectator) $('.overlay [fb-data]').not('img, input, select').text('');
+
+            const overlays = html_structure === 'vertical_score' || this.isSpectator;
+            $('.score_history').toggleClass('hidden', !overlays);
+            $('.match_statistics').toggleClass('hidden', !overlays);
+            $('.match_preview').toggleClass('hidden', !overlays);
         }
     }
 
@@ -1234,6 +1247,7 @@ export class Scoreboard {
      * ============================================================================== */
     async insertAdminSetting(path, value) {
         const part = path.split('.').pop();
+        if (this.isSpectator && VIEWER_SETTINGS.includes(part)) return;
         this.settings[part] = value;
         
         // Special handling for match statistics type
@@ -1255,7 +1269,7 @@ export class Scoreboard {
      *
      * On input.html, a fallback-derived code also gets written back to
      * teams_info.team_x.flag, so it becomes the same kind of explicit fact a
-     * manual pick would be - other consumers of that field (index.html, a
+     * manual pick would be - other consumers of that field (display.html, a
      * second admin's browser, TournamentLiveScores/Fwango) then see it
      * directly instead of each re-deriving their own guess from the name,
      * and the country <select> picks it up as its selected option on the
@@ -2317,7 +2331,7 @@ export class Scoreboard {
     /** ==============================================================================
      * One .logo-indicator per team next to every .flag-indicator of an
      * output page (board, overlays, score history), and next to the color
-     * picker on input.html - created once, so index.html doesn't need a
+     * picker on input.html - created once, so display.html doesn't need a
      * second copy of every flag slot.
      * ============================================================================== */
     ensureLogoIndicators() {
@@ -2361,13 +2375,13 @@ export class Scoreboard {
     }
 
     /** ==============================================================================
-     * Set every .flag-indicator <img> on an output page (index.html) to an
+     * Set every .flag-indicator <img> on an output page (display.html) to an
      * explicit height (scaled by FLAG_HEIGHT_SCALE) with a proportional
      * width via a plain 4:3 multiplication done in JS - not left to CSS
      * height:77%/aspect-ratio + !important, which kept getting silently
      * defeated per-theme across several rounds with no way to verify live.
-     * The "full" theme never has a .flag-indicator at all (removed per
-     * request - flags aren't offered there).
+     * The spectator board's flag sits in a .teamname-row like the stream
+     * themes' main board, so it's measured the same way.
      *
      * Main scoreboard branch measures .teamname's cap-height (top of a
      * capital letter to the baseline), not .name, .team, or .teamname's own
@@ -2414,7 +2428,7 @@ export class Scoreboard {
                 // Overlay team headers carry the name in an <h4>, not a
                 // .teamname, and the statistics overlay's header isn't inside
                 // a .team either - so neither lookup below applies. The <h4>
-                // is always the flag's next sibling (see index.html).
+                // is always the flag's next sibling (see display.html).
                 const $reference = $flag.nextAll('h4').first();
                 if (!$reference.length) return;
                 heightPx = this.measureCapHeight($reference[0]);
@@ -2489,7 +2503,19 @@ export class Scoreboard {
      * ============================================================================== */
     supportsOverlays() {
         const themeConfig = themes[this.theme];
-        return !!themeConfig && themeConfig.html_structure === 'vertical_score';
+        return !!themeConfig && (themeConfig.html_structure === 'vertical_score' || !!themeConfig.spectator);
+    }
+
+    /** ==============================================================================
+     * Spectator view: the overlays are opened by the viewer, so the court's own
+     * settings for them (set for the stream in the input panel) are ignored
+     * there - see insertAdminSetting(). Everything else (colors, names, serve)
+     * still follows the court.
+     * ============================================================================== */
+    setViewerSettings(values) {
+        Object.assign(this.settings, values);
+        this.updateSettings();
+        this.requestRender();
     }
 
     updateMatchStatisticsVisibility() {
@@ -2542,7 +2568,7 @@ export class Scoreboard {
 
     updateUrlOutput() {
         const baseUrl = window.location.origin + window.location.pathname;
-        const newUrl = baseUrl.replace("input.html", "index.html");
+        const newUrl = baseUrl.replace("input.html", "display.html");
         // Org/court link as long as the channel belongs to a court - it stays
         // valid even if the internal channel number changes at some point.
         const court = this.user?.courtForChannel(this.channel);

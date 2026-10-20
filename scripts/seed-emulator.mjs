@@ -4,8 +4,8 @@
 //   firebase emulators:start --only database,auth --project live-scoreboard-fc0e5
 //   node scripts/seed-emulator.mjs
 //   open http://localhost:5517/input.html?emulator  (login below)
-//   and  http://localhost:5517/index.html?emulator&org=testorg&court=1
-//   and  http://localhost:5517/overview.html?emulator  (courts 2-6: one per overview state,
+//   and  http://localhost:5517/display.html?emulator&org=testorg&court=1  (&theme=spectator for the spectator view)
+//   and  http://localhost:5517/?emulator  (the overview - courts 2-6: one per state,
 //        channels 7-9: one squad game with three subgames on Test Org's courts 5-7)
 //
 // Only ever talks to 127.0.0.1 - these credentials exist in the emulator only.

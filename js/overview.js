@@ -1,4 +1,4 @@
-// Live overview (overview.html): every court of every org at a glance.
+// Live overview (index.html, the start page): every court of every org at a glance.
 //
 // Read-only and public, like the output displays: it reads orgs (which courts
 // exist), live_games (when a Playerzone game went on court) and the parts of
@@ -12,6 +12,7 @@ import { summarizeMatch } from "./matchStatus.js?v=4";
 import { resolveFlag } from "./flags.js?v=4";
 import { pzGamePage } from "./pzBase.js?v=4";
 import { groupSquadGames } from "./squadGroups.js?v=4";
+import { watchAccount, login, logout } from "./auth.js?v=4";
 
 /** The parts of match-<channel> the overview reads, one listener each. */
 const MATCH_FIELDS = ['score', 'active_set', 'teams_info', 'tournament_name', 'phase', 'game_settings', 'updated_at', 'timer', 'playerzone', 'admin_settings', 'tournament_logo'];
@@ -39,6 +40,9 @@ const filters = {
     query: '',
 };
 const collapsed = readCollapsed();
+/** Signed-in account (auth.js) - decides which courts get the input panel and output links. */
+let account = null;
+let orgFilterFromAccount = false;
 
 // ========================================= Data ===================================== //
 
@@ -108,6 +112,12 @@ function startDataSync() {
 // ========================================= View model ===================================== //
 
 const now = () => Date.now() + serverTimeOffset;
+
+/** Stream theme of the signed-in account's org - set as orgs/<org>/theme in the console. */
+function streamTheme() {
+    const theme = account?.orgId ? orgs[account.orgId]?.theme : null;
+    return typeof theme === 'string' && /^[\w-]+$/.test(theme) ? theme : 'rg';
+}
 
 /**
  * Colors, flags and player names follow the court's own display settings
@@ -212,7 +222,11 @@ function cardView(court) {
         pzLink: gameId ? pzGamePage(gameId) : null,
         pzGameId: gameId,
         mainGameId,
-        displayLink: `index.html?${courtParams}`,
+        // Everyone: the big spectator view. Accounts that operate the court: input panel and display output
+        spectatorLink: `display.html?${courtParams}&theme=spectator`,
+        canControl: !!account?.channels.includes(court.channel),
+        // Stream overlay for OBS, in the theme of the signed-in account's org (orgs/<org>/theme, default rg)
+        streamLink: new URL(`display.html?${courtParams}&theme=${encodeURIComponent(streamTheme())}`, window.location.href).href,
         controlLink: `input.html?${courtParams}`,
         searchText: [court.orgName, courtLabel, data.tournament_name, phase,
             teamA.name, teamA.players, teamB.name, teamB.players].join(' ').toLowerCase(),
@@ -318,16 +332,19 @@ function buildCard(view, extraClass = '') {
     const situation = view.situation.map((chip) => el('span', { class: `chip ${chip.kind}` },
         chip.kind === 'timer' ? icon('timer') : null, chip.text));
 
+    // Fixed order on every card: Playerzone, edit, stream link, open
     const links = el('div', { class: 'card_links' },
         view.pzLink ? el('a', {
             class: 'link icon_only pz', href: view.pzLink, target: '_blank', rel: 'noopener',
             title: `Open game ${view.pzGameId} in the Playerzone`, 'aria-label': 'Open in the Playerzone',
         }, el('img', { src: 'img/pz_logo.png', alt: '' })) : null,
-        el('a', { class: 'link icon_only', href: view.displayLink, target: '_blank', rel: 'noopener', title: 'Open live display', 'aria-label': 'Open live display' }, icon('open_in_full')),
-        el('a', { class: 'link icon_only', href: view.controlLink, target: '_blank', rel: 'noopener', title: 'Open in the input panel (login required)', 'aria-label': 'Open in the input panel' }, icon('edit')),
+        view.canControl ? el('a', { class: 'link icon_only control', href: view.controlLink, title: 'Open in the input panel', 'aria-label': 'Open in the input panel' }, icon('edit')) : null,
+        view.canControl ? el('button', { type: 'button', class: 'link icon_only copy_stream', 'data-link': view.streamLink, title: 'Copy the stream link (OBS)', 'aria-label': 'Copy the stream link' }, icon('cast')) : null,
+        el('a', { class: 'link icon_only open', href: view.spectatorLink, title: 'Open the scoreboard', 'aria-label': 'Open the scoreboard' }, icon('open_in_full')),
     );
 
-    return el('article', { class: `match_card ${view.status}${extraClass}`, 'data-channel': view.channel },
+    // The whole card opens the scoreboard (the links in it keep their own targets)
+    return el('article', { class: `match_card ${view.status}${extraClass}`, 'data-channel': view.channel, 'data-href': view.spectatorLink },
         el('header', { class: 'card_head' },
             cardTitle(view.title, view.event, view.eventLogo),
             el('div', { class: 'card_tags' }, situation, status)),
@@ -540,9 +557,9 @@ function renderOrgFilter() {
     updateTitle();
 }
 
+/** The selected org is in the filter itself - only the browser tab names it. */
 function updateTitle() {
     const orgName = filters.org ? (orgs[filters.org]?.name || filters.org) : '';
-    $('#overview_subtitle').text(orgName);
     document.title = orgName ? `Live Matches · ${orgName}` : 'Live Matches';
 }
 
@@ -560,21 +577,130 @@ function storeCollapsed() {
     try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed])); } catch { /* not remembered */ }
 }
 
+// ========================================= Toast ===================================== //
+
+/** Short message at the bottom - the same banner as in the input panel (main.js showToast()). */
+let toastTimeout = null;
+function showToast(emoji, message, duration = 3000) {
+    const $toast = $('#toast');
+    $toast.find('.toast_icon').text(emoji);
+    $toast.find('.toast_text').text(message);
+    $toast.removeClass('hidden').addClass('visible');
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => $toast.removeClass('visible'), duration);
+}
+
+// ========================================= Account ===================================== //
+
+function renderAccount() {
+    const $account = $('#account');
+    if (!account) {
+        $account[0].replaceChildren(el('button', { type: 'button', class: 'account_login', id: 'open_login' }, icon('login'), 'Log in'));
+        return;
+    }
+    // Same element as in the input panel's header: name, email, admin tag, logout
+    $account[0].replaceChildren(el('div', { class: 'account_user' },
+        el('div', { class: 'account_details' },
+            el('span', { class: 'account_name', text: account.displayName }),
+            el('span', { class: 'account_email', text: account.email })),
+        account.isAdmin ? el('span', { class: 'account_tag', text: 'Admin' }) : null,
+        el('button', { type: 'button', class: 'account_logout', id: 'logout', title: 'Log out', 'aria-label': 'Log out' }, icon('logout'))));
+}
+
+function bindAccount() {
+    const dialog = document.getElementById('login_dialog');
+    const $error = $('#login_error');
+
+    $('#account').on('click', '#open_login', () => {
+        $error.text('').addClass('hidden');
+        dialog.showModal();
+        $('#login_email').trigger('focus');
+    });
+    $('#account').on('click', '#logout', () => logout());
+    $('#login_cancel').on('click', () => dialog.close());
+
+    $('#login_form').on('submit', async (event) => {
+        event.preventDefault();
+        const $submit = $('#login_submit').prop('disabled', true).text('Signing in…');
+        const error = await login($('#login_email').val().trim(), $('#login_password').val());
+        $submit.prop('disabled', false).text('Log in');
+        if (error) {
+            $error.text(error).removeClass('hidden');
+            return;
+        }
+        $('#login_password').val('');
+        dialog.close();
+    });
+
+    watchAccount((user, reason) => {
+        account = user;
+        // Signing in shows the account's own org - once per page, and not over an org from the link
+        if (user?.orgId && !orgFilterFromAccount && !urlParams.has('org')) {
+            orgFilterFromAccount = true;
+            setOrgFilter(user.orgId);
+        }
+        if (!user && (reason === 'no-org' || reason === 'error')) {
+            // Signed in, but nothing to operate - say so in the dialog and sign out again
+            $error.text(reason === 'no-org' ? "This account isn't linked to an organisation yet." : "Couldn't load this account - please try again.")
+                .removeClass('hidden');
+            if (!dialog.open) dialog.showModal();
+            logout();
+        }
+        renderAccount();
+        scheduleRender();
+    });
+}
+
+/** Sets the org filter (select and link) - from the select, or the account's org on sign-in. */
+function setOrgFilter(org) {
+    filters.org = org;
+    $('#org_filter').val(org);
+    const params = new URLSearchParams(window.location.search);
+    if (org) params.set('org', org);
+    else params.delete('org');
+    const search = params.toString().replace(/=(?=&|$)/g, '');
+    history.replaceState(null, '', `${window.location.pathname}${search ? `?${search}` : ''}`);
+    updateTitle();
+    render();
+}
+
 function bindControls() {
     $('#org_filter').on('change', function () {
-        filters.org = $(this).val();
-        const params = new URLSearchParams(window.location.search);
-        if (filters.org) params.set('org', filters.org);
-        else params.delete('org');
-        const search = params.toString();
-        history.replaceState(null, '', `${window.location.pathname}${search ? `?${search}` : ''}`);
-        updateTitle();
-        render();
+        setOrgFilter($(this).val());
     });
 
     $('#search').on('input', function () {
         filters.query = $(this).val();
         render();
+    });
+
+    // Cast: copy the stream link instead of opening it - it goes into OBS
+    $(document).on('click', '.copy_stream', async function () {
+        const button = this;
+        let copied = false;
+        try {
+            await navigator.clipboard.writeText(button.dataset.link);
+            copied = true;
+        } catch {
+            window.prompt('Copy the stream link:', button.dataset.link);
+        }
+        if (!copied) return;
+        showToast('✅', 'Stream link copied - paste it into OBS as a browser source.');
+        const $icon = $(button).find('.material-symbols-rounded');
+        $icon.text('check');
+        button.title = 'Link copied';
+        clearTimeout(button.copyTimeout);
+        button.copyTimeout = setTimeout(() => {
+            $icon.text('cast');
+            button.title = 'Copy the stream link (OBS)';
+        }, 1600);
+    });
+
+    // A click anywhere on a card opens its scoreboard - except on its own links
+    $(document).on('click', '.match_card[data-href]', function (event) {
+        if (event.target.closest('a, button')) return;
+        if (window.getSelection()?.toString()) return; // selecting text isn't a click
+        window.location.href = this.dataset.href;
     });
 
     $('.section_toggle').on('click', function () {
@@ -588,6 +714,8 @@ function bindControls() {
 
 $(function () {
     bindControls();
+    renderAccount();
+    bindAccount();
     startDataSync();
     // Relative times and running timers
     setInterval(scheduleRender, 1000);

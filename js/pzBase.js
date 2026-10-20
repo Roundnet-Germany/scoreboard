@@ -1,5 +1,5 @@
 // Base URL of the Roundnet Playerzone (PZ) - its own module, so pages
-// without the input panel (overview.html) can link to the PZ without
+// without the input panel (the overview, index.html) can link to the PZ without
 // loading main.js.
 
 const DEFAULT_PZ_BASE = 'https://playerzone.roundnetgermany.de';
