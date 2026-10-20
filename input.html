@@ -422,18 +422,24 @@
                     <h3>Display Options</h3>
                     <div class="inner">
                         
-                        <div class="setting_entry boolean">
-                            <label>Colors:</label>
-                            <label class="toggle-switch" for="Show_Color">
-                                <input type="checkbox" id="Show_Color" fb-data="admin_settings.show_color">
-                            </label>
-                        </div>
-
-                        <div class="setting_entry boolean">
-                            <label>Show as Flags:</label>
-                            <label class="toggle-switch" for="Show_Flag">
-                                <input type="checkbox" id="Show_Flag" fb-data="admin_settings.show_flag">
-                            </label>
+                        <div class="setting_entry boolean team_indicator">
+                            <label>Team Indicator:</label>
+                            <div class="right">
+                                <select id="Team_Indicator_Type" title="What to show next to the team names">
+                                    <option value="show_color">Color</option>
+                                    <option value="show_flag">Flag</option>
+                                    <option value="show_club_logo">Club Logos</option>
+                                    <option value="show_team_logo">Team Logo</option>
+                                </select>
+                                <label class="toggle-switch" for="Show_Team_Indicator">
+                                    <input type="checkbox" id="Show_Team_Indicator">
+                                </label>
+                                <!-- The stored settings - at most one is on, set by the select + toggle above -->
+                                <input type="checkbox" id="Show_Color" fb-data="admin_settings.show_color" hidden>
+                                <input type="checkbox" id="Show_Flag" fb-data="admin_settings.show_flag" hidden>
+                                <input type="checkbox" id="Show_Club_Logo" fb-data="admin_settings.show_club_logo" hidden>
+                                <input type="checkbox" id="Show_Team_Logo" fb-data="admin_settings.show_team_logo" hidden>
+                            </div>
                         </div>
 
                         <div class="setting_entry boolean">
@@ -555,6 +561,20 @@
                                 <label for="Tournament_Logo">Tournament Logo URL</label>
                                 <div class="input-with-trailing-icon">
                                     <input type="text" class="text" id="Tournament_Logo" value="" placeholder="https://example.com/tournament-logo.png" fb-data="tournament_logo">
+                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                </div>
+                            </div>
+                            <div class="input_container">
+                                <label for="A_Team_Logo">Team A Logo URL</label>
+                                <div class="input-with-trailing-icon">
+                                    <input type="text" class="text" id="A_Team_Logo" value="" placeholder="https://example.com/team-a-logo.png" fb-data="teams_info.team_a.logo">
+                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                </div>
+                            </div>
+                            <div class="input_container">
+                                <label for="B_Team_Logo">Team B Logo URL</label>
+                                <div class="input-with-trailing-icon">
+                                    <input type="text" class="text" id="B_Team_Logo" value="" placeholder="https://example.com/team-b-logo.png" fb-data="teams_info.team_b.logo">
                                     <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
                                 </div>
                             </div>

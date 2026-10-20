@@ -1391,7 +1391,8 @@ select.small {
   margin-bottom: 2px;
 }
 
-select#Match_Stats_Type {
+select#Match_Stats_Type,
+select#Team_Indicator_Type {
   height: auto;
   padding: 0px 0px 3px 2px;
 }
@@ -1593,3 +1594,27 @@ select#Match_Stats_Type {
   gap: 4px;
 }
 
+
+/* Club logo / team logo preview next to the team name (see ensureLogoIndicators()) */
+.logo-indicator {
+  --logo-size: 36px;
+  display: none;
+  flex: none;
+  align-items: center;
+  align-self: center;
+}
+
+.logo-indicator.visible:not(.empty) {
+  display: inline-flex;
+}
+
+.logo-indicator img {
+  flex: none;
+  width: var(--logo-size);
+  height: var(--logo-size);
+  object-fit: contain;
+}
+
+.logo-indicator img + img {
+  margin-left: calc(var(--logo-size) * -0.4);
+}

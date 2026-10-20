@@ -30,6 +30,32 @@
   flex: none !important;
 }
 
+/* Team indicator "Club Logos" / "Team Logo": the logos in the flag's slot
+   (created next to every .flag-indicator by ensureLogoIndicators() in
+   Scoreboard.js, sized via --logo-size by syncOutputFlagSizes()). Two
+   different clubs overlap slightly, like in the Playerzone. */
+.logo-indicator {
+  --logo-size: 20px;
+  display: none;
+  flex: none;
+  align-items: center;
+}
+
+.logo-indicator.visible:not(.empty) {
+  display: inline-flex;
+}
+
+.logo-indicator img {
+  flex: none;
+  width: var(--logo-size);
+  height: var(--logo-size);
+  object-fit: contain;
+}
+
+.logo-indicator img + img {
+  margin-left: calc(var(--logo-size) * -0.4);
+}
+
 /* Main scoreboard team header (vertical_score theme - rg/small/france/eura):
    the flag sits inline with the teamname on its own row instead of spanning
    the whole .team row like .color-indicator does. align-items:baseline lines

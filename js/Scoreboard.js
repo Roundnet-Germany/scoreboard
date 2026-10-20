@@ -1,6 +1,8 @@
 import { themes, DEFAULT_BRAND_LOGO, subscribeToMatch, getPathsAndValues, getColorBrightness, rgb2hex, writeData, readData, serverTimestamp, writeTimerState, showToast, copyToClipboard, changeEventHistory, normalizeEventHistory } from "./main.js?v=4";
 import { PlayerzonePicker, fetchGame, syncToPlayerzone, sendSyncBeacon } from "./playerzone.js?v=4";
 
+// Mutually exclusive "team indicator" settings, see the Team Indicator handler
+const TEAM_INDICATOR_MODES = ['show_color', 'show_flag', 'show_club_logo', 'show_team_logo'];
 import { resolveFlag, getCountryList } from "./flags.js?v=4";
 import { historyScore, reconcileScore, recordSquadScore, cleanScoreEvents } from "./scoreHistory.js?v=4";
 // Timer durations and the set-mode convention are shared with the live overview
@@ -69,6 +71,8 @@ export class Scoreboard {
             "show_player_names": 1,
             "show_color": 1,
             "show_flag": 0,
+            "show_club_logo": 0,
+            "show_team_logo": 0,
             "show_group_score": 0,
             "show_serve_indicator": 0,
             "show_score_history": 0,
@@ -83,6 +87,10 @@ export class Scoreboard {
         // regardless of which of the two paths arrives first on a given update.
         this.teamNames = { a: '', b: '' };
         this.teamFlags = { a: '', b: '' };
+        // teams_info.team_x.player_1/2_club_logo and teams_info.team_x.logo,
+        // for the club logo / team logo indicators (see applyLogos())
+        this.teamClubLogos = { a: ['', ''], b: ['', ''] };
+        this.teamLogos = { a: '', b: '' };
         this.active_set = 1;
         // { type: "timeout"|"medical"|"break", startedAt: <epoch ms> } | null -
         // mirrors match-<channel>/timer, see processDataAndUpdateFields().
@@ -568,6 +576,8 @@ export class Scoreboard {
         // Settings entries handler
         this.$settingsEntries.click((event) => {
             const $trigger = $(event.target);
+            // Controls without their own setting (e.g. the team indicator toggle, handled below)
+            if (!$trigger.attr('fb-data')) return;
             const value = $trigger.prop('checked') ? 1 : 0;
             const part = $trigger.attr('fb-data').split('.').pop();
             this.settings[part] = value;
@@ -588,19 +598,8 @@ export class Scoreboard {
             // Update toggle switch appearance
             $toggleSwitch.toggleClass('active', $checkbox.prop('checked'));
 
-            // Colors and flags are mutually exclusive - turning one on turns
-            // the other off, rather than just picking a display-time priority,
-            // so the stored settings themselves never disagree with what's shown.
-            if (isAdminSetting && value === 1 && (part === 'show_color' || part === 'show_flag')) {
-                const otherPart = part === 'show_color' ? 'show_flag' : 'show_color';
-                const $other = $(`.toggle-switch input[fb-data="admin_settings.${otherPart}"]`);
-                if ($other.length && $other.prop('checked')) {
-                    $other.prop('checked', false);
-                    $other.closest('.toggle-switch').removeClass('active');
-                    this.settings[otherPart] = 0;
-                    uploadTargets.push($other);
-                }
-            }
+            // No setting of its own (team indicator toggle, see below)
+            if (!fbData) return;
 
             if (isAdminSetting) {
                 this.settings[part] = value;
@@ -610,6 +609,20 @@ export class Scoreboard {
             this.uploadData(uploadTargets);
         });
         
+        // Team indicator: select (color / flag / club logo) + toggle. Stored as
+        // the show_color / show_flag / show_club_logo / show_team_logo settings, at most
+        // one of them on - so the stored settings never disagree with what's shown.
+        $('#Team_Indicator_Type, #Show_Team_Indicator').change(() => {
+            const mode = $('#Team_Indicator_Type').val();
+            const isOn = $('#Show_Team_Indicator').prop('checked');
+            const uploadTargets = TEAM_INDICATOR_MODES.map((key) => {
+                this.settings[key] = isOn && key === mode ? 1 : 0;
+                return $(`input[fb-data="admin_settings.${key}"]`).prop('checked', this.settings[key] === 1);
+            });
+            this.updateSettings();
+            this.uploadData(uploadTargets);
+        });
+
         // Match stats type selector handler
         $('#Match_Stats_Type').change((event) => {
             const value = $(event.target).val();
@@ -972,6 +985,15 @@ export class Scoreboard {
             }
             const $allElements = this.fieldElements(path);
 
+            // Only cached here - the <img>s with this fb-data (player cards)
+            // are still filled by the branches below
+            const clubLogo = path.match(/^teams_info\.team_([ab])\.player_([12])_club_logo$/);
+            const teamLogo = path.match(/^teams_info\.team_([ab])\.logo$/);
+            const isLocked = isImport && $allElements.toArray().some((el) => this.isFieldLocked($(el)));
+            if (clubLogo && !isLocked) this.teamClubLogos[clubLogo[1]][Number(clubLogo[2]) - 1] = value || '';
+            if (teamLogo && !isLocked) this.teamLogos[teamLogo[1]] = value || '';
+
+            // event_history is handled above, before the per-path loop
             if (path.includes('admin_settings')) {
                 this.insertAdminSetting(path, value);
             } else if (path.includes('teams_info') && path.includes('color')) {
@@ -2136,6 +2158,13 @@ export class Scoreboard {
             $toggleSwitch.toggleClass('active', value === 1);
         });
 
+        // Team indicator row: the select shows the active mode; while none is
+        // on it keeps the last pick, so switching the toggle on restores it
+        const activeIndicator = TEAM_INDICATOR_MODES.find((key) => this.settings[key] === 1);
+        if (activeIndicator) $('#Team_Indicator_Type').val(activeIndicator);
+        $('#Show_Team_Indicator').prop('checked', !!activeIndicator)
+            .closest('.toggle-switch').toggleClass('active', !!activeIndicator);
+
         // Update visibility states
         this.updateGroupScoreVisibility();
         this.updateColorIndicatorVisibility();
@@ -2154,8 +2183,10 @@ export class Scoreboard {
     }
 
     updateColorIndicatorVisibility() {
-        const showColor = this.settings.show_color === 1;
-        const showFlag = this.settings.show_flag === 1;
+        // Club logos or the team logo - both in the flag's slot
+        const logoMode = this.settings.show_club_logo === 1 ? 'club' : this.settings.show_team_logo === 1 ? 'team' : null;
+        const showColor = this.settings.show_color === 1 && !logoMode;
+        const showFlag = this.settings.show_flag === 1 && !logoMode;
         // Colors and flags are two independent settings, but mutually
         // exclusive by choice - flags wins if a stale channel somehow has
         // both set (the toggle-switch handler keeps them exclusive going
@@ -2193,6 +2224,61 @@ export class Scoreboard {
             }
         }
         this.flagsWereOn = flagsOn;
+
+        // Logos take the flags' place (same slot, same size)
+        this.ensureLogoIndicators();
+        $('.logo-indicator').toggleClass('visible', !!logoMode);
+        if (logoMode) {
+            this.applyLogos('a', logoMode);
+            this.applyLogos('b', logoMode);
+            this.syncOutputFlagSizes();
+        }
+    }
+
+    /** ==============================================================================
+     * One .logo-indicator per team next to every .flag-indicator of an
+     * output page (board, overlays, score history), and next to the color
+     * picker on input.html - created once, so index.html doesn't need a
+     * second copy of every flag slot.
+     * ============================================================================== */
+    ensureLogoIndicators() {
+        if (this.logoIndicatorsCreated) return;
+        this.logoIndicatorsCreated = true;
+        const create = (team, extraClass = '') =>
+            $('<span class="logo-indicator" aria-hidden="true"></span>').addClass(`team_${team} ${extraClass}`.trim());
+
+        if (this.type === 'input') {
+            ['a', 'b'].forEach((team) => {
+                this.$html_frame.find(`.teams .team .color-indicator.${team}_color`).after(create(team));
+            });
+            return;
+        }
+        $('.flag-indicator').each((_, el) => {
+            const $flag = $(el);
+            const team = $flag.hasClass('team_a') ? 'a' : $flag.hasClass('team_b') ? 'b' : null;
+            if (team) $flag.after(create(team, $flag.hasClass('overlay_flag') ? 'overlay_flag' : ''));
+        });
+    }
+
+    /** ==============================================================================
+     * Fill a team's .logo-indicator elements - mode 'club': its players' club
+     * logos, one if both play for the same club (or only one has a logo), two
+     * slightly overlapping ones otherwise, like the Playerzone shows them;
+     * mode 'team': the team logo (teams_info.team_x.logo).
+     * @param {string} team - Team identifier ('a' or 'b')
+     * @param {string} mode - 'club' or 'team'
+     * ============================================================================== */
+    applyLogos(team, mode) {
+        const urls = mode === 'team' ? [this.teamLogos[team]] : this.teamClubLogos[team];
+        const logos = [...new Set(urls.map((url) => (url || '').trim()).filter(Boolean))];
+        const key = logos.join(' ');
+        $(`.logo-indicator.team_${team}`).each((_, el) => {
+            const $indicator = $(el);
+            $indicator.toggleClass('empty', !logos.length);
+            if ($indicator.attr('data-logos') === key) return; // unchanged - don't reload the images
+            $indicator.attr('data-logos', key).empty();
+            logos.forEach((url) => $('<img alt="">').attr('src', url).appendTo($indicator));
+        });
     }
 
     /** ==============================================================================
@@ -2229,8 +2315,11 @@ export class Scoreboard {
     syncOutputFlagSizes() {
         const SCORE_HISTORY_FLAG_SCALE = 0.65; // relative to the legend's fixed 22px slot
 
-        $('.flag-indicator').each((_, el) => {
+        $('.flag-indicator, .logo-indicator').each((_, el) => {
             const $flag = $(el);
+            const isLogo = $flag.hasClass('logo-indicator');
+            // input.html sizes its logos in CSS
+            if (isLogo && this.type === 'input') return;
             // input.html's flag <img> lives inside .flag-indicator-wrap and
             // is already sized (relative to .details, not .team) by
             // syncFlagWrapHeights() - skip it here to avoid the two fighting
@@ -2259,6 +2348,11 @@ export class Scoreboard {
             }
             if (!heightPx) return;
 
+            if (isLogo) {
+                // Square slots; a second logo overlaps the first by 40%
+                $flag[0].style.setProperty('--logo-size', `${heightPx}px`);
+                return;
+            }
             $flag[0].style.setProperty('height', `${heightPx}px`, 'important');
             $flag[0].style.setProperty('width', `${heightPx * 4 / 3}px`, 'important');
         });
