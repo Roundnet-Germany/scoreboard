@@ -1,4 +1,5 @@
-import { themes, DEFAULT_BRAND_LOGO, subscribeToMatch, getPathsAndValues, getColorBrightness, rgb2hex, writeData, readData, serverTimestamp, writeTimerState, showToast, copyToClipboard, changeEventHistory, normalizeEventHistory } from "./main.js?v=4";
+import { themes, DEFAULT_BRAND_LOGO, subscribeToMatch, getPathsAndValues, getColorBrightness, rgb2hex, writeData, readData, serverTimestamp, writeTimerState, copyToClipboard, changeEventHistory, normalizeEventHistory } from "./main.js?v=4";
+import { showToast } from "./toast.js?v=4";
 import { PlayerzonePicker, fetchGame, syncToPlayerzone, sendSyncBeacon } from "./playerzone.js?v=4";
 
 // Mutually exclusive "team indicator" settings, see the Team Indicator handler
@@ -54,7 +55,10 @@ export class Scoreboard {
         this.$cancelTimerButton = $('#cancel_timer');
         this.$timerStatus = $('.timer_status');
         this.$timerWidget = $('.timer_widget');
-        this.$sets = $('.set');
+        // Not the score history inside the statistics: updateScoreHistory() shows
+        // its sets by the statistics type - toggled here by the active set as well,
+        // it showed other sets for a moment while the statistics faded out
+        this.$sets = $('.set').not('.score_history_in_stats .set');
         this.$setScoreCounterA = $('.a_sets_won');
         this.$setScoreCounterB = $('.b_sets_won');
         this.$activeScoreCounterA = $('.a_score_active');
@@ -296,6 +300,9 @@ export class Scoreboard {
             this.updateMatchStatistics();
             this.updateTeamRGX();
         }
+
+        // Pages building on the board (spectator.js) catch up after each render
+        this.onRender?.();
     }
 
 
@@ -760,17 +767,19 @@ export class Scoreboard {
         return Number(this.playerzoneLink?.main_game_id) || null;
     }
 
-    /** (Re)starts or stops the watcher and locks the squad score fields while it's automatic. */
+    /** (Re)starts or stops the watcher and locks the squad score fields while it's set to automatic. */
     updateAutoSquadScore() {
         if (!this.autoSquad) return;
         const mainGameId = this.autoSquadMainGame();
         this.autoSquad.watch(mainGameId ? this.channel : null, mainGameId);
+        // Locked as soon as it's automatic - to type it in, switch back to manual
         const auto = this.settings.group_score_mode === 'auto';
         $('#A_Score_Team, #B_Score_Team')
-            .prop('readonly', !!mainGameId)
+            .prop('readonly', auto)
+            .attr('tabindex', auto ? -1 : null)
             .attr('title', !auto ? null : mainGameId
                 ? 'Counted automatically from the squad game\'s subgames'
-                : 'Automatic needs a Playerzone subgame on this court - typed in until then');
+                : 'Automatic - counted once a Playerzone subgame is loaded on this court (switch to manual to type it in)');
     }
 
     /** Writes the counted squad score (and the known subgame results) if they changed. */
@@ -892,6 +901,12 @@ export class Scoreboard {
         if (!playerzone?.game_id) {
             showToast("❌", "Invalid response from Playerzone");
             return false;
+        }
+        // Event name like the game description (locked fields stay) - from the
+        // picker's event list while the PZ doesn't send it yet
+        if (!gameData.tournament_name) {
+            const eventName = this.playerzonePicker?.eventName(playerzone.event_id);
+            if (eventName) gameData.tournament_name = eventName;
         }
 
         // Game currently on this court, and wherever the new game is listed as live right now
@@ -3063,19 +3078,19 @@ export class Scoreboard {
         this.$matchStatisticsContainer.find('.center h3').text(title);
     }
 
+    /**
+     * Set scores in the statistics: all of them for the match, the other sets
+     * dimmed for a single set - dimmed rather than hidden, so switching
+     * between match and set doesn't move anything.
+     */
     updateSetScoresDisplay(setNumber) {
-        if (this.settings.match_stats_type === 'match') {
-            // Show all set scores
-            this.$matchStatisticsContainer.find('.set_stats .counter').removeClass('hide');
-        } else {            
-            if (setNumber && setNumber >= 1 && setNumber <= 7) {
-                this.$matchStatisticsContainer.find('.set_stats .counter').addClass('hide');
-                const $targetSet = this.$matchStatisticsContainer.find(`.set_stats .counter:nth-child(${setNumber})`);
-                if ($targetSet.length) {
-                    $targetSet.removeClass('hide');
-                }
-            }
+        const $counters = this.$matchStatisticsContainer.find('.set_stats .counter');
+        if (this.settings.match_stats_type === 'match' || !(setNumber >= 1 && setNumber <= 7)) {
+            $counters.removeClass('dimmed');
+            return;
         }
+        $counters.addClass('dimmed');
+        this.$matchStatisticsContainer.find(`.set_stats .counter:nth-child(${setNumber})`).removeClass('dimmed');
     }
 
     getLastResetIndex(event_history = this.event_history) {
@@ -3232,17 +3247,18 @@ export class Scoreboard {
      * Update set-specific player statistics in the UI
      * ============================================================================== */
     updatePlayerSetStatistics() {
-        let completedSetsCountArray;
-        if (this.settings.match_stats_type == 'match') {
-            let completedSetsCount = this.getCompletedSetsCount();
-            completedSetsCountArray = Array.from({length: completedSetsCount}, (_, i) => i);
-            // const completedSetsCount = this.active_set;
-            if (this.active_set != completedSetsCount && this.getScore(this.active_set, 'a') + this.getScore(this.active_set, 'b') > 0) {
-                completedSetsCountArray.push(this.active_set - 1)
-            }
-        } else {
-            completedSetsCountArray = this.settings.match_stats_type === 'active_set' ? [this.active_set - 1] : [this.settings.match_stats_type - 1];
+        // Every set played so far gets its line - also for a single set, where
+        // the other sets are only dimmed (see below), so switching between
+        // match and set doesn't change the height and nothing moves
+        let completedSetsCount = this.getCompletedSetsCount();
+        const completedSetsCountArray = Array.from({length: completedSetsCount}, (_, i) => i);
+        if (this.active_set != completedSetsCount && this.getScore(this.active_set, 'a') + this.getScore(this.active_set, 'b') > 0) {
+            completedSetsCountArray.push(this.active_set - 1)
         }
+        // The set the statistics are about (null: the whole match)
+        const selectedSet = this.settings.match_stats_type === 'match' ? null
+            : this.settings.match_stats_type === 'active_set' ? this.active_set
+                : Number(this.settings.match_stats_type);
 
         // Build a map from set index to stats, so we can reference by set index directly
         const setsStats = {};
@@ -3296,11 +3312,9 @@ export class Scoreboard {
                 const match = id.match(/set_(\d+)$/);
                 if (match) {
                     const setNum = parseInt(match[1], 10);
-                    if (completedSetsCountArray.includes(setNum - 1)) {
-                        $(this).closest('.line_stat').show();
-                    } else {
-                        $(this).closest('.line_stat').hide();
-                    }
+                    const $line = $(this).closest('.line_stat');
+                    $line.toggle(completedSetsCountArray.includes(setNum - 1));
+                    $line.toggleClass('dimmed', selectedSet != null && setNum !== selectedSet);
                 }
             });
         });

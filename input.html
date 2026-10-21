@@ -7,6 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scoreboards</title>
     <link rel="stylesheet" href="css/base.css?v=4">
+    <link rel="stylesheet" href="css/toast.css?v=4">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
     <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha384-vtXRMe3mGCbOeY7l30aIg8H9p3GdeSe4IFlP6G8JMa7o7lXvnz3GFKzPxzJdPfGK" crossorigin="anonymous"></script>
     <script type="module" src="js/firebase_config.js?v=4"></script>
@@ -35,18 +36,10 @@
         </div>
     </div>
 
-    <div id="info_banner" class="banner" style="display:none">
-        <div class="info">
-            <span class="icon">👍</span>
-            <p>You can change your preference anytime using the cookie icon in the bottom right.</p>
-        </div>
-        <svg class="progress-ring banner_close_button" width="32" height="32">
-            <circle class="progress-ring_circle" stroke-width="2" fill="transparent" r="10" cx="16" cy="16" />
-            <line stroke="#222222" stroke-width="2" stroke-linecap="round" x1="19" y1="13" x2="13" y2="19">
-            </line>
-            <line stroke="#222222" stroke-width="2" stroke-linecap="round" x1="13" y1="13" x2="19" y2="19">
-            </line>
-        </svg>
+    <!-- Toast (js/toast.js, css/toast.css) - the same on the overview -->
+    <div id="toast" class="toast" role="status" aria-live="polite">
+        <span class="toast_icon" aria-hidden="true"></span>
+        <p class="toast_text"></p>
     </div>
 
 
@@ -91,7 +84,10 @@
                     <div class="inner">
                         <div class="input_container">
                             <label for="Occasion">Event Name</label>
-                            <input type="text" class="text" id="Occasion" value="Occasion" fb-data="tournament_name" placeholder="Event Name">
+                            <div class="input-with-trailing-icon">
+                                <input type="text" class="text" id="Occasion" value="Occasion" fb-data="tournament_name" placeholder="Event Name">
+                                <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                            </div>
                         </div>
                         <div class="input_container">
                             <label for="Game_Description">Game Description</label>
@@ -285,7 +281,7 @@
                             <div class="right">
                                 <div class="starting_players_container">
                                     <div class="starting_team_container">
-                                        <label>Starting Server:</label>
+                                        <label>Start Serve:</label>
                                         <div class="starting_team_sets">
                                             <div class="starting_team_selector set">
                                                 <select class="small" id="starting_server_1" fb-data="score.set_1.starting_server">
@@ -346,7 +342,7 @@
                                         </div>
                                     </div>
                                     <div class="starting_team_container">
-                                        <label>Starting Receiver:</label>
+                                        <label>Start Receive:</label>
                                         <div class="starting_team_sets">
                                             <div class="starting_team_selector set">
                                                 <select class="small" id="starting_receiver_1" fb-data="score.set_1.starting_receiver">

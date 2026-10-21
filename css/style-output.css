@@ -1211,6 +1211,18 @@
   display: none !important;
 }
 
+/* Statistics for a single set: the other sets stay in place, only dimmed
+   (see updateSetScoresDisplay() / updatePlayerSetStatistics()) */
+.match_statistics .set_stats .counter,
+.match_statistics .line_stat {
+  transition: opacity 0.2s ease;
+}
+
+.match_statistics .set_stats .counter.dimmed,
+.match_statistics .line_stat.dimmed {
+  opacity: 0.3;
+}
+
 .match_statistics .team_stats_container .team_stats:first-child .set_stats .counter {
   border-radius: 3px 3px 0px 0px;
 }

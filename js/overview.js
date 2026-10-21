@@ -13,6 +13,7 @@ import { resolveFlag } from "./flags.js?v=4";
 import { pzGamePage } from "./pzBase.js?v=4";
 import { groupSquadGames } from "./squadGroups.js?v=4";
 import { watchAccount, login, logout } from "./auth.js?v=4";
+import { showToast } from "./toast.js?v=4";
 
 /** The parts of match-<channel> the overview reads, one listener each. */
 const MATCH_FIELDS = ['score', 'active_set', 'teams_info', 'tournament_name', 'phase', 'game_settings', 'updated_at', 'timer', 'playerzone', 'admin_settings', 'tournament_logo'];
@@ -281,7 +282,8 @@ function teamRow(view, team) {
         serveIndicator(view.serve, team),
         // Squad score of a liga game, where the court shows it (Group Score setting)
         view.squad ? el('span', {
-            class: `squad_score${view.squad[team] > view.squad[team === 'a' ? 'b' : 'a'] ? ' leading' : ''}`,
+            class: `squad_score${view.squad[team] > view.squad[team === 'a' ? 'b' : 'a'] ? ' leading'
+                : view.squad[team] < view.squad[team === 'a' ? 'b' : 'a'] ? ' trailing' : ''}`,
             title: 'Squad score', text: view.squad[team],
         }) : null,
         view.sets.map((set) => {
@@ -289,6 +291,7 @@ function teamRow(view, team) {
             const classes = ['set_score'];
             if (set.active && !set.winner && view.status !== 'idle') classes.push('active');
             if (set.winner === team) classes.push('set_won');
+            else if (set.winner) classes.push('set_lost');
             return el('span', { class: classes.join(' '), title: `Set ${set.set}`, text: own });
         }),
     );
@@ -476,12 +479,8 @@ function render() {
     const views = allViews.filter(inOrg);
 
     // Summary over the org filter, before the search
-    const counts = { live: 0, ready: 0, finished: 0, idle: 0, pz: 0, timer: 0 };
-    for (const view of views) {
-        counts[view.status]++;
-        if (view.pzLink && view.status !== 'idle') counts.pz++;
-        if (view.situation.some((chip) => chip.kind === 'timer')) counts.timer++;
-    }
+    const counts = { live: 0, ready: 0, finished: 0, idle: 0 };
+    for (const view of views) counts[view.status]++;
     renderSummary(counts, views.length);
 
     // Subgames of a squad game become one entry, placed by its most active
@@ -525,8 +524,6 @@ function renderSummary(counts, total) {
         ['live', counts.live, 'Live'],
         ['ready', counts.ready, 'Not started'],
         ['finished', counts.finished, 'Just finished'],
-        ['pz', counts.pz, 'Playerzone games'],
-        ['timer', counts.timer, 'Timeout / Break'],
     ];
     const nodes = items.map(([kind, value, label]) =>
         el('div', { class: `summary_item ${kind}${value ? '' : ' zero'}` },
@@ -577,25 +574,14 @@ function storeCollapsed() {
     try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed])); } catch { /* not remembered */ }
 }
 
-// ========================================= Toast ===================================== //
-
-/** Short message at the bottom - the same banner as in the input panel (main.js showToast()). */
-let toastTimeout = null;
-function showToast(emoji, message, duration = 3000) {
-    const $toast = $('#toast');
-    $toast.find('.toast_icon').text(emoji);
-    $toast.find('.toast_text').text(message);
-    $toast.removeClass('hidden').addClass('visible');
-    clearTimeout(toastTimeout);
-    toastTimeout = setTimeout(() => $toast.removeClass('visible'), duration);
-}
-
 // ========================================= Account ===================================== //
 
 function renderAccount() {
     const $account = $('#account');
     if (!account) {
-        $account[0].replaceChildren(el('button', { type: 'button', class: 'account_login', id: 'open_login' }, icon('login'), 'Log in'));
+        // On phones only the icon (the label goes, see style_overview.css)
+        $account[0].replaceChildren(el('button', { type: 'button', class: 'account_login', id: 'open_login', 'aria-label': 'Log in', title: 'Log in' },
+            icon('login'), el('span', { class: 'account_login_label', text: 'Log in' })));
         return;
     }
     // Same element as in the input panel's header: name, email, admin tag, logout
@@ -611,12 +597,29 @@ function bindAccount() {
     const dialog = document.getElementById('login_dialog');
     const $error = $('#login_error');
 
+    // Opened non-modal with a backdrop of its own: a modal <dialog> makes the
+    // rest of the page inert - password managers' fill menus (Bitwarden) sit
+    // there and can't fill the fields then
+    const openLogin = () => {
+        if (dialog.open) return;
+        dialog.show();
+        $('html').addClass('login_open');
+    };
+    $(dialog).on('close', () => $('html').removeClass('login_open'));
+    $('.login_backdrop').on('click', () => dialog.close());
+    $(document).on('keydown', (event) => {
+        if (event.key === 'Escape' && dialog.open) dialog.close();
+    });
+
     $('#account').on('click', '#open_login', () => {
         $error.text('').addClass('hidden');
-        dialog.showModal();
+        openLogin();
         $('#login_email').trigger('focus');
     });
-    $('#account').on('click', '#logout', () => logout());
+    $('#account').on('click', '#logout', async () => {
+        await logout();
+        showToast('👋', 'Logged out', 2000);
+    });
     $('#login_cancel').on('click', () => dialog.close());
 
     $('#login_form').on('submit', async (event) => {
@@ -643,7 +646,7 @@ function bindAccount() {
             // Signed in, but nothing to operate - say so in the dialog and sign out again
             $error.text(reason === 'no-org' ? "This account isn't linked to an organisation yet." : "Couldn't load this account - please try again.")
                 .removeClass('hidden');
-            if (!dialog.open) dialog.showModal();
+            openLogin();
             logout();
         }
         renderAccount();

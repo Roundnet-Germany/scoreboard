@@ -68,13 +68,14 @@
                 <i class="material-symbols-rounded" aria-hidden="true">arrow_back</i><span>All matches</span>
             </a>
         </div>
-        <!-- Middle: the game and the event in focus, where and how it's played below -->
+        <!-- Middle: the game and how it's played in focus, event and place below -->
         <div class="spectator_title">
             <div class="spectator_title_text">
-                <!-- The event's logo small in front of its name (the name has its own span, setting its text would drop the logo) -->
-                <p class="spectator_heading"><span class="spectator_game" fb-data="phase"></span><span class="spectator_event"><img class="spectator_event_logo" fb-data="tournament_logo" alt=""><span class="spectator_event_name" fb-data="tournament_name"></span></span></p>
-                <!-- No whitespace between the parts: the separators come from CSS -->
-                <p class="spectator_meta"><span class="spectator_location"></span><span class="spectator_mode"><span fb-data="game_settings.set_mode"></span> to <span fb-data="game_settings.win_points"></span> · HC <span fb-data="game_settings.hardcap"></span></span></p>
+                <!-- The game and how it's played big - mode and hardcap matter most to spectators.
+                     No whitespace between the parts: the separators come from CSS -->
+                <p class="spectator_heading"><span class="spectator_game" fb-data="phase"></span><span class="spectator_mode"><span fb-data="game_settings.set_mode"></span> to <span fb-data="game_settings.win_points"></span> · HC <span fb-data="game_settings.hardcap"></span></span></p>
+                <!-- Event (its logo small in front - the name has its own span, setting its text would drop the logo), org and court -->
+                <p class="spectator_meta"><span class="spectator_event"><img class="spectator_event_logo" fb-data="tournament_logo" alt=""><span class="spectator_event_name" fb-data="tournament_name"></span></span><span class="spectator_location"></span></p>
             </div>
         </div>
         <nav class="spectator_tools spectator_end" aria-label="Match details">
@@ -412,8 +413,8 @@
                 <img class="brand_logo" src="img/rg_logo_white.png" alt="Federation Logo">
                 <!-- Spectator view only (instead of the logo): what the numbers cover, and close -->
                 <div class="spectator_stats_type spectator_only" role="group" aria-label="Statistics for">
+                    <!-- Match, then one button per set played or running (js/spectator.js renderStatsTypes()) -->
                     <button type="button" data-stats-type="match" aria-pressed="true">Match</button>
-                    <button type="button" data-stats-type="active_set" aria-pressed="false">Current set</button>
                 </div>
                 <button type="button" class="spectator_close spectator_only" title="Close" aria-label="Close statistics">
                     <i class="material-symbols-rounded" aria-hidden="true">close</i>

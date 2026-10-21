@@ -274,9 +274,13 @@ html.is-loading .page_spinner {
   outline-offset: 2px;
 }
 
-/* Login dialog (native <dialog>) */
+/* Login dialog (native <dialog>, opened non-modal - see bindAccount()) */
 .login_dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 201;
   width: min(400px, calc(100vw - 32px));
+  height: fit-content;
   margin: auto;
   padding: 20px;
   border: none;
@@ -286,9 +290,17 @@ html.is-loading .page_spinner {
   box-shadow: 0 10px 40px #00000066;
 }
 
-.login_dialog::backdrop {
+.login_backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
   background-color: #000000aa;
   backdrop-filter: blur(4px);
+}
+
+html.login_open .login_backdrop {
+  display: block;
 }
 
 .login_dialog form {
@@ -298,15 +310,10 @@ html.is-loading .page_spinner {
 }
 
 .login_dialog h2 {
+  margin-bottom: 8px;
   font-size: 1.2rem;
   font-weight: 600;
   text-transform: uppercase;
-}
-
-.login_hint {
-  margin-bottom: 8px;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
 }
 
 .login_dialog label {
@@ -401,10 +408,6 @@ html.is-loading .page_spinner {
   color: #ff7a8c;
 }
 
-.summary_item.timer:not(.zero) .summary_value {
-  color: var(--primary);
-}
-
 .summary_item.zero .summary_value {
   color: #ffffff55;
 }
@@ -421,8 +424,8 @@ html.is-loading .page_spinner {
 .section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 6px;
+  gap: 12px;
+  margin-top: 18px;
 }
 
 .section h2 {
@@ -746,6 +749,13 @@ html.is-loading .page_spinner {
 }
 
 .squad_score,
+.set_score,
+.squad_result,
+.squad_result * {
+  font-family: 'Barlow Condensed', sans-serif;
+}
+
+.squad_score,
 .set_score {
   flex: none;
   text-align: center;
@@ -764,7 +774,7 @@ html.is-loading .page_spinner {
   border-radius: 4px;
   background-color: rgba(197, 81, 81, 0.2);
   font-size: 1.2rem;
-  font-weight: 300;
+  font-weight: 500;
   color: var(--text-primary);
 }
 
@@ -772,9 +782,13 @@ html.is-loading .page_spinner {
   font-weight: 600;
 }
 
+.squad_score.trailing {
+  font-weight: 400;
+}
+
 .set_score {
   /* Like the rg theme's set counters, in grey: one flat box per set,
-     the set winner's score bold, the rest light */
+     the set winner's score bold, the loser's light, the rest in between */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -784,12 +798,16 @@ html.is-loading .page_spinner {
   border-radius: 4px;
   background-color: #00000010;
   font-size: 1.2rem;
-  font-weight: 300;
+  font-weight: 500;
   color: var(--text-primary);
 }
 
 .set_score.set_won {
   font-weight: 600;
+}
+
+.set_score.set_lost {
+  font-weight: 400;
 }
 
 /* The set being played: framed like the rg theme's active set */
@@ -961,12 +979,10 @@ button.link {
 
 .squad_result {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
   padding: 3px 10px;
   border-radius: 5px;
-  background-color: var(--white);
-  box-shadow: 0 1px 2px #0000001a;
   font-size: 1.6rem;
   font-weight: 600;
   line-height: 1.15;
@@ -985,6 +1001,8 @@ button.link {
 
 .squad_result .separator {
   font-size: 1.2rem;
+  /* The colon sits on the baseline - lifted to the digits' middle */
+  margin-top: -0.18em;
 }
 
 .subgame_grid {
@@ -1020,19 +1038,76 @@ button.link {
   text-align: center;
 }
 
+/* Phones held sideways: search, org and account as a row of their own across the width */
+@media (max-height: 520px) and (orientation: landscape) {
+  .controls {
+    flex-basis: 100%;
+    max-width: none;
+  }
+}
+
 @media (max-width: 520px) {
   .wrapper {
     padding: 8px 16px 24px;
   }
 
-  .controls,
+  /* Header: the pages and the login (icon only) in the first row; signed
+     in, the account across the width, search and org below it */
+  .page_head {
+    flex-wrap: wrap;
+  }
+
+  .controls {
+    display: contents;
+  }
+
+  .page_head .title { order: 0; }
+  .account { order: 1; }
+  .filter.search { order: 2; }
+  .filter.select { order: 3; }
+
+  .filter.search,
   .filter.select,
   .filter.select select {
+    flex: 1 1 100%;
     width: 100%;
   }
 
+  .account_login {
+    width: var(--control-height);
+    padding: 0;
+    justify-content: center;
+  }
+
+  .account_login .material-symbols-rounded {
+    font-size: 20px;
+  }
+
+  .account_login_label {
+    display: none;
+  }
+
+  .account:has(.account_user) {
+    flex: 1 1 100%;
+  }
+
+  .account_user {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .account_details {
+    flex: 1;
+  }
+
+  .account_name,
+  .account_email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .summary {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .summary_item {
@@ -1056,39 +1131,4 @@ button.link {
     font-size: 1.35rem;
     padding: 2px 8px;
   }
-}
-
-/* Toast - the input panel's banner (base.css .banner), in the overview's style */
-.toast {
-  position: fixed;
-  left: 50%;
-  bottom: 20px;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: calc(100vw - 32px);
-  padding: 10px 16px;
-  border-radius: 10px;
-  border: 1px solid #9e9e9e;
-  background-color: #f1f1f1;
-  color: #222222;
-  box-shadow: 0 6px 24px #00000040;
-  opacity: 0;
-  transform: translate(-50%, 12px);
-  pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.toast.visible {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
-
-.toast.hidden {
-  display: flex !important;
-}
-
-.toast_icon {
-  font-size: 1.3rem;
 }

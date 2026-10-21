@@ -3,6 +3,7 @@ import { get, ref, update, onValue, runTransaction, serverTimestamp } from "http
 import { db, auth, signOut } from "./firebase_config.js?v=4";
 import { resolveCourt, watchAccount, login, withTimeout } from "./auth.js?v=4";
 import { Scoreboard } from "./Scoreboard.js?v=4";
+import { showToast } from "./toast.js?v=4";
 
 /**
  * Theme registry.
@@ -73,14 +74,21 @@ if (typeof window !== 'undefined') window.AUTH_DEBUG = AUTH_DEBUG;
 // Initialize variables for global usage
 let loggedInUser;
 let scoreboard;
-let $banner, $logoutButton, $userString;
+let $logoutButton, $userString;
 
 // =========================================== Page Load ======================================= //
 
 $(document).ready(async function () {
-    $banner = $('.banner');
     $logoutButton = $('button#logout');
     $userString = $('header #username');
+
+    // Just logged out (User.logout() reloads the page)
+    try {
+        if (sessionStorage.getItem('signed_out')) {
+            sessionStorage.removeItem('signed_out');
+            showToast("👋", "Logged out", 2000);
+        }
+    } catch { /* storage blocked */ }
 
     // Determine board type
     const type = $('html').attr('type') === 'output' ? 'output' : 'input';
@@ -120,11 +128,6 @@ $(document).ready(async function () {
     if (type === 'input') {
         await handleAuthentication(scoreboard);
     }
-
-    // Close toast message
-    $('.banner_close_button').click(() => {
-        $banner.fadeOut(100);
-    });
 });
 
 // ========================================= Data Functions ===================================== //
@@ -380,29 +383,6 @@ function startConnectionStatus() {
     if (connectionStatusStarted) return;
     connectionStatusStarted = true;
     watchConnection(renderConnectionStatus);
-}
-
-// Toasts often carry text from outside (URL parameters, Playerzone team names
-// and error messages) - always set as text, never as HTML.
-let toastTimeout = null;
-export function showToast(emoji, message, duration) {
-    try {
-        // Set the animation-duration of the cooldown ring to the show duration
-        const showDuration = duration || 5000;
-        $banner.find('.icon').text(emoji);
-        $banner.find('.progress-ring_circle').css('animation-duration', `${showDuration / 1000}s`);
-        $banner.find('p').text(message);
-        $banner.fadeIn(100);
-
-        // Fade out banner after the set show duration if not already closed manually -
-        // a newer toast restarts the countdown instead of being cut short by the older one's
-        clearTimeout(toastTimeout);
-        toastTimeout = setTimeout(() => {
-            $banner.fadeOut(100);
-        }, showDuration);
-    } catch (error) {
-        console.log("Banner shown: " + message);
-    }
 }
 
 // ========================================= Helper Functions ===================================== //

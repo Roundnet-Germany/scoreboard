@@ -8,7 +8,7 @@
 // result - the PZ reads it from Firebase itself, so the court has to still
 // carry that game when it's called.
 
-import { showToast } from "./main.js?v=4";
+import { showToast } from "./toast.js?v=4";
 import { PZ_BASE } from "./pzBase.js?v=4";
 
 const SELECTION_KEY = 'pz_selection';
@@ -361,6 +361,13 @@ export class PlayerzonePicker {
             const $button = $(e.currentTarget);
             if (await this.pick(Number($button.attr('data-game-id')), $button)) this.setGamesCollapsed(true);
         });
+    }
+
+    /** Name of a known event (listed or the remembered selection), or ''. */
+    eventName(eventId) {
+        const id = Number(eventId);
+        const event = this.events.find((e) => e.id === id) || (this.selection.event?.id === id ? this.selection.event : null);
+        return event?.name || '';
     }
 
     /** Loads the event list once the user is signed in. */

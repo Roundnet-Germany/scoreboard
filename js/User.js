@@ -30,6 +30,8 @@ export class User {
         this.isAuthenticated = false;
         signOut(auth).then(() => {
             console.log(`${this.email} is now logged out.`);
+            // The page reloads - main.js shows the "Logged out" toast afterwards
+            try { sessionStorage.setItem('signed_out', '1'); } catch { /* storage blocked */ }
             location.reload();
         }).catch((err) => {
             console.error("Logout error:", err);

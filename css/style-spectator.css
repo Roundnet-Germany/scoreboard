@@ -26,6 +26,9 @@
   --B_Color: #3a3d46;
   /* Spacing grows with the screen - phone to TV */
   --gap: clamp(10px, 1.6vmin, 28px);
+  /* Around the page and between header and board - like the former spectator theme (v3) */
+  --edge: clamp(12px, 2vw, 40px);
+  --header-gap: clamp(14px, 3vh, 44px);
   --radius: clamp(8px, 1.2vmin, 18px);
   /* Header type: grows with the width, but stays small on short screens (phones held sideways) */
   --chrome-size: clamp(13px, min(calc(0.55rem + 0.75vw), 3.4vh), 36px);
@@ -72,10 +75,11 @@ html[data-theme="spectator"] .spectator_bar {
   align-items: center;
   gap: var(--gap);
   flex: none;
-  margin: var(--gap) var(--gap) 0;
-  padding: 0.75em 0.8em;
+  margin: var(--edge) var(--edge) 0;
+  padding: 1.05em 0.8em;
   border-radius: var(--radius);
-  background-color: var(--surface);
+  /* Like the overview's tiles (summary) */
+  background-color: #ffffff0d;
   font-size: var(--chrome-size);
 }
 
@@ -134,7 +138,12 @@ html[data-theme="spectator"] .spectator_bar {
   outline-offset: 2px;
 }
 
-/* Middle: game and event big, place and mode small */
+/* Middle: the game and how it's played big, event and place small - in the board's Oswald */
+.spectator_title_text,
+.spectator_title_text * {
+  font-family: 'Oswald', sans-serif;
+}
+
 .spectator_title {
   display: flex;
   align-items: center;
@@ -144,65 +153,88 @@ html[data-theme="spectator"] .spectator_bar {
   max-width: 100%;
 }
 
-.spectator_event_logo {
-  flex: none;
-  height: 0.95em;
-  max-width: 2.5em;
-  object-fit: contain;
-}
-
-.spectator_event_logo:not([src]),
-.spectator_event_logo[src=""] {
-  display: none;
-}
-
 .spectator_title_text {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.1em;
+  gap: 0.3em;
   min-width: 0;
   max-width: 100%;
   text-align: center;
   line-height: 1.15;
 }
 
-.spectator_heading {
+.spectator_heading,
+.spectator_meta {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
-  gap: 0 0.5em;
   max-width: 100%;
   min-width: 0;
 }
 
-.spectator_heading > span {
+.spectator_heading > span,
+.spectator_meta > span {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
 }
 
+/* Game and mode alike: big, uppercase, white */
+.spectator_heading > span {
+  font-size: 1.8em;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase !important;
+}
+
+.spectator_heading > span * {
+  font-size: inherit;
+  font-weight: inherit;
+  text-transform: inherit !important;
+}
+
 .spectator_game {
   flex: none;
   max-width: 100%;
-  font-size: 1.7em;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  text-transform: uppercase !important;
+}
+
+/* Mode only once the court has one (otherwise just "to · HC" would be left) */
+.spectator_mode:has(> span:empty) {
+  display: none;
+}
+
+.spectator_game:not(:empty) + .spectator_mode::before {
+  content: '·';
+  margin: 0 0.4em;
+  color: var(--chrome-muted);
+}
+
+/* Below: event and place */
+.spectator_meta {
+  font-size: 0.85em;
+}
+
+.spectator_meta,
+.spectator_meta * {
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  color: #ffffff80 !important;
+}
+
+.spectator_meta * {
+  font-size: inherit;
 }
 
 .spectator_event {
   display: inline-flex;
   align-items: center;
-  gap: 0.35em;
-  font-size: 1.3em;
-  font-weight: 500;
+  gap: 0.4em;
 }
 
-.spectator_event,
-.spectator_event * {
-  color: var(--chrome-muted) !important;
+.spectator_event:not(:has(.spectator_event_name:not(:empty))) {
+  display: none;
 }
 
 .spectator_event_name {
@@ -212,43 +244,27 @@ html[data-theme="spectator"] .spectator_bar {
   text-overflow: ellipsis;
 }
 
-.spectator_event:not(:has(.spectator_event_name:not(:empty))) {
+/* As tall as the text's capitals rather than its line box - so it sits in the middle */
+.spectator_event_logo {
+  flex: none;
+  height: 0.8em;
+  max-width: 2.2em;
+  object-fit: contain;
+}
+
+.spectator_event_logo:not([src]),
+.spectator_event_logo[src=""] {
   display: none;
 }
 
-.spectator_game:not(:empty) + .spectator_event::before {
-  content: '·';
-  margin-right: 0.15em;
+/* Event and place give way alike when it gets tight */
+.spectator_event,
+.spectator_location {
+  flex: 0 1 auto;
 }
 
-.spectator_meta {
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.spectator_meta {
-  font-size: 0.85em;
-}
-
-.spectator_meta,
-.spectator_meta * {
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: #ffffff80 !important;
-}
-
-.spectator_meta * {
-  font-size: inherit;
-}
-
-/* Mode only once the court has one (otherwise just "to · HC" would be left) */
-.spectator_mode:has(> span:empty) {
-  display: none;
-}
-
-.spectator_meta > span:not(:empty) + span:not(:empty)::before {
+/* Separator before the place - only if the event in front of it shows */
+.spectator_event:has(.spectator_event_name:not(:empty)) + .spectator_location:not(:empty)::before {
   content: '·';
   margin: 0 0.45em;
 }
@@ -276,7 +292,7 @@ html[data-theme="spectator"] .spectator_bar {
   container: board / size;
   flex: 1;
   min-height: 0;
-  padding: var(--gap);
+  padding: var(--header-gap) var(--edge) calc(var(--edge) * 1.2);
 }
 
 .scoreboard[theme="full"] .board {
@@ -328,7 +344,8 @@ html[data-theme="spectator"] .spectator_bar {
   align-items: center;
   gap: clamp(8px, 2.2cqw, 28px);
   min-width: 0;
-  padding: clamp(8px, 2.5cqh, 28px) clamp(12px, 3.5cqw, 40px);
+  /* As tall as the former spectator theme's (v3) */
+  padding: clamp(10px, 4.5cqh, 48px) clamp(14px, 4.8cqw, 60px);
   border-radius: var(--radius);
 }
 
@@ -360,7 +377,7 @@ html[data-theme="spectator"] .spectator_bar {
   align-items: baseline;
   gap: 0.3em;
   min-width: 0;
-  font-size: clamp(18px, min(6.5cqw, 9cqh), 110px);
+  font-size: clamp(20px, min(7.5cqw, 10cqh), 120px);
 }
 
 .scoreboard[theme="full"] .teamname {
@@ -388,7 +405,7 @@ html[data-theme="spectator"] .spectator_bar {
   align-items: baseline;
   gap: 0.35em;
   min-width: 0;
-  font-size: clamp(12px, min(3.3cqw, 4.6cqh), 56px);
+  font-size: clamp(14px, min(4.4cqw, 5.6cqh), 64px);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -469,6 +486,12 @@ html[data-theme="spectator"] .spectator_bar {
     grid-template-columns: minmax(0, 1fr) minmax(0, 0.42fr);
     grid-template-areas: "active sets";
   }
+
+  /* Name to score as far apart as score to sets (.score's gap - the board is
+     as wide as a team here); the larger gap is only for teams side by side */
+  .scoreboard[theme="full"] .team {
+    gap: clamp(8px, 3cqw, 40px);
+  }
 }
 
 .scoreboard[theme="full"] .active_card,
@@ -497,21 +520,22 @@ html[data-theme="spectator"] .spectator_bar {
   margin-top: -0.06em;
 }
 
-/* Sets won: only as tall as the number, an outline in the team colour */
+/* Sets won: only as tall as the number, an outline in the team colour
+   (as thick as the former spectator theme's 1vw) */
 .scoreboard[theme="full"] .sets_card {
   grid-area: sets;
   align-self: start;
-  padding: 0.16em 0 0.22em;
-  font-size: min(32cqh, 18cqw);
+  padding: 0.36em 0 0.45em;
+  font-size: min(40cqh, 22cqw);
   background-color: transparent;
 }
 
 .scoreboard[theme="full"] .team_a .sets_card {
-  box-shadow: inset 0 0 0 clamp(3px, 1.2cqw, 12px) var(--A_Color);
+  box-shadow: inset 0 0 0 clamp(4px, 2.15cqw, 24px) var(--A_Color);
 }
 
 .scoreboard[theme="full"] .team_b .sets_card {
-  box-shadow: inset 0 0 0 clamp(3px, 1.2cqw, 12px) var(--B_Color);
+  box-shadow: inset 0 0 0 clamp(4px, 2.15cqw, 24px) var(--B_Color);
 }
 
 .scoreboard[theme="full"] .sets_card span {
@@ -540,9 +564,10 @@ html[data-theme="spectator"] .spectator_bar {
 @media (max-width: 560px) {
   html[data-theme="spectator"] .spectator_bar {
     grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: start;
-    gap: 0.5em;
-    padding: 0.6em;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0.9em 0.6em;
+    font-size: 14px;
   }
 
   .spectator_heading {
@@ -550,8 +575,23 @@ html[data-theme="spectator"] .spectator_bar {
     align-items: center;
   }
 
-  .spectator_game:not(:empty) + .spectator_event::before {
+  .spectator_heading > span {
+    font-size: 1.35em;
+  }
+
+  .spectator_game:not(:empty) + .spectator_mode::before {
     content: none;
+  }
+
+  /* Back and statistics at the top of the box, not centred on the title */
+  .spectator_start,
+  .spectator_end {
+    align-self: start;
+  }
+
+  /* Readable on a phone: as big as the buttons' text */
+  .spectator_meta {
+    font-size: 0.95em;
   }
 }
 
@@ -582,6 +622,47 @@ html[data-theme="spectator"] .spectator_backdrop.hidden {
   box-shadow: 0 20px 60px #00000080;
 }
 
+/* Scrollbar: thin, in the panel's colours. It would come and go while the
+   parts slide in and briefly stick out, shifting everything sideways - so
+   no scrolling during that (.settling), and its room is kept from the start
+   only if the overlay really is too tall for the screen (.needs_scroll) -
+   both set by js/spectator.js. No room kept otherwise: content can't paint
+   into it, the header and bottom bar would end short of the edges. */
+.overlay {
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff33 transparent;
+}
+
+.overlay::-webkit-scrollbar {
+  width: 8px;
+}
+
+.overlay::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overlay::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background-color: #ffffff33;
+}
+
+.overlay::-webkit-scrollbar-thumb:hover {
+  background-color: #ffffff55;
+}
+
+.overlay.needs_scroll {
+  scrollbar-gutter: stable;
+}
+
+/* Fits the screen: no scrollbar at all - parts sliding in can't bring one up */
+.match_statistics:not(.needs_scroll) {
+  overflow-y: hidden;
+}
+
+.overlay.settling {
+  overflow-y: hidden;
+}
+
 /* A closed overlay is only transparent - out of the way completely, or its
    invisible box sits in the middle of the page and swallows clicks (the
    size limit above overrides base.css' .hidden, which used to shrink it) */
@@ -600,6 +681,15 @@ html[data-theme="spectator"] .spectator_backdrop.hidden {
   font-weight: normal;
   line-height: 1;
   font-variation-settings: 'FILL' 0, 'wght' 500;
+}
+
+/* Statistics: wider than the stream's 80%, so team names and the columns get room */
+.match_statistics {
+  width: min(1600px, 92vw);
+}
+
+.match_statistics .team_stats_container {
+  max-width: 27%;
 }
 
 /* Header of the statistics: Match / current set and close instead of the logo */
@@ -678,182 +768,30 @@ html[data-theme="spectator"] .match_statistics .spectator_close {
 }
 
 /* ---------------- Statistics on phones ----------------
-   The stream layout is one row of four columns (team values | players |
-   sideouts | breaks) whose rows line up per player. Narrow, the same
-   elements are regrouped per player instead - only CSS, the markup the
-   stream themes use stays as it is:
-     team A values | team B values
-     Sideouts      | Breaks          (column labels)
-     player A (name, club)
-     sideouts A    | breaks A
-     ... for B, C, D                                                      */
-@media (max-width: 820px) {
-  .match_statistics {
-    width: calc(100vw - 20px);
-    max-width: none;
-  }
+   For now the desktop layout, scaled down as a whole to fit the screen
+   (--stats-scale, set by fitStatsToScreen() in js/spectator.js) and always
+   in landscape: turned by 90° while the phone is held upright. Scale and
+   rotation are the separate properties, so they combine with the overlay's
+   own transform (centring, fade-in animation) instead of replacing it;
+   the origin is the overlay's anchor in the middle of the screen. */
+html.stats_fit .match_statistics {
+  /* Desktop width, wider on long screens (--stats-width, see fitStatsToScreen()) */
+  width: var(--stats-width, 1280px);
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  transform-origin: 0 0;
+  scale: var(--stats-scale, 1);
+}
 
-  .match_statistics .overlay_header {
-    padding: 10px 12px;
-  }
+html.stats_fit.stats_rotated .match_statistics {
+  rotate: 90deg;
+}
 
-  .match_statistics .overlay_header .left {
-    display: none;
-  }
-
-  .match_statistics .overlay_header .right {
-    width: auto;
-  }
-
-  .match_statistics .overlay_header .center {
-    min-width: 0;
-    align-items: flex-start;
-    text-align: left;
-  }
-
-  .match_statistics .spectator_stats_type button {
-    padding: 0 9px;
-    font-size: 0.9rem;
-  }
-
-  .match_statistics .overlay_header .center h3 {
-    font-size: 1.3rem;
-  }
-
-  .match_statistics .overlay_header .center h4 {
-    font-size: 1rem;
-  }
-
-  .match_statistics .team_statistics {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px 10px;
-    padding: 14px 12px 18px;
-  }
-
-  /* Flatten the column wrappers so their items join the grid */
-  .match_statistics .team_statistics > .players_container,
-  .match_statistics .players_container > .team,
-  .match_statistics .team_statistics > .player_stats,
-  .match_statistics .player_stats > .player_stats_container {
-    display: contents;
-  }
-
-  /* Team values side by side on top */
-  .match_statistics .team_stats_container {
-    grid-column: 1 / -1;
-    order: 0;
-    max-width: none;
-    flex-direction: row !important;
-    gap: 10px !important;
-  }
-
-  .match_statistics .team_stats_container .team_stats,
-  .match_statistics .team_stats_container .team_stats:last-child {
-    flex: 1 1 0;
-    flex-direction: column;
-    min-width: 0;
-    gap: 10px;
-    padding: 0 !important;
-    border: none !important;
-  }
-
-  /* Same order for both teams (the stream mirrors team B: header at the bottom) */
-  .match_statistics .team_stats_container .team_stats .team_header { order: 0; }
-  .match_statistics .team_stats_container .team_stats .team_overall_stats { order: 1; }
-  .match_statistics .team_stats_container .team_stats .set_stats { order: 2; }
-
-  .match_statistics .team_stats_container .team_stats .team_header h4 {
-    font-size: 1.25rem;
-  }
-
-  .match_statistics .team_stats_container .team_stats .team_overall_stats .stat_item {
-    padding: 8px 10px;
-  }
-
-  .match_statistics .stat_item * {
-    font-size: 1.5rem;
-  }
-
-  .match_statistics .stat_item .value .unit,
-  .match_statistics .team_stats_container .team_stats .team_overall_stats .stat_item .stat_label {
-    font-size: 1rem;
-  }
-
-  .match_statistics .stat_item .absolute_value .stat_value {
-    font-size: 0.95rem;
-  }
-
-  .match_statistics .team_stats_container .team_stats .set_stats .counter {
-    width: auto !important;
-    flex: 1 1 0;
-    min-width: 0;
-  }
-
-  .match_statistics .team_stats_container .team_stats .set_stats .counter .score.score {
-    font-size: 1.15rem;
-  }
-
-  /* Column labels as a header row */
-  .match_statistics .player_stats .col_label {
-    position: static;
-    order: 1;
-    margin-top: 6px;
-    padding-top: 10px;
-    border-top: 1px solid var(--ov-line);
-  }
-
-  .match_statistics .player_stats.sideouts .col_label { grid-column: 1; }
-  .match_statistics .player_stats.breaks .col_label { grid-column: 2; }
-
-  .match_statistics .player_stats .col_label p {
-    font-size: 0.95rem;
-  }
-
-  /* Each player across the whole width, their two stats below */
-  .match_statistics .players_container .player {
-    grid-column: 1 / -1;
-    margin-top: 8px;
-  }
-
-  .match_statistics .players_container .player.a { order: 10; }
-  .match_statistics .players_container .player.b { order: 20; }
-  .match_statistics .players_container .player.c { order: 30; }
-  .match_statistics .players_container .player.d { order: 40; }
-
-  .match_statistics .player_stats.sideouts .player_stats_group { grid-column: 1; }
-  .match_statistics .player_stats.breaks .player_stats_group { grid-column: 2; }
-
-  .match_statistics .player_stats .team_a .player_stats_group:nth-child(1) { order: 11; }
-  .match_statistics .player_stats .team_a .player_stats_group:nth-child(2) { order: 21; }
-  .match_statistics .player_stats .team_b .player_stats_group:nth-child(1) { order: 31; }
-  .match_statistics .player_stats .team_b .player_stats_group:nth-child(2) { order: 41; }
-
-  .match_statistics .players_container .player .details .name h5 {
-    font-size: 1.4rem;
-  }
-
-  .match_statistics .players_container .player > img {
-    width: 40px;
-    height: 40px;
-  }
-
-  /* Percentage above the per-set bars inside each half */
-  .match_statistics .player_stats .player_stats_container .player_stats_group {
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .match_statistics .player_stats .player_stats_container .player_stats_group .stat_item,
-  .match_statistics .player_stats .player_stats_container .player_stats_group .line_stats_group {
-    width: auto;
-  }
-
-  .match_statistics .player_stats .player_stats_container .player_stats_group .stat_item {
-    padding: 8px 10px 10px;
-  }
-
-  .match_statistics .score_history_in_stats {
-    overflow-x: auto;
-  }
+/* Less empty space above and below - the height decides how big it gets.
+   The top keeps room for the column labels (Sideouts / Breaks), which sit
+   40px above their columns. */
+html.stats_fit .match_statistics .team_statistics {
+  padding-top: 52px;
+  padding-bottom: 32px;
 }
