@@ -20,8 +20,6 @@
    of a light scoreboard next to a dark statistics panel.
    ============================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
-
 * {
   font-family: 'Barlow Semi Condensed', sans-serif;
   font-weight: 500;
@@ -497,7 +495,7 @@ body[players='show'] .counter {
 /* No RGX anywhere in this theme - the rating is a Roundnet Germany ladder and
    has nothing to say at a world championship. Hiding the wrapper covers both
    the per-player chips and the per-team ones (they all carry .rgx, see
-   index.html), and it leaves the values in the DOM, so Scoreboard.js' data
+   display.html), and it leaves the values in the DOM, so Scoreboard.js' data
    export still reads them. */
 .rgx {
   display: none;

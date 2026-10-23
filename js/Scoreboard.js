@@ -1,30 +1,18 @@
-import { themes, DEFAULT_BRAND_LOGO, subscribeToMatch, getPathsAndValues, getColorBrightness, rgb2hex, writeData, readData, serverTimestamp, writeTimerState, showToast, copyToClipboard, changeEventHistory, normalizeEventHistory } from "./main.js?v=4";
+import { themes, DEFAULT_BRAND_LOGO, subscribeToMatch, getPathsAndValues, getColorBrightness, rgb2hex, writeData, readData, serverTimestamp, writeTimerState, copyToClipboard, changeEventHistory, normalizeEventHistory } from "./main.js?v=4";
+import { showToast } from "./toast.js?v=4";
 import { PlayerzonePicker, fetchGame, syncToPlayerzone, sendSyncBeacon } from "./playerzone.js?v=4";
 
-// Fixed durations for the shared timeout/medical/break timer - matches
-// led_scoreboard/include/score_actions.h's BREAK/TIMEOUT/MEDICAL_*_MS
-// exactly. Never sent over the wire; every reader (this page, the LED
-// board, the manager server) keeps its own copy so match-<channel>/timer
-// only ever has to say *which* timer is running, not how long it lasts.
-const TIMER_DURATIONS_MS = { timeout: 60_000, medical: 300_000, break: 180_000 };
-const TIMER_LABELS = { timeout: 'Timeout', medical: 'Medical Timeout', break: 'Break' };
 // Mutually exclusive "team indicator" settings, see the Team Indicator handler
 const TEAM_INDICATOR_MODES = ['show_color', 'show_flag', 'show_club_logo', 'show_team_logo'];
 import { resolveFlag, getCountryList } from "./flags.js?v=4";
 import { historyScore, reconcileScore, recordSquadScore, cleanScoreEvents } from "./scoreHistory.js?v=4";
+// Timer durations and the set-mode convention are shared with the live overview
+import { TIMER_DURATIONS_MS, TIMER_LABELS, setModeToFormat, serveInfo } from "./matchStatus.js?v=4";
+import { squadScoreFromResults } from "./squadGroups.js?v=4";
+import { AutoSquadScore } from "./autoSquadScore.js?v=4";
 
-// Same convention as led_scoreboard/include/firebase.h's _parseSetMode() and
-// the manager server's setModeToFormat() (firebaseBridge.js): 0=BO1 (never
-// auto-starts a break), 1=2 sets (always does), 2=BO3 (only while the match
-// isn't already decided) - see startTimer('break') callers below.
-function setModeToFormat(raw) {
-    const text = String(raw || '').trim();
-    if (!text) return 2;
-    const lower = text.toLowerCase();
-    if (text === '1' || /\b1\s*set\b/.test(lower)) return 0;
-    if (text === '2' || /\b2\s*sets?\b/.test(lower)) return 1;
-    return 2; // any other value (e.g. "3", "Best of 3") -> BO3
-}
+/** Settings a spectator picks for themselves (setViewerSettings()) instead of taking the court's. */
+const VIEWER_SETTINGS = ['show_score_history', 'show_score_history_chart', 'show_match_statistics', 'show_match_preview', 'match_stats_type'];
 
 /** A typed score that jumps by more than one point waits this long for the next keystroke. */
 const SCORE_TYPING_DELAY_MS = 700;
@@ -67,7 +55,10 @@ export class Scoreboard {
         this.$cancelTimerButton = $('#cancel_timer');
         this.$timerStatus = $('.timer_status');
         this.$timerWidget = $('.timer_widget');
-        this.$sets = $('.set');
+        // Not the score history inside the statistics: updateScoreHistory() shows
+        // its sets by the statistics type - toggled here by the active set as well,
+        // it showed other sets for a moment while the statistics faded out
+        this.$sets = $('.set').not('.score_history_in_stats .set');
         this.$setScoreCounterA = $('.a_sets_won');
         this.$setScoreCounterB = $('.b_sets_won');
         this.$activeScoreCounterA = $('.a_score_active');
@@ -98,6 +89,8 @@ export class Scoreboard {
             "show_match_statistics": 0,
             "show_match_preview": 0,
             "match_stats_type": "match",
+            // "manual" (typed in) or "auto" (counted from the linked squad subgames, see AutoSquadScore)
+            "group_score_mode": "manual",
         };
         // Raw teams_info.team_x.name/flag as last received from Firebase -
         // kept independently of the DOM so applyFlag() can fall back to
@@ -130,6 +123,8 @@ export class Scoreboard {
         this.remoteActiveSet = null;
         // Input only: game picker of the "Playerzone" container (see playerzone.js)
         this.playerzonePicker = null;
+        // Input only: watches the subgames of the linked squad game while the squad score is automatic
+        this.autoSquad = null;
         // Live data as last applied to the page, per flattened path - an
         // update only touches the fields whose value actually changed
         // (processDataAndUpdateFields()). Cleared on a channel switch.
@@ -177,6 +172,7 @@ export class Scoreboard {
 
         if (this.type === 'input') {
             this.playerzonePicker = new PlayerzonePicker($('.container.playerzone'), (gameId) => this.loadPlayerzoneGame(gameId));
+            this.autoSquad = new AutoSquadScore((update) => this.applyAutoSquadScore(update));
             // Closing the tab: best-effort interim result for the linked game
             window.addEventListener('pagehide', () => {
                 this.flushPendingUploads();
@@ -235,6 +231,7 @@ export class Scoreboard {
             if (this.type === 'input') {
                 this.remoteActiveSet = Number(data?.active_set) || null;
                 this.updatePlayerzoneLink(data);
+                this.updateAutoSquadScore();
             }
             this.sanitizeStartingSelections();
             this.requestRender();
@@ -256,7 +253,7 @@ export class Scoreboard {
     }
 
     /**
-     * Output page: reveals it (removes html.is-loading, see index.html) once
+     * Output page: reveals it (removes html.is-loading, see display.html) once
      * both the theme's stylesheet and the first match data are in.
      */
     markLoaded(part) {
@@ -303,6 +300,9 @@ export class Scoreboard {
             this.updateMatchStatistics();
             this.updateTeamRGX();
         }
+
+        // Pages building on the board (spectator.js) catch up after each render
+        this.onRender?.();
     }
 
 
@@ -310,14 +310,18 @@ export class Scoreboard {
      * Apply theme styling and HTML structure based on theme configuration
      * ============================================================================== */
     setTheme(theme) {
-        // Simplified fallback logic
+        // Displays without a (known) theme show the spectator board - also old
+        // ?theme=full links, the theme it replaced
         if (!(theme in themes)) {
-            theme = this.type === 'output' ? 'full' : 'rg';
+            theme = this.type === 'output' ? 'spectator' : 'rg';
             this.theme = theme;
         }
 
         const html_structure = themes[theme].html_structure;
         const css_path = themes[theme].css_path;
+        // Spectator view: overlays opened by the viewer, not the court's settings (see setViewerSettings())
+        this.isSpectator = this.type === 'output' && !!themes[theme].spectator;
+        $('html').attr('data-theme', theme);
         const extensionIndex = css_path.lastIndexOf('.');
         const css_path_input = css_path.slice(0, extensionIndex) + "_input" + css_path.slice(extensionIndex);
 
@@ -332,14 +336,14 @@ export class Scoreboard {
         // the page unstyled (raw HTML, in normal flow, no opacity:0/
         // position:fixed on .overlay) while the new links load.
         // The 'css/style-v' half of the selector is what clears the theme link
-        // that index.html ships in its own <head>; [theme-stylesheet] catches
+        // that display.html ships in its own <head>; [theme-stylesheet] catches
         // the ones this method appended on an earlier call, whatever they're
         // named (style-irf.css doesn't match the 'style-v' pattern, and
         // without this a theme switch would leave the old sheet behind).
         $('link[rel="stylesheet"][href*="css/style-v"], link[theme-stylesheet]').remove();
         // Once the sheet is in, layout and fonts change - re-render so the
         // JS-measured sizes (flags, timer widget position) pick that up.
-        // index.html stays hidden (html.is-loading) until the theme's sheet
+        // display.html stays hidden (html.is-loading) until the theme's sheet
         // is in, instead of first loading a default theme and then swapping
         $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('theme-stylesheet', '').attr('href', css_path)
             .on('load', () => {
@@ -376,9 +380,15 @@ export class Scoreboard {
             $('.scoreboard').hide();
             $(`.scoreboard[theme="${html_structure}"]`).show();
 
-            $('.score_history').toggleClass('hidden', html_structure !== 'vertical_score');
-            $('.match_statistics').toggleClass('hidden', html_structure !== 'vertical_score');
-            $('.match_preview').toggleClass('hidden', html_structure !== 'vertical_score');
+            // Spectator view: the overlays' placeholder texts (player clubs, RGX, ...)
+            // would show as real data wherever a court has none - start them empty.
+            // Runs before the first data is applied (the listener answers asynchronously).
+            if (this.isSpectator) $('.overlay [fb-data]').not('img, input, select').text('');
+
+            const overlays = html_structure === 'vertical_score' || this.isSpectator;
+            $('.score_history').toggleClass('hidden', !overlays);
+            $('.match_statistics').toggleClass('hidden', !overlays);
+            $('.match_preview').toggleClass('hidden', !overlays);
         }
     }
 
@@ -648,6 +658,13 @@ export class Scoreboard {
             this.uploadData(uploadTargets);
         });
 
+        // Squad score mode: typed in or counted from the linked subgames
+        $('#Squad_Score_Mode').change((event) => {
+            this.settings.group_score_mode = $(event.target).val();
+            this.uploadData([$(event.target)]);
+            this.updateAutoSquadScore();
+        });
+
         // Match stats type selector handler
         $('#Match_Stats_Type').change((event) => {
             const value = $(event.target).val();
@@ -736,6 +753,62 @@ export class Scoreboard {
         return updatedElements;
     }
 
+
+    /* ==============================================================================
+     * Automatic squad score: while admin_settings.group_score_mode is 'auto' and
+     * the court carries a Playerzone subgame, AutoSquadScore watches the other
+     * subgames of its main game, and the result is written as this court's
+     * score.squad_score - so every display shows it like a typed-in one. The
+     * subgame results are kept in match-<channel>/squad_auto as well, so a
+     * subgame still counts after "End game" (see squadGroups.js).
+     * ============================================================================== */
+    autoSquadMainGame() {
+        if (this.type !== 'input' || this.settings.group_score_mode !== 'auto' || !this.canWriteChannel()) return null;
+        return Number(this.playerzoneLink?.main_game_id) || null;
+    }
+
+    /** (Re)starts or stops the watcher and locks the squad score fields while it's set to automatic. */
+    updateAutoSquadScore() {
+        if (!this.autoSquad) return;
+        const mainGameId = this.autoSquadMainGame();
+        this.autoSquad.watch(mainGameId ? this.channel : null, mainGameId);
+        // Locked as soon as it's automatic - to type it in, switch back to manual
+        const auto = this.settings.group_score_mode === 'auto';
+        $('#A_Score_Team, #B_Score_Team')
+            .prop('readonly', auto)
+            .attr('tabindex', auto ? -1 : null)
+            .attr('title', !auto ? null : mainGameId
+                ? 'Counted automatically from the squad game\'s subgames'
+                : 'Automatic - counted once a Playerzone subgame is loaded on this court (switch to manual to type it in)');
+    }
+
+    /** Writes the counted squad score (and the known subgame results) if they changed. */
+    applyAutoSquadScore({ channel, mainGameId, results, own }) {
+        if (channel !== this.channel || mainGameId !== this.autoSquadMainGame()) return;
+        const names = { a: own.teams_info?.team_a?.name, b: own.teams_info?.team_b?.name };
+        const score = squadScoreFromResults(results, names);
+        const current = own.score?.squad_score || {};
+        const updates = {};
+
+        if (Number(current.team_a_score) !== score.a || Number(current.team_b_score) !== score.b) {
+            updates[`/match-${channel}/score/squad_score/team_a_score`] = score.a;
+            updates[`/match-${channel}/score/squad_score/team_b_score`] = score.b;
+            this.updateEventHistory((list) => {
+                recordSquadScore(list, { team: 'a', score: score.a });
+                recordSquadScore(list, { team: 'b', score: score.b });
+            });
+        }
+
+        // Key order differs between Firebase and here - compare a canonical form
+        const canonical = (list) => Object.entries(list || {})
+            .map(([gameId, result]) => `${gameId}:${result?.side}:${result?.winner || ''}`).sort().join('|');
+        const stored = own.squad_auto;
+        if (Number(stored?.main_game_id) !== mainGameId || canonical(stored?.results) !== canonical(results)) {
+            updates[`/match-${channel}/squad_auto`] = { main_game_id: mainGameId, results };
+        }
+
+        if (Object.keys(updates).length) writeData(updates);
+    }
 
     /** True if the signed-in account may write the selected court. */
     canWriteChannel() {
@@ -828,6 +901,12 @@ export class Scoreboard {
         if (!playerzone?.game_id) {
             showToast("❌", "Invalid response from Playerzone");
             return false;
+        }
+        // Event name like the game description (locked fields stay) - from the
+        // picker's event list while the PZ doesn't send it yet
+        if (!gameData.tournament_name) {
+            const eventName = this.playerzonePicker?.eventName(playerzone.event_id);
+            if (eventName) gameData.tournament_name = eventName;
         }
 
         // Game currently on this court, and wherever the new game is listed as live right now
@@ -1183,11 +1262,15 @@ export class Scoreboard {
      * ============================================================================== */
     async insertAdminSetting(path, value) {
         const part = path.split('.').pop();
+        if (this.isSpectator && VIEWER_SETTINGS.includes(part)) return;
         this.settings[part] = value;
         
         // Special handling for match statistics type
         if (part === 'match_stats_type') {
             $('#Match_Stats_Type').val(value);
+        }
+        if (part === 'group_score_mode') {
+            $('#Squad_Score_Mode').val(value === 'auto' ? 'auto' : 'manual');
         }
     }
 
@@ -1201,7 +1284,7 @@ export class Scoreboard {
      *
      * On input.html, a fallback-derived code also gets written back to
      * teams_info.team_x.flag, so it becomes the same kind of explicit fact a
-     * manual pick would be - other consumers of that field (index.html, a
+     * manual pick would be - other consumers of that field (display.html, a
      * second admin's browser, TournamentLiveScores/Fwango) then see it
      * directly instead of each re-deriving their own guess from the name,
      * and the country <select> picks it up as its selected option on the
@@ -2037,44 +2120,14 @@ export class Scoreboard {
      * @returns {Object|null} Object with team and serve number, or null if no serve data
      * ============================================================================== */
     getServeInfo() {
-        // Get the starting team for this set from database
-        const startingTeam = this.getStartingTeam(this.active_set);
-        if (!startingTeam) return null;
-        
-        // Count total points in this set
-        const totalPoints = this.getTotalPointsInSet(this.active_set);
-        
-        // Check if we're in overtime mode
-        const isOvertime = this.isInOvertime(this.active_set);
-        
-        if (isOvertime) {
-            // Overtime rules: serve changes after every point
-            const servingTeam = totalPoints % 2 === 0 ? startingTeam : (startingTeam === 'a' ? 'b' : 'a');
-            return {
-                team: servingTeam,
-                serveNumber: 1, // Always single serve in overtime
-                isOvertime: true
-            };
-        } else {
-            // Normal rules: first serve is single, then alternates every 2 points
-            let servingTeam, serveNumber;
-            if (totalPoints === 0) {
-                servingTeam = startingTeam;
-                serveNumber = 1;
-            } else {
-                const servesAfterFirst = totalPoints - 1;
-                const serveGroup = Math.floor(servesAfterFirst / 2);
-                const isStartingTeamServe = serveGroup % 2 === 0;
-                servingTeam = isStartingTeamServe ? (startingTeam === 'a' ? 'b' : 'a') : startingTeam;
-                serveNumber = (servesAfterFirst % 2) + 1;
-            }
-
-            return {
-                team: servingTeam,
-                serveNumber: serveNumber,
-                isOvertime: false
-            };
-        }        
+        // Shared with the live overview (matchStatus.js)
+        const set = this.active_set;
+        const info = serveInfo(this.getScore(set, 'a'), this.getScore(set, 'b'), this.getStartingServer(set), {
+            winPoints: this.gameSettings.win_points,
+            hardcap: this.gameSettings.hardcap,
+            minMargin: this.gameSettings.min_win_margin,
+        });
+        return info && { team: info.team, serveNumber: info.serveNumber, isOvertime: info.single && this.getTotalPointsInSet(set) > 0 };
     }
 
     /** ==============================================================================
@@ -2293,7 +2346,7 @@ export class Scoreboard {
     /** ==============================================================================
      * One .logo-indicator per team next to every .flag-indicator of an
      * output page (board, overlays, score history), and next to the color
-     * picker on input.html - created once, so index.html doesn't need a
+     * picker on input.html - created once, so display.html doesn't need a
      * second copy of every flag slot.
      * ============================================================================== */
     ensureLogoIndicators() {
@@ -2337,13 +2390,13 @@ export class Scoreboard {
     }
 
     /** ==============================================================================
-     * Set every .flag-indicator <img> on an output page (index.html) to an
+     * Set every .flag-indicator <img> on an output page (display.html) to an
      * explicit height (scaled by FLAG_HEIGHT_SCALE) with a proportional
      * width via a plain 4:3 multiplication done in JS - not left to CSS
      * height:77%/aspect-ratio + !important, which kept getting silently
      * defeated per-theme across several rounds with no way to verify live.
-     * The "full" theme never has a .flag-indicator at all (removed per
-     * request - flags aren't offered there).
+     * The spectator board's flag sits in a .teamname-row like the stream
+     * themes' main board, so it's measured the same way.
      *
      * Main scoreboard branch measures .teamname's cap-height (top of a
      * capital letter to the baseline), not .name, .team, or .teamname's own
@@ -2390,7 +2443,7 @@ export class Scoreboard {
                 // Overlay team headers carry the name in an <h4>, not a
                 // .teamname, and the statistics overlay's header isn't inside
                 // a .team either - so neither lookup below applies. The <h4>
-                // is always the flag's next sibling (see index.html).
+                // is always the flag's next sibling (see display.html).
                 const $reference = $flag.nextAll('h4').first();
                 if (!$reference.length) return;
                 heightPx = this.measureCapHeight($reference[0]);
@@ -2465,7 +2518,19 @@ export class Scoreboard {
      * ============================================================================== */
     supportsOverlays() {
         const themeConfig = themes[this.theme];
-        return !!themeConfig && themeConfig.html_structure === 'vertical_score';
+        return !!themeConfig && (themeConfig.html_structure === 'vertical_score' || !!themeConfig.spectator);
+    }
+
+    /** ==============================================================================
+     * Spectator view: the overlays are opened by the viewer, so the court's own
+     * settings for them (set for the stream in the input panel) are ignored
+     * there - see insertAdminSetting(). Everything else (colors, names, serve)
+     * still follows the court.
+     * ============================================================================== */
+    setViewerSettings(values) {
+        Object.assign(this.settings, values);
+        this.updateSettings();
+        this.requestRender();
     }
 
     updateMatchStatisticsVisibility() {
@@ -2518,7 +2583,7 @@ export class Scoreboard {
 
     updateUrlOutput() {
         const baseUrl = window.location.origin + window.location.pathname;
-        const newUrl = baseUrl.replace("input.html", "index.html");
+        const newUrl = baseUrl.replace("input.html", "display.html");
         // Org/court link as long as the channel belongs to a court - it stays
         // valid even if the internal channel number changes at some point.
         const court = this.user?.courtForChannel(this.channel);
@@ -3013,19 +3078,19 @@ export class Scoreboard {
         this.$matchStatisticsContainer.find('.center h3').text(title);
     }
 
+    /**
+     * Set scores in the statistics: all of them for the match, the other sets
+     * dimmed for a single set - dimmed rather than hidden, so switching
+     * between match and set doesn't move anything.
+     */
     updateSetScoresDisplay(setNumber) {
-        if (this.settings.match_stats_type === 'match') {
-            // Show all set scores
-            this.$matchStatisticsContainer.find('.set_stats .counter').removeClass('hide');
-        } else {            
-            if (setNumber && setNumber >= 1 && setNumber <= 7) {
-                this.$matchStatisticsContainer.find('.set_stats .counter').addClass('hide');
-                const $targetSet = this.$matchStatisticsContainer.find(`.set_stats .counter:nth-child(${setNumber})`);
-                if ($targetSet.length) {
-                    $targetSet.removeClass('hide');
-                }
-            }
+        const $counters = this.$matchStatisticsContainer.find('.set_stats .counter');
+        if (this.settings.match_stats_type === 'match' || !(setNumber >= 1 && setNumber <= 7)) {
+            $counters.removeClass('dimmed');
+            return;
         }
+        $counters.addClass('dimmed');
+        this.$matchStatisticsContainer.find(`.set_stats .counter:nth-child(${setNumber})`).removeClass('dimmed');
     }
 
     getLastResetIndex(event_history = this.event_history) {
@@ -3182,17 +3247,18 @@ export class Scoreboard {
      * Update set-specific player statistics in the UI
      * ============================================================================== */
     updatePlayerSetStatistics() {
-        let completedSetsCountArray;
-        if (this.settings.match_stats_type == 'match') {
-            let completedSetsCount = this.getCompletedSetsCount();
-            completedSetsCountArray = Array.from({length: completedSetsCount}, (_, i) => i);
-            // const completedSetsCount = this.active_set;
-            if (this.active_set != completedSetsCount && this.getScore(this.active_set, 'a') + this.getScore(this.active_set, 'b') > 0) {
-                completedSetsCountArray.push(this.active_set - 1)
-            }
-        } else {
-            completedSetsCountArray = this.settings.match_stats_type === 'active_set' ? [this.active_set - 1] : [this.settings.match_stats_type - 1];
+        // Every set played so far gets its line - also for a single set, where
+        // the other sets are only dimmed (see below), so switching between
+        // match and set doesn't change the height and nothing moves
+        let completedSetsCount = this.getCompletedSetsCount();
+        const completedSetsCountArray = Array.from({length: completedSetsCount}, (_, i) => i);
+        if (this.active_set != completedSetsCount && this.getScore(this.active_set, 'a') + this.getScore(this.active_set, 'b') > 0) {
+            completedSetsCountArray.push(this.active_set - 1)
         }
+        // The set the statistics are about (null: the whole match)
+        const selectedSet = this.settings.match_stats_type === 'match' ? null
+            : this.settings.match_stats_type === 'active_set' ? this.active_set
+                : Number(this.settings.match_stats_type);
 
         // Build a map from set index to stats, so we can reference by set index directly
         const setsStats = {};
@@ -3246,11 +3312,9 @@ export class Scoreboard {
                 const match = id.match(/set_(\d+)$/);
                 if (match) {
                     const setNum = parseInt(match[1], 10);
-                    if (completedSetsCountArray.includes(setNum - 1)) {
-                        $(this).closest('.line_stat').show();
-                    } else {
-                        $(this).closest('.line_stat').hide();
-                    }
+                    const $line = $(this).closest('.line_stat');
+                    $line.toggle(completedSetsCountArray.includes(setNum - 1));
+                    $line.toggleClass('dimmed', selectedSet != null && setNum !== selectedSet);
                 }
             });
         });

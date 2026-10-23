@@ -1,0 +1,793 @@
+/* Spectator view (theme=spectator - also the display without a stream theme).
+   Opened from the overview, see js/spectator.js. A header box in the
+   overview's style (Barlow Semi Condensed, dark page), below it the big board
+   in the team colours (Oswald, big numbers) and the stream overlays as panels
+   in the same palette.
+
+   Sizes follow the space actually available, not the screen: the board and
+   every team are size containers (cqw/cqh), so the same rules fit a phone in
+   portrait, a laptop and a TV across the hall. Landscape-ish boards put the
+   teams side by side, portrait ones stack them. */
+
+:root {
+  --page: #13141A;
+  --surface: #1e2027;
+  --surface-raised: #2a2d36;
+  --surface-sunken: #17181e;
+  --primary: #fcc155;
+  --white: #ffffff;
+  --chrome-text: #ffffff;
+  --chrome-muted: #ffffff99;
+  --A_Color: #3a3d46;
+  --B_Color: #3a3d46;
+  /* Spacing grows with the screen - phone to TV */
+  --gap: clamp(10px, 1.6vmin, 28px);
+  /* Around the page and between header and board - like the former spectator theme (v3) */
+  --edge: clamp(12px, 2vw, 40px);
+  --header-gap: clamp(14px, 3vh, 44px);
+  --radius: clamp(8px, 1.2vmin, 18px);
+  /* Header type: grows with the width, but stays small on short screens (phones held sideways) */
+  --chrome-size: clamp(13px, min(calc(0.55rem + 0.75vw), 3.4vh), 36px);
+
+  /* Stream overlays (statistics, preview - style-output.css) in this palette */
+  --ov-surface: var(--surface);
+  --ov-header-bg: var(--surface-sunken);
+  --ov-radius: 14px;
+  --ov-line: #ffffff1f;
+  --ov-font: 'Barlow Semi Condensed', sans-serif;
+  --ov-num-font: 'Oswald', sans-serif;
+  --ov-text: #ffffff;
+  --ov-text-muted: #ffffffb3;
+  --ov-text-faint: #ffffff80;
+  --ov-panel: var(--surface-sunken);
+  --ov-panel-raised: var(--surface-raised);
+  --ov-accent: var(--primary);
+  --ov-table-bg: #ffffff08;
+  --ov-cell-bg: var(--surface-sunken);
+  --ov-cell-border: #ffffff1f;
+}
+
+html,
+body {
+  background-color: var(--page);
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* ============================== Header ============================== */
+
+/* Its own box above the board: back | game and event | details */
+html[data-theme="spectator"] .spectator_bar {
+  display: grid !important;
+  /* Sides as wide as their buttons need, the title truly centred and the
+     first to give way when it gets tight */
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, max-content) minmax(max-content, 1fr);
+  align-items: center;
+  gap: var(--gap);
+  flex: none;
+  margin: var(--edge) var(--edge) 0;
+  padding: 1.05em 0.8em;
+  border-radius: var(--radius);
+  /* Like the overview's tiles (summary) */
+  background-color: #ffffff0d;
+  font-size: var(--chrome-size);
+}
+
+.spectator_bar,
+.spectator_bar * {
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  color: var(--chrome-text);
+  text-transform: none;
+  margin: 0;
+}
+
+.spectator_bar .material-symbols-rounded {
+  font-family: 'Material Symbols Rounded';
+  font-weight: normal;
+  font-size: 1.35em;
+  line-height: 1;
+  font-variation-settings: 'FILL' 0, 'wght' 500;
+}
+
+.spectator_start {
+  display: flex;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.spectator_end {
+  justify-content: flex-end;
+}
+
+.spectator_back,
+.spectator_tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  height: 2.3em;
+  padding: 0 0.85em 0 0.6em;
+  border: none;
+  border-radius: 0.45em;
+  font-size: 0.85em;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  background-color: #ffffff12;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.spectator_back:hover,
+.spectator_tool:hover {
+  background-color: #ffffff22;
+}
+
+.spectator_back:focus-visible,
+.spectator_tool:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Middle: the game and how it's played big, event and place small - in the board's Oswald */
+.spectator_title_text,
+.spectator_title_text * {
+  font-family: 'Oswald', sans-serif;
+}
+
+.spectator_title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7em;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.spectator_title_text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3em;
+  min-width: 0;
+  max-width: 100%;
+  text-align: center;
+  line-height: 1.15;
+}
+
+.spectator_heading,
+.spectator_meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.spectator_heading > span,
+.spectator_meta > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Game and mode alike: big, uppercase, white */
+.spectator_heading > span {
+  font-size: 1.8em;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase !important;
+}
+
+.spectator_heading > span * {
+  font-size: inherit;
+  font-weight: inherit;
+  text-transform: inherit !important;
+}
+
+.spectator_game {
+  flex: none;
+  max-width: 100%;
+}
+
+/* Mode only once the court has one (otherwise just "to · HC" would be left) */
+.spectator_mode:has(> span:empty) {
+  display: none;
+}
+
+.spectator_game:not(:empty) + .spectator_mode::before {
+  content: '·';
+  margin: 0 0.4em;
+  color: var(--chrome-muted);
+}
+
+/* Below: event and place */
+.spectator_meta {
+  font-size: 0.85em;
+}
+
+.spectator_meta,
+.spectator_meta * {
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  color: #ffffff80 !important;
+}
+
+.spectator_meta * {
+  font-size: inherit;
+}
+
+.spectator_event {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.spectator_event:not(:has(.spectator_event_name:not(:empty))) {
+  display: none;
+}
+
+.spectator_event_name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* As tall as the text's capitals rather than its line box - so it sits in the middle */
+.spectator_event_logo {
+  flex: none;
+  height: 0.8em;
+  max-width: 2.2em;
+  object-fit: contain;
+}
+
+.spectator_event_logo:not([src]),
+.spectator_event_logo[src=""] {
+  display: none;
+}
+
+/* Event and place give way alike when it gets tight */
+.spectator_event,
+.spectator_location {
+  flex: 0 1 auto;
+}
+
+/* Separator before the place - only if the event in front of it shows */
+.spectator_event:has(.spectator_event_name:not(:empty)) + .spectator_location:not(:empty)::before {
+  content: '·';
+  margin: 0 0.45em;
+}
+
+/* Details: score history, statistics, preview */
+.spectator_tools {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  min-width: 0;
+}
+
+.spectator_tool[aria-pressed="true"] {
+  background-color: var(--primary);
+}
+
+.spectator_tool[aria-pressed="true"],
+.spectator_tool[aria-pressed="true"] * {
+  color: #111111 !important;
+}
+
+/* ============================== Board ============================== */
+
+.wrapper.scoreboard[theme="full"] {
+  container: board / size;
+  flex: 1;
+  min-height: 0;
+  padding: var(--header-gap) var(--edge) calc(var(--edge) * 1.2);
+}
+
+.scoreboard[theme="full"] .board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  /* Clear space between the teams, like the old full board */
+  column-gap: clamp(16px, 4cqw, 96px);
+  row-gap: clamp(14px, 3.5cqh, 64px);
+  height: 100%;
+}
+
+/* Portrait (phones, portrait screens): teams on top of each other */
+@container board (aspect-ratio < 1.15) {
+  .scoreboard[theme="full"] .board {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.scoreboard[theme="full"] .team {
+  container: team / size;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: clamp(8px, 2.6cqh, 32px);
+  min-width: 0;
+  min-height: 0;
+}
+
+.scoreboard[theme="full"] .team,
+.scoreboard[theme="full"] .team * {
+  font-family: 'Oswald', sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #ffffff;
+  margin: 0;
+}
+
+.scoreboard[theme="full"] .team.light .name,
+.scoreboard[theme="full"] .team.light .name *,
+.scoreboard[theme="full"] .team.light .active_card,
+.scoreboard[theme="full"] .team.light .active_card * {
+  color: #111111;
+}
+
+/* Name card in the team colour: flag/logos, name, players - serve on the right */
+.scoreboard[theme="full"] .team .name {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 2.2cqw, 28px);
+  min-width: 0;
+  /* As tall as the former spectator theme's (v3) */
+  padding: clamp(10px, 4.5cqh, 48px) clamp(14px, 4.8cqw, 60px);
+  border-radius: var(--radius);
+}
+
+.scoreboard[theme="full"] .team_a .name,
+.scoreboard[theme="full"] .team_a .active_card {
+  background-color: var(--A_Color);
+}
+
+.scoreboard[theme="full"] .team_b .name,
+.scoreboard[theme="full"] .team_b .active_card {
+  background-color: var(--B_Color);
+}
+
+/* The colour is the card itself here */
+.scoreboard[theme="full"] .color-indicator {
+  display: none !important;
+}
+
+.scoreboard[theme="full"] .team .name .right {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.15em;
+  min-width: 0;
+}
+
+.scoreboard[theme="full"] .teamname-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3em;
+  min-width: 0;
+  font-size: clamp(20px, min(7.5cqw, 10cqh), 120px);
+}
+
+.scoreboard[theme="full"] .teamname {
+  font-size: 1em;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Flag (sized to the name's capitals by syncOutputFlagSizes()) and club/team logos */
+.scoreboard[theme="full"] .flag-indicator {
+  flex: none;
+  border-radius: 0.06em;
+  box-shadow: 0 0 0 1px #00000026;
+}
+
+.scoreboard[theme="full"] .logo-indicator {
+  align-self: center;
+}
+
+.scoreboard[theme="full"] .player_names {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35em;
+  min-width: 0;
+  font-size: clamp(14px, min(4.4cqw, 5.6cqh), 64px);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.scoreboard[theme="full"] .player_names * {
+  font-size: 1em;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.scoreboard[theme="full"] .player_names .player {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Serve: the rg theme's dots, in the text colour (white or black on the team
+   colour) - two on the 1st serve, the used one faded on the 2nd, one for a
+   single serve. On the right, so the name never moves. */
+.scoreboard[theme="full"] .serve_indicator {
+  --dot: clamp(8px, min(1.6cqw, 2.4cqh), 22px);
+  order: 3;
+  flex: none;
+  position: relative;
+  width: var(--dot);
+  height: var(--dot);
+  margin: calc(var(--dot) * 1.5) 0 0;
+  border-radius: 50%;
+  background-color: transparent;
+}
+
+.scoreboard[theme="full"] .serve_indicator.active {
+  background-color: currentColor;
+}
+
+.scoreboard[theme="full"] .serve_indicator.serve_1::before,
+.scoreboard[theme="full"] .serve_indicator.serve_2::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: calc(var(--dot) * 1.5);
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.scoreboard[theme="full"] .serve_indicator.active.serve_2::before {
+  opacity: 0.35;
+}
+
+.scoreboard[theme="full"] .serve_indicator.active.single_serve {
+  margin: 0;
+}
+
+.scoreboard[theme="full"] .serve_indicator.active.single_serve::before {
+  display: none;
+}
+
+/* Score: the running set big, the sets won next to it - mirrored for team B
+   while side by side, both the same way round when stacked */
+.scoreboard[theme="full"] .team .score {
+  container: score / size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.42fr);
+  grid-template-areas: "active sets";
+  align-items: start;
+  gap: clamp(8px, 3cqw, 40px);
+  min-height: 0;
+}
+
+.scoreboard[theme="full"] .team_b .score {
+  grid-template-columns: minmax(0, 0.42fr) minmax(0, 1fr);
+  grid-template-areas: "sets active";
+}
+
+@container board (aspect-ratio < 1.15) {
+  .scoreboard[theme="full"] .team_b .score {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.42fr);
+    grid-template-areas: "active sets";
+  }
+
+  /* Name to score as far apart as score to sets (.score's gap - the board is
+     as wide as a team here); the larger gap is only for teams side by side */
+  .scoreboard[theme="full"] .team {
+    gap: clamp(8px, 3cqw, 40px);
+  }
+}
+
+.scoreboard[theme="full"] .active_card,
+.scoreboard[theme="full"] .sets_card {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--radius);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.scoreboard[theme="full"] .active_card {
+  grid-area: active;
+  align-self: stretch;
+  min-height: 0;
+  font-size: min(78cqh, 52cqw);
+}
+
+.scoreboard[theme="full"] .active_card p {
+  font-size: 1em;
+  line-height: 1;
+  /* Oswald's digits sit a little low in their box */
+  margin-top: -0.06em;
+}
+
+/* Sets won: only as tall as the number, an outline in the team colour
+   (as thick as the former spectator theme's 1vw) */
+.scoreboard[theme="full"] .sets_card {
+  grid-area: sets;
+  align-self: start;
+  padding: 0.36em 0 0.45em;
+  font-size: min(40cqh, 22cqw);
+  background-color: transparent;
+}
+
+.scoreboard[theme="full"] .team_a .sets_card {
+  box-shadow: inset 0 0 0 clamp(4px, 2.15cqw, 24px) var(--A_Color);
+}
+
+.scoreboard[theme="full"] .team_b .sets_card {
+  box-shadow: inset 0 0 0 clamp(4px, 2.15cqw, 24px) var(--B_Color);
+}
+
+.scoreboard[theme="full"] .sets_card span {
+  font-size: 1em;
+  line-height: 1;
+  color: #ffffff !important;
+}
+
+/* ============================== Small screens ============================== */
+
+/* Tight: buttons as icons, title on one line (phones held sideways stay one row) */
+@media (max-width: 900px) {
+  .spectator_back span,
+  .spectator_tool span {
+    display: none;
+  }
+
+  .spectator_back,
+  .spectator_tool {
+    padding: 0 0.6em;
+  }
+}
+
+/* Phones upright: one row - back, the game (on up to three lines, starting
+   right at the top), details */
+@media (max-width: 560px) {
+  html[data-theme="spectator"] .spectator_bar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0.9em 0.6em;
+    font-size: 14px;
+  }
+
+  .spectator_heading {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .spectator_heading > span {
+    font-size: 1.35em;
+  }
+
+  .spectator_game:not(:empty) + .spectator_mode::before {
+    content: none;
+  }
+
+  /* Back and statistics at the top of the box, not centred on the title */
+  .spectator_start,
+  .spectator_end {
+    align-self: start;
+  }
+
+  /* Readable on a phone: as big as the buttons' text */
+  .spectator_meta {
+    font-size: 0.95em;
+  }
+}
+
+/* ============================== Panels ============================== */
+
+html[data-theme="spectator"] .spectator_backdrop {
+  display: block !important;
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background-color: #000000b3;
+  backdrop-filter: blur(3px);
+}
+
+html[data-theme="spectator"] .spectator_backdrop.hidden {
+  display: none !important;
+}
+
+/* Overlays (statistics): the stream design in this palette (--ov-* above),
+   in the middle of the screen above everything else */
+.overlay {
+  z-index: 1000;
+  top: 50%;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  border: 1px solid #ffffff14;
+  box-shadow: 0 20px 60px #00000080;
+}
+
+/* Scrollbar: thin, in the panel's colours. It would come and go while the
+   parts slide in and briefly stick out, shifting everything sideways - so
+   no scrolling during that (.settling), and its room is kept from the start
+   only if the overlay really is too tall for the screen (.needs_scroll) -
+   both set by js/spectator.js. No room kept otherwise: content can't paint
+   into it, the header and bottom bar would end short of the edges. */
+.overlay {
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff33 transparent;
+}
+
+.overlay::-webkit-scrollbar {
+  width: 8px;
+}
+
+.overlay::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overlay::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background-color: #ffffff33;
+}
+
+.overlay::-webkit-scrollbar-thumb:hover {
+  background-color: #ffffff55;
+}
+
+.overlay.needs_scroll {
+  scrollbar-gutter: stable;
+}
+
+/* Fits the screen: no scrollbar at all - parts sliding in can't bring one up */
+.match_statistics:not(.needs_scroll) {
+  overflow-y: hidden;
+}
+
+.overlay.settling {
+  overflow-y: hidden;
+}
+
+/* A closed overlay is only transparent - out of the way completely, or its
+   invisible box sits in the middle of the page and swallows clicks (the
+   size limit above overrides base.css' .hidden, which used to shrink it) */
+.overlay.hidden:not(.animate) {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.overlay,
+.overlay * {
+  text-transform: none;
+}
+
+.overlay .material-symbols-rounded {
+  font-family: 'Material Symbols Rounded';
+  font-weight: normal;
+  line-height: 1;
+  font-variation-settings: 'FILL' 0, 'wght' 500;
+}
+
+/* Statistics: wider than the stream's 80%, so team names and the columns get room */
+.match_statistics {
+  width: min(1600px, 92vw);
+}
+
+.match_statistics .team_stats_container {
+  max-width: 27%;
+}
+
+/* Header of the statistics: Match / current set and close instead of the logo */
+.match_statistics .overlay_header .brand_logo {
+  display: none;
+}
+
+.match_statistics .overlay_header .right {
+  gap: 8px;
+}
+
+html[data-theme="spectator"] .match_statistics .spectator_stats_type,
+html[data-theme="spectator"] .match_statistics .spectator_close {
+  display: inline-flex !important;
+}
+
+.match_statistics .spectator_stats_type {
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background-color: #ffffff12;
+}
+
+.match_statistics .spectator_stats_type button,
+.match_statistics .spectator_close {
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ov-text);
+  background-color: transparent;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.match_statistics .spectator_stats_type button {
+  display: inline-flex;
+}
+
+.match_statistics .spectator_stats_type button[aria-pressed="true"] {
+  background-color: #ffffff26;
+}
+
+.match_statistics .spectator_close {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  background-color: #ffffff12;
+}
+
+.match_statistics .spectator_close .material-symbols-rounded {
+  font-size: 22px;
+}
+
+.match_statistics .spectator_stats_type button:hover,
+.match_statistics .spectator_close:hover {
+  background-color: #ffffff22;
+}
+
+.match_statistics .spectator_stats_type button:focus-visible,
+.match_statistics .spectator_close:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Nothing to show: no event logo, no club, no RGX (placeholders are cleared, see setTheme()) */
+.overlay img[src=""],
+.overlay img:not([src]),
+.overlay .rgx:has(> span:empty) {
+  display: none;
+}
+
+/* ---------------- Statistics on phones ----------------
+   For now the desktop layout, scaled down as a whole to fit the screen
+   (--stats-scale, set by fitStatsToScreen() in js/spectator.js) and always
+   in landscape: turned by 90° while the phone is held upright. Scale and
+   rotation are the separate properties, so they combine with the overlay's
+   own transform (centring, fade-in animation) instead of replacing it;
+   the origin is the overlay's anchor in the middle of the screen. */
+html.stats_fit .match_statistics {
+  /* Desktop width, wider on long screens (--stats-width, see fitStatsToScreen()) */
+  width: var(--stats-width, 1280px);
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  transform-origin: 0 0;
+  scale: var(--stats-scale, 1);
+}
+
+html.stats_fit.stats_rotated .match_statistics {
+  rotate: 90deg;
+}
+
+/* Less empty space above and below - the height decides how big it gets.
+   The top keeps room for the column labels (Sideouts / Breaks), which sit
+   40px above their columns. */
+html.stats_fit .match_statistics .team_statistics {
+  padding-top: 52px;
+  padding-bottom: 32px;
+}

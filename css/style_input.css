@@ -356,7 +356,54 @@ header {
 }
 
 header h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--white);
+  line-height: 1.1;
+}
+
+header .header_left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Link to the other page (Input panel | Live matches) - same look as on the overview */
+header .tab_link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px 4px 7px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: #ffffffb3;
+  text-decoration: none;
+  background-color: #ffffff12;
+  transition: background-color .2s ease, color .2s ease;
+}
+
+header .tab_link:hover {
+  color: var(--white);
+  background-color: #ffffff22;
+}
+
+header .tab_link i {
+  font-size: 16px;
+}
+
+/* Logout inside the account element - same as on the overview (style_overview.css) */
+header .account_logout {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 5px;
+  background-color: #00000011;
+  color: var(--text-primary);
+}
+
+header .account_logout i {
+  font-size: 18px;
 }
 
 /* Loading state (html.is-loading): until the selected court's data is in -
@@ -366,8 +413,6 @@ header h1 .page_spinner {
   display: none;
   width: 16px;
   height: 16px;
-  margin-left: 8px;
-  vertical-align: middle;
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.25);
   border-top-color: var(--white);
@@ -1363,7 +1408,8 @@ select.small {
 }
 
 select#Match_Stats_Type,
-select#Team_Indicator_Type {
+select#Team_Indicator_Type,
+select#Squad_Score_Mode {
   height: auto;
   padding: 0px 0px 3px 2px;
 }
@@ -1436,6 +1482,28 @@ select#Team_Indicator_Type {
 @media only screen and (max-width: 600px) {
   .wrapper {
     margin: 8px;
+  }
+
+  /* Header: account first, then the court - each across the whole width */
+  header .header_right {
+    flex-direction: column-reverse;
+    width: 100%;
+  }
+
+  header .header_right .container {
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  header .header_right .setting_entry {
+    flex: 1;
+    min-width: 0;
+  }
+
+  header .header_right #channel {
+    flex: 1;
+    min-width: 0;
   }
 
   .input_group {
@@ -1588,4 +1656,34 @@ select#Team_Indicator_Type {
 
 .logo-indicator img + img {
   margin-left: calc(var(--logo-size) * -0.4);
+}
+
+/* Squad score while it's set to automatic (see updateAutoSquadScore()):
+   locked - no arrows, no focus, the number subtle */
+.group_score .counter[readonly] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+  padding: 0px 0px 5px 0px !important;
+  color: var(--text-secondary);
+  pointer-events: none;
+  user-select: none;
+}
+
+.group_score .counter[readonly]::-webkit-inner-spin-button,
+.group_score .counter[readonly]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  display: none;
+  margin: 0;
+}
+
+.group_score:has(.counter[readonly]) {
+  cursor: not-allowed;
+}
+
+/* Login box: way out for anyone who only wants to watch */
+#auth .auth_back {
+  margin-top: 16px;
+  font-size: 0.9rem;
+  text-align: center;
+  color: #00000099;
 }
