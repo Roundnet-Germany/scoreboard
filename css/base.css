@@ -17,23 +17,35 @@ html, body {
   overflow: hidden;
 }
 
+/* Login of the input panel - looks like the overview's login dialog
+   (.login_dialog in style_overview.css), keep both in sync */
 #auth {
   display: none;
-  position: absolute;
-  width: 100vw;
-  height: 100vh;
+  /* Fixed, not absolute: covers the viewport while scrolling, too */
+  position: fixed;
+  inset: 0;
   z-index: 10;
-  backdrop-filter: blur(10px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background-color: #000000aa;
+  backdrop-filter: blur(4px);
+}
+
+/* While the login is shown, the page behind it can't be scrolled
+   (the content itself is made inert in main.js) */
+html.auth_open,
+html.auth_open body {
+  overflow: hidden;
 }
 
 #auth .content {
   width: 100%;
-  height: 100%;
+  min-height: 100%;
   display: flex;
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  background-color: #111111ee;
+  padding: 16px;
 }
 
 #auth * {
@@ -43,51 +55,71 @@ html, body {
 #auth .inner {
   display: flex;
   flex-direction: column;
-  width: 95%;
-  max-width: 400px;
-  padding: 24px;
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 2px 2px 30px 0px #00000055;
+  width: min(400px, 100%);
+  padding: 20px;
+  background-color: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px #00000066;
 }
 
 #auth .inner form {
   display: flex;
   flex-direction: column;
+  gap: 6px;
 }
 
 #auth h3 {
-  margin-bottom: 24px;
-}
-
-#auth .inner > * {
-  width: 100%;
+  /* 8px + the form's 6px gap, like the overview's heading inside its form */
+  margin-bottom: 14px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  text-transform: uppercase;
 }
 
 #auth label {
-  margin-bottom: 8px;
-}
-
-#auth input, select {
-  padding: 8px 6px 9px 6px;
-  background-color: #ffffff;
-  border: 2px solid #cccccc; 
-  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
 }
 
 #auth input {
-  margin-bottom: 20px;
-}
-
-#auth input, #auth select, #auth option {
-  font-family: sans-serif;
+  height: 38px;
+  margin-bottom: 6px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background-color: #00000011;
+  font: inherit;
+  font-size: 1rem;
   text-transform: none;
 }
 
+#auth input:focus-visible {
+  outline: 2px solid var(--primary, #fcc155);
+}
+
+#auth .auth_actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
 #auth button {
-  min-height: 40px;
-  margin-top: 18px;
-  color: var(--text-primary, #111111);
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 6px;
+  background-color: var(--primary, #fcc155);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#auth button:disabled {
+  opacity: 0.6;
+  cursor: progress;
 }
 
 #auth #submit.is-loading {

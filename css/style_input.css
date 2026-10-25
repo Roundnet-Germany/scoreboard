@@ -1682,8 +1682,6 @@ select#Squad_Score_Mode {
 
 /* Login box: way out for anyone who only wants to watch */
 #auth .auth_back {
-  margin-top: 16px;
   font-size: 0.9rem;
-  text-align: center;
   color: #00000099;
 }

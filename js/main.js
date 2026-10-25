@@ -293,6 +293,13 @@ export async function writeTimerState(channel, type) {
 
 // ========================================= Global Functions ===================================== //
 
+/** Shows/hides the login and locks the page behind it (no scrolling, clicking or tabbing into it). */
+function setAuthVisible(visible) {
+    $('#auth').toggle(visible);
+    document.documentElement.classList.toggle('auth_open', visible);
+    $('.wrapper.scoreboard').prop('inert', visible);
+}
+
 async function handleAuthentication(scoreboard) {
     // Set on form login, only so that "Signed in as" is shown afterwards
     let signedInViaForm = false;
@@ -330,7 +337,7 @@ async function handleAuthentication(scoreboard) {
                 $userString.text('');
                 $('header #user_email').text('');
                 $('header #admin_tag').hide();
-                $('#auth').show();
+                setAuthVisible(true);
                 scoreboard.setInputLoading(false);
                 return;
             }
@@ -350,7 +357,7 @@ async function handleAuthentication(scoreboard) {
             scoreboard.startDataSync();
             scoreboard.playerzonePicker?.start();
             startConnectionStatus();
-            $('#auth').hide();
+            setAuthVisible(false);
             $userString.text(user.displayName);
             $('header #user_email').text(user.email);
             $('header #admin_tag').toggle(user.isAdmin);
