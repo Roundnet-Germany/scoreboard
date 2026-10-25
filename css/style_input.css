@@ -1761,17 +1761,14 @@ select#Squad_Score_Mode {
   opacity: .45;
 }
 
-/* No separate Cancel button: hovering the running button swaps its label
-   and countdown for "Cancel" (the gauge keeps filling behind it), and
-   clicking it cancels - see Scoreboard.js's $teamTimerButtons handler. */
-.team_timer.running:hover > .team_timer_icon,
-.team_timer.running:hover > .team_timer_name,
-.team_timer.running:hover > .team_timer_info {
-  visibility: hidden;
-}
-
-.team_timer.running:hover::after {
-  content: 'Cancel';
+/* No separate Cancel button: the running button swaps its label and
+   countdown for "Cancel" (the gauge keeps filling behind it), and clicking
+   it then cancels - see Scoreboard.js's $teamTimerButtons handler.
+   - mouse: on hover, but not while .fresh - the pointer is still on the
+     button that was just clicked to start the timer (cleared on mouseleave)
+   - touch: no hover (a tap leaves :hover stuck), the first tap sets
+     .confirm_cancel ("Cancel?") for a few seconds, the second one cancels */
+.team_timer.running::after {
   position: absolute;
   inset: 0px;
   display: flex;
@@ -1781,9 +1778,40 @@ select#Squad_Score_Mode {
   color: var(--ui-error);
 }
 
-.team_timer.running:hover {
+.team_timer.running.confirm_cancel > .team_timer_icon,
+.team_timer.running.confirm_cancel > .team_timer_name,
+.team_timer.running.confirm_cancel > .team_timer_info {
+  visibility: hidden;
+}
+
+.team_timer.running.confirm_cancel::after {
+  content: 'Cancel?';
+}
+
+.team_timer.running.confirm_cancel {
   opacity: 1; /* not the generic button:hover fade - keep the gauge readable */
   box-shadow: inset 0px 0px 0px 2px var(--ui-error);
+}
+
+@media (hover: hover) {
+  .team_timer.running:not(.fresh):hover > .team_timer_icon,
+  .team_timer.running:not(.fresh):hover > .team_timer_name,
+  .team_timer.running:not(.fresh):hover > .team_timer_info {
+    visibility: hidden;
+  }
+
+  .team_timer.running:not(.fresh):hover::after {
+    content: 'Cancel';
+  }
+
+  .team_timer.running:not(.fresh):hover {
+    opacity: 1;
+    box-shadow: inset 0px 0px 0px 2px var(--ui-error);
+  }
+
+  .team_timer.running.fresh:hover {
+    opacity: 1;
+  }
 }
 
 /* Break / board-started timer (no team button of its own) - same look as
@@ -1831,7 +1859,7 @@ select#Squad_Score_Mode {
     display: none;
   }
 
-  .team_timer.running:hover::after {
+  .team_timer.running::after {
     font-size: .6rem;
   }
 

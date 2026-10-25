@@ -20,6 +20,8 @@ const TEAM_TIMER_TYPES = ['timeout', 'medical'];
 // greyed button on input.html), never enforced, so an operator can still
 // correct a mistake.
 const TIMEOUTS_PER_SET = 1;
+// Touch: how long a running timer button waits for the confirming second tap
+const CANCEL_CONFIRM_MS = 3000;
 
 /**
  * Removes a timeout/medical event from the end of the history (in place) -
@@ -734,15 +736,31 @@ export class Scoreboard {
         // Clicking the button of the timer that's currently running cancels
         // it (it reads "Cancel" on hover, see style_input.css) - there's no
         // separate Cancel button.
+        // With a mouse it reads "Cancel" on hover - but not while the pointer
+        // is still on the button that just started it (.fresh, until it
+        // leaves). Touch has no hover: the first tap asks "Cancel?", a second
+        // one within CANCEL_CONFIRM_MS cancels (see style_input.css).
+        const onRunningTimerClick = ($button) => {
+            if (matchMedia('(hover: hover)').matches || $button.hasClass('confirm_cancel')) {
+                $button.removeClass('confirm_cancel');
+                this.cancelTimer();
+                return;
+            }
+            $button.addClass('confirm_cancel');
+            clearTimeout($button.data('confirmTimeout'));
+            $button.data('confirmTimeout', setTimeout(() => $button.removeClass('confirm_cancel'), CANCEL_CONFIRM_MS));
+        };
         this.$teamTimerButtons.click((event) => {
             const $button = $(event.currentTarget);
             if ($button.hasClass('running')) {
-                this.cancelTimer();
+                onRunningTimerClick($button);
             } else {
+                $button.addClass('fresh');
                 this.startTimer($button.attr('timer-type'), $button.attr('team'));
             }
         });
-        this.$otherTimerButton.click(() => this.cancelTimer());
+        this.$otherTimerButton.click(() => onRunningTimerClick(this.$otherTimerButton));
+        this.$teamTimerButtons.add(this.$otherTimerButton).on('mouseleave', (event) => $(event.currentTarget).removeClass('fresh'));
 
         // Logout button handler (nutzt User.logout() für Firebase signOut)
         this.$logoutButton.click(() => {
@@ -1684,7 +1702,7 @@ export class Scoreboard {
         const active = this.isTimerActive();
 
         if (!active) {
-            this.$otherTimerButton.addClass('hidden');
+            this.$otherTimerButton.addClass('hidden').removeClass('fresh confirm_cancel');
             this.$timerWidget.removeClass('visible');
             return false;
         }
@@ -1702,6 +1720,10 @@ export class Scoreboard {
         // (updateTeamTimerButtons()); a break or a board/pedal-started timer
         // has no button of its own, so input.html shows it on #other_timer
         // in the Scores header instead - same countdown + gauge, click to cancel.
+        // Appearing right under the pointer (layout shift) isn't a request to cancel either
+        if (!team && this.$otherTimerButton.hasClass('hidden')) {
+            this.$otherTimerButton.removeClass('hidden').toggleClass('fresh', this.$otherTimerButton.is(':hover'));
+        }
         this.$otherTimerButton.toggleClass('hidden', !!team);
         if (!team) {
             const elapsedMs = Date.now() - state.startedAt;
@@ -1786,6 +1808,7 @@ export class Scoreboard {
 
             $button.attr('title', running ? `${TIMER_LABELS[type]} - ${teamLabel} - click to cancel` : `${TIMER_LABELS[type]} - ${teamLabel}`);
             $button.toggleClass('running', running);
+            if (!running) $button.removeClass('fresh confirm_cancel');
 
             let info = '';
             if (running) {
