@@ -540,6 +540,65 @@ html[data-theme="spectator"] .spectator_bar {
   color: #ffffff !important;
 }
 
+/* ============================== Timer ============================== */
+
+/* Timeout / medical / break: a card in the free space below the sets won
+   (placed and sized by Scoreboard.js's placeSpectatorTimer()) - the header's
+   surface, the board's Oswald, the countdown as big as the space allows */
+html[data-theme="spectator"] .timer_widget {
+  container-type: size;
+  justify-content: center;
+  gap: 0.2em;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background-color: #ffffff0d;
+  filter: none;
+  clip-path: none;
+  transform: translateY(12px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+html[data-theme="spectator"] .timer_widget.visible {
+  transform: none;
+  transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Too little room for a readable countdown (very wide, flat boards): rather none */
+@container (max-height: 40px) {
+  html[data-theme="spectator"] .timer_widget > * {
+    display: none;
+  }
+}
+
+html[data-theme="spectator"] .timer_widget_label,
+html[data-theme="spectator"] .timer_widget_time {
+  margin: 0;
+  font-family: 'Oswald', sans-serif;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+html[data-theme="spectator"] .timer_widget_label {
+  font-size: clamp(10px, min(13cqh, 7.5cqw), 48px);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--chrome-muted);
+}
+
+html[data-theme="spectator"] .timer_widget[data-timer-type="medical"] .timer_widget_label {
+  color: #ff6b6b;
+}
+
+html[data-theme="spectator"] .timer_widget_time {
+  font-size: min(52cqh, 34cqw);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+}
+
 /* ============================== Small screens ============================== */
 
 /* Tight: buttons as icons, title on one line (phones held sideways stay one row) */
