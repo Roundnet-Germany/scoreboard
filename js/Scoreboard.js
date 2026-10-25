@@ -7,7 +7,7 @@ const TEAM_INDICATOR_MODES = ['show_color', 'show_flag', 'show_club_logo', 'show
 import { resolveFlag, getCountryList } from "./flags.js?v=4";
 import { historyScore, reconcileScore, recordSquadScore, cleanScoreEvents } from "./scoreHistory.js?v=4";
 // Timer durations and the set-mode convention are shared with the live overview
-import { TIMER_DURATIONS_MS, TIMER_LABELS, setModeToFormat, serveInfo } from "./matchStatus.js?v=4";
+import { TIMER_DURATIONS_MS, TIMER_LABELS, setModeToFormat, serveInfo, serveRotation } from "./matchStatus.js?v=4";
 import { squadScoreFromResults } from "./squadGroups.js?v=4";
 import { AutoSquadScore } from "./autoSquadScore.js?v=4";
 
@@ -19,6 +19,8 @@ const SCORE_TYPING_DELAY_MS = 700;
 
 /** Text-like fields upload after a short pause in typing instead of on every keystroke. */
 const TEXT_UPLOAD_DELAY_MS = 300;
+// Name input of each player id ('a'/'b' = team A, 'c'/'d' = team B)
+const PLAYER_NAME_INPUTS = { a: 'A_Player_1', b: 'A_Player_2', c: 'B_Player_1', d: 'B_Player_2' };
 const isTextField = ($elem) => $elem.is('textarea, input:not([type]), input[type="text"], input[type="url"], input[type="color"]');
 
 
@@ -530,6 +532,13 @@ export class Scoreboard {
             if (isTextField($target)) this.scheduleUpload($target);
             else this.uploadData([$target]);
         });
+        // Starting server/receiver selects list the player names while open
+        // ("A (Max)") but show just the letter when closed - they are only
+        // 45px wide, one per set.
+        const $playerSelects = this.$html_frame.find('select[fb-data$=".starting_server"], select[fb-data$=".starting_receiver"]');
+        $playerSelects.on('mousedown focus', (event) => this.setPlayerOptionLabels($(event.currentTarget), true));
+        $playerSelects.on('change blur', (event) => this.setPlayerOptionLabels($(event.currentTarget), false));
+
         // Leaving a text field saves it right away
         this.$scoreboardInputs.not('[fb-data*="score"]').on('change', (event) => {
             const elem = event.target;
@@ -2032,14 +2041,7 @@ export class Scoreboard {
      * @returns {string} Player name or fallback
      * ============================================================================== */
     getPlayerName(playerId) {
-        const playerMap = {
-            'a': 'A_Player_1',
-            'b': 'A_Player_2', 
-            'c': 'B_Player_1',
-            'd': 'B_Player_2'
-        };
-        
-        const inputId = playerMap[playerId];
+        const inputId = PLAYER_NAME_INPUTS[playerId];
         if (inputId) {
             const $input = $(`#${inputId}`);
             if ($input.length > 0) {
@@ -2051,81 +2053,15 @@ export class Scoreboard {
         return `Player ${playerId.toUpperCase()}`;
     }
 
-
-    playerLocationTransformation(input, inputType, set) {
-        const startingServer = this.getStartingServer(set);
-        const startingReceiver = this.getStartingReceiver(set);
-        
-        let list;
-        if (startingServer == 'a' && startingReceiver == 'c') {
-            list = {
-                a: 'b',
-                b: 'a',
-                c: 'd',
-                d: 'c'
-            }
-        } else if (startingServer == 'a' && startingReceiver == 'd') {
-            list = {
-                a: 'b',
-                b: 'a',
-                c: 'c',
-                d: 'd'
-            }
-        } else if (startingServer == 'b' && startingReceiver == 'c') {
-            list = {
-                a: 'a',
-                b: 'b',
-                c: 'd',
-                d: 'c'
-            }
-        } else if (startingServer == 'b' && startingReceiver == 'd') {
-            list = {
-                a: 'a',
-                b: 'b',
-                c: 'c',
-                d: 'd'
-            }
-        } else if (startingServer == 'c' && startingReceiver == 'a') {
-            list = {
-                a: 'd',
-                b: 'c',
-                c: 'b',
-                d: 'a'
-            }
-        } else if (startingServer == 'c' && startingReceiver == 'b') {
-            list = {
-                a: 'c',
-                b: 'd',
-                c: 'b',
-                d: 'a'
-            }
-        } else if (startingServer == 'd' && startingReceiver == 'a') {
-            list = {
-                a: 'd',
-                b: 'c',
-                c: 'a',
-                d: 'b'
-            }
-        } else if (startingServer == 'd' && startingReceiver == 'b') {
-            list = {
-                a: 'c',
-                b: 'd',
-                c: 'a',
-                d: 'b'
-            }
-        }
-        
-        if (inputType == 'player') {
-            for (const [key, value] of Object.entries(list)) {
-                if (value === input) {
-                    return String(key);
-                }
-            }
-        } else if (inputType == 'location') {
-            return list[input];
-        }
+    /** Option labels of a player select: "A (Max)" with names, or just "A". */
+    setPlayerOptionLabels($select, withNames) {
+        $select.find('option').each((i, option) => {
+            const letter = option.value.toUpperCase();
+            const name = withNames ? $(`#${PLAYER_NAME_INPUTS[option.value]}`).val()?.trim() : '';
+            option.textContent = name ? `${letter} (${name})` : letter;
+        });
     }
-    
+
 
     /** ==============================================================================
      * Check if a field is locked (should not be overwritten during manual import)
@@ -2155,42 +2091,6 @@ export class Scoreboard {
         });
         return info && { team: info.team, serveNumber: info.serveNumber, isOvertime: info.single && this.getTotalPointsInSet(set) > 0 };
     }
-
-    /** ==============================================================================
-     * Check if a set is in overtime mode
-     * Overtime occurs when winning score is reached but 2-point margin is not met
-     * OR when hardcap is reached by either team
-     * @param {number} set - Set number to check (defaults to active set)
-     * @returns {boolean} True if set is in overtime
-     * ============================================================================== */
-    isInOvertime(set = this.active_set, pointIndex = null) {
-        let scoreA, scoreB;
-        if (pointIndex == null) {
-            scoreA = this.getScore(set, 'a');
-            scoreB = this.getScore(set, 'b');
-        } else {
-            scoreA = this.getScoreAtPointIndex(set, 'a', pointIndex);
-            scoreB = this.getScoreAtPointIndex(set, 'b', pointIndex);
-        }
-        // console.log(pointIndex, scoreA, scoreB);
-
-        // Check if hardcap is reached by either team (see setWinner() for why
-        // this only applies when hardcap is configured above win_points).
-        if (this.gameSettings.hardcap > this.gameSettings.win_points &&
-            scoreA !== scoreB && (scoreA >= this.gameSettings.hardcap || scoreB >= this.gameSettings.hardcap)) {
-            return true;
-        }
-
-        // Check if winning score is reached
-        if (scoreA >= this.gameSettings.win_points || scoreB >= this.gameSettings.win_points) {
-            // Check if 2-point margin is met
-            const scoreDifference = Math.abs(scoreA - scoreB);
-            return scoreDifference < this.gameSettings.min_win_margin;
-        }
-        
-        return false;
-    }
-
 
     /** ==============================================================================
      * Get the starting server for a specific set
@@ -2679,163 +2579,35 @@ export class Scoreboard {
 
 
     /** ==============================================================================
-     * Get the player that was serving at a specific point in the score history
+     * Get the player serving at a specific point of a set (see serveRotation())
      * @param {number} pointIndex - Index of the point (0-based)
      * @param {number} set - Set number (defaults to active set)
      * @returns {string|null} Player identifier ('a', 'b', 'c', 'd') or null if not available
      * ============================================================================== */
     getServingPlayerAtPoint(pointIndex, set = this.active_set) {
-        const startingServer = this.getStartingServer(set);
-        const startingReceiver = this.getStartingReceiver(set);
-        const isOvertime = this.isInOvertime(set, pointIndex);
-
-        let serveOrder;
-        if (startingServer == 'a' && startingReceiver == 'c') {
-            serveOrder = ['a', 'd', 'b', 'c'];
-        } else if (startingServer == 'a' && startingReceiver == 'd') {
-            serveOrder = ['a', 'c', 'b', 'd'];
-        } else if (startingServer == 'b' && startingReceiver == 'c') {
-            serveOrder = ['b', 'd', 'a', 'c'];
-        } else if (startingServer == 'b' && startingReceiver == 'd') {
-            serveOrder = ['b', 'c', 'a', 'd'];
-        } else if (startingServer == 'c' && startingReceiver == 'a') {
-            serveOrder = ['c', 'b', 'd', 'a'];
-        } else if (startingServer == 'c' && startingReceiver == 'b') {
-            serveOrder = ['c', 'a', 'd', 'b'];
-        } else if (startingServer == 'd' && startingReceiver == 'a') {
-            serveOrder = ['d', 'b', 'c', 'a'];
-        } else if (startingServer == 'd' && startingReceiver == 'b') {
-            serveOrder = ['d', 'a', 'c', 'b'];
-        }
-
-        // Same-team combo (see matching guard in getReceivingPlayerAtPoint) -
-        // no valid serve order, so bail out instead of crashing below.
-        if (!serveOrder) return null;
-
-        const startIndex = serveOrder.indexOf(startingServer);
-        // const startIndex = serveOrder.indexOf(this.playerLocationTransformation(startingServer, 'player', set));
-        if (pointIndex === 0) {
-            return startingServer;
-        } else {
-            let player, steps, pointsTillOvertime;
-            if (!isOvertime) {
-                steps = Math.floor(((pointIndex + 1) / 2) % 4);
-                player = serveOrder[(startIndex + steps) % 4];
-            } else {
-                pointsTillOvertime = this.gameSettings.win_points * 2 - 2;
-                steps = Math.floor(((((pointsTillOvertime + 1) / 2) % 4) + (pointIndex - pointsTillOvertime) % 4) % 4);
-                player = serveOrder[(startIndex + steps) % 4];
-            }
-            
-            return player;
-            // return this.playerLocationTransformation(serveOrder[(startIndex + steps) % 4], 'location', set);
-        }
+        return this.getServeRotation(pointIndex, set)?.server ?? null;
     }
 
 
     /** ==============================================================================
-     * Get the receiving player at a specific point in a set
+     * Get the receiving player at a specific point in a set (see serveRotation())
      * @param {number} pointIndex - Point index (0-based)
      * @param {number} set - Set number
      * @returns {string|null} Player identifier ('a', 'b', 'c', 'd') or null
      * ============================================================================== */
-    getReceivingPlayerAtPoint(pointIndex, set) {
-        const startingServer = this.getStartingServer(set);
-        const startingReceiver = this.getStartingReceiver(set);
-        const isOvertime = this.isInOvertime(set, pointIndex);
+    getReceivingPlayerAtPoint(pointIndex, set = this.active_set) {
+        return this.getServeRotation(pointIndex, set)?.receiver ?? null;
+    }
 
-        let receivingOrder, overtimeOrder15, overtimeOrder21;
-        if (startingServer == 'a' && startingReceiver == 'c') {
-            receivingOrder = ['c', 'b', 'a', 'c', 'd', 'a', 'b', 'd'];
-            overtimeOrder15 = ['a', 'd', 'b', 'c'];
-            overtimeOrder21 = ['b', 'd', 'a', 'c'];
-        } else if (startingServer == 'a' && startingReceiver == 'd') {
-            receivingOrder = ['d', 'b', 'a', 'd', 'c', 'a', 'b', 'c'];
-            overtimeOrder15 = ['a', 'c', 'b', 'd'];
-            overtimeOrder21 = ['b', 'c', 'a', 'd'];
-        } else if (startingServer == 'b' && startingReceiver == 'c') {
-            receivingOrder = ['c', 'a', 'b', 'c', 'd', 'b', 'a', 'd'];
-            overtimeOrder15 = ['b', 'c', 'a', 'd'];
-            overtimeOrder21 = ['a', 'd', 'b', 'c'];
-        } else if (startingServer == 'b' && startingReceiver == 'd') {
-            receivingOrder = ['d', 'a', 'b', 'd', 'c', 'b', 'a', 'c'];
-            overtimeOrder15 = ['b', 'd', 'a', 'c'];
-            overtimeOrder21 = ['a', 'c', 'b', 'd'];
-        } else if (startingServer == 'c' && startingReceiver == 'a') {
-            receivingOrder = ['a', 'd', 'c', 'a', 'b', 'c', 'd', 'b'];
-            overtimeOrder15 = ['c', 'b', 'd', 'a'];
-            overtimeOrder21 = ['d', 'b', 'c', 'a'];
-        } else if (startingServer == 'c' && startingReceiver == 'b') {
-            receivingOrder = ['b', 'd', 'c', 'b', 'a', 'c', 'd', 'a'];
-            overtimeOrder15 = ['c', 'a', 'd', 'b'];
-            overtimeOrder21 = ['d', 'a', 'c', 'b'];
-        } else if (startingServer == 'd' && startingReceiver == 'a') {
-            receivingOrder = ['a', 'c', 'd', 'a', 'b', 'd', 'c', 'b'];
-            overtimeOrder15 = ['d', 'b', 'c', 'a'];
-            overtimeOrder21 = ['c', 'b', 'd', 'a'];
-        } else if (startingServer == 'd' && startingReceiver == 'b') {
-            receivingOrder = ['b', 'c', 'd', 'b', 'a', 'd', 'c', 'a'];
-            overtimeOrder15 = ['d', 'a', 'c', 'b'];
-            overtimeOrder21 = ['c', 'a', 'd', 'b'];
-        }
-
-        // Starting server/receiver from the same team (e.g. both default to
-        // 'a' before an operator sets the receiver) has no valid serve order -
-        // bail out instead of leaving receivingOrder undefined, which would
-        // throw on the next line and abort updateCurrentPlayersDisplay()
-        // before it reaches uploadData(), silently blocking every score input.
-        if (!receivingOrder) return null;
-
-        // TODO: fix overtime
-        const startIndex = receivingOrder.indexOf(startingReceiver);
-        if (pointIndex === 0) {
-            return startingReceiver;
-        } else {
-            let steps, pointsTillOvertime;
-            if (!isOvertime) {
-                steps = Math.floor((pointIndex) % 8);
-                return receivingOrder[(startIndex + steps) % 8];
-            } else {
-                steps = Math.floor((pointIndex - 1) % 4);
-                // pointsTillOvertime = this.gameSettings.win_points * 2 - 2;
-                // let lastReceiver = receivingOrder[(startIndex + Math.floor((pointsTillOvertime) % 8)) % 8];
-                // let preLastReceiver = receivingOrder[(startIndex + Math.floor((pointsTillOvertime - 1) % 8)) % 8]
-                // let prePreLastReceiver = receivingOrder[(startIndex + Math.floor((pointsTillOvertime - 2) % 8)) % 8]
-                // let lastReceiverTeam = this.getPlayerTeam(lastReceiver);
-                // let preLastReceiverTeam = this.getPlayerTeam(preLastReceiver);
-                // let prePreLastReceiverTeam = this.getPlayerTeam(prePreLastReceiver);
-
-                // let overtimeOrder = [];
-                // if (lastReceiverTeam == 'a' && preLastReceiverTeam == 'a') {
-                //     prePreLastReceiver == 'c' ? overtimeOrder.push('c') : overtimeOrder.push('d')
-                // } else if (lastReceiverTeam == 'b' && preLastReceiverTeam == 'b') {
-                //     prePreLastReceiver == 'a' ? overtimeOrder.push('a') : overtimeOrder.push('b')
-                // }
-                
-                // overtimeOrder.push(lastReceiver)
-                // if (this.getPlayerTeam(overtimeOrder[0]) == 'a') {
-                //     prePreLastReceiver == 'a' ? overtimeOrder.push('b') : overtimeOrder.push('a')
-                // } else if (this.getPlayerTeam(overtimeOrder[0]) == 'b') {
-                //     prePreLastReceiver == 'c' ? overtimeOrder.push('d') : overtimeOrder.push('c')
-                // }
-                // if (this.getPlayerTeam(overtimeOrder[1]) == 'a') {
-                //     this.getPlayerTeam(overtimeOrder[1]) == 'a' ? overtimeOrder.push('b') : overtimeOrder.push('a'); 
-                // } else if (this.getPlayerTeam(overtimeOrder[1]) == 'b') {
-                //     this.getPlayerTeam(overtimeOrder[1]) == 'c' ? overtimeOrder.push('d') : overtimeOrder.push('c'); 
-                // }
-
-                // console.log(pointIndex, pointsTillOvertime)
-                // console.log('last receivers: ', prePreLastReceiver, preLastReceiver, lastReceiver)
-                // console.log(overtimeOrder, overtimeOrder15, overtimeOrder21);
-
-                if (this.gameSettings.win_points == 15) {
-                    return overtimeOrder15[(startIndex + steps) % 4];
-                } else {
-                    return overtimeOrder21[(startIndex + steps) % 4];
-                }
-            }
-            
-        }
+    // Null while starting server and receiver are on the same team (e.g. both
+    // default to 'a' before the receiver is set) - callers must not crash on
+    // that, or updateCurrentPlayersDisplay() would abort before uploadData()
+    // and silently block every score input.
+    getServeRotation(pointIndex, set) {
+        return serveRotation(pointIndex, this.getStartingServer(set), this.getStartingReceiver(set), {
+            winPoints: this.gameSettings.win_points,
+            minMargin: this.gameSettings.min_win_margin,
+        });
     }
 
     /** ==============================================================================

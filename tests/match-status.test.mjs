@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { summarizeMatch, setModeToFormat, serveInfo, STALE_AFTER_MS, FINISHED_VISIBLE_MS } from '../js/matchStatus.js';
+import { summarizeMatch, setModeToFormat, serveInfo, serveRotation, STALE_AFTER_MS, FINISHED_VISIBLE_MS } from '../js/matchStatus.js';
 
 // Runs without the emulator: npm run test:unit
 const NOW = 1_800_000_000_000;
@@ -124,5 +124,39 @@ describe('serve', () => {
     assert.equal(summarizeMatch(match({ score, set_mode: '1 Set' }), NOW).serve, null);
     const running = { set_1: { team_a_score: 1, team_b_score: 0, starting_server: 'a' } };
     assert.equal(summarizeMatch(match({ score: running }), NOW).serve.team, 'b');
+  });
+});
+
+describe('serve rotation (players)', () => {
+  const rotation = (from, to, server, receiver, winPoints) => {
+    const out = [];
+    for (let i = from; i <= to; i++) {
+      const r = serveRotation(i, server, receiver, { winPoints, minMargin: 2 });
+      out.push(r.server + r.receiver);
+    }
+    return out;
+  };
+
+  test('single first serve, then each server twice to both opponents', () => {
+    assert.deepEqual(rotation(0, 8, 'a', 'c', 15), ['ac', 'db', 'da', 'bc', 'bd', 'ca', 'cb', 'ad', 'ac']);
+    assert.deepEqual(rotation(0, 4, 'd', 'b', 15), ['db', 'ac', 'ad', 'cb', 'ca']);
+  });
+
+  test('overtime from 21:20: one serve per player, alternating teams, nobody switches spots', () => {
+    assert.deepEqual(rotation(39, 48, 'a', 'c', 21), ['ad', 'ac', 'db', 'bd', 'ca', 'ac', 'db', 'bd', 'ca', 'ac']);
+    assert.deepEqual(rotation(29, 32, 'a', 'c', 15), ['ca', 'ac', 'db', 'bd']);
+  });
+
+  test('works for any win score (even ones too)', () => {
+    // 10:9 -> point 19; team A served 15/16, team B 17/18, so A serves next
+    const r = serveRotation(19, 'a', 'c', { winPoints: 10, minMargin: 2 });
+    assert.equal(r.team, 'a');
+    assert.equal(r.single, true);
+    assert.equal(serveRotation(20, 'a', 'c', { winPoints: 10, minMargin: 2 }).team, 'b');
+    assert.deepEqual(serveInfo(10, 9, 'a', { winPoints: 10, hardcap: 15, minMargin: 2 }), { team: 'a', serveNumber: 1, single: true });
+  });
+
+  test('starting server and receiver on the same team -> null', () => {
+    assert.equal(serveRotation(3, 'a', 'b', { winPoints: 15, minMargin: 2 }), null);
   });
 });

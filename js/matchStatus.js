@@ -60,32 +60,78 @@ export function setWinner(a, b, { winPoints, hardcap, minMargin }) {
     return null;
 }
 
-/** Winning score reached without the 2-point margin, or the hardcap reached - serve then changes every point. */
-export function isOvertime(a, b, { winPoints, hardcap, minMargin }) {
-    if (hardcap > winPoints && a !== b && (a >= hardcap || b >= hardcap)) return true;
-    if (a >= winPoints || b >= winPoints) return Math.abs(a - b) < minMargin;
-    return false;
+const PARTNER = { a: 'b', b: 'a', c: 'd', d: 'c' };
+const teamOf = (player) => (player === 'a' || player === 'b' ? 'a' : 'b');
+const otherTeam = (team) => (team === 'a' ? 'b' : 'a');
+
+/**
+ * Server and receiver of a point (0-based index within the set), simulated
+ * along the serving order rules (4.2):
+ * - the first server stands right of their partner, serves to the player
+ *   across and serves for only one point
+ * - then each team serves two points in a row: the server starts left of
+ *   their partner, serves to the opponent across, switches spots with the
+ *   partner and serves to the other opponent; next time the team serves,
+ *   the partner (now on the left) is the server
+ * - from the first point at which the win score is reached without the
+ *   margin (e.g. 21:20) the serve goes to the other team after every point
+ *   and nobody switches spots anymore: each team's left and right player
+ *   take turns, always serving to the opponent across
+ * Works for any win score. Players: 'a'/'b' = team A, 'c'/'d' = team B.
+ * Returns { server, receiver, team, serveNumber: 1|2, single } or null if the
+ * starting server/receiver are missing or on the same team.
+ */
+export function serveRotation(pointIndex, startingServer, startingReceiver, { winPoints, minMargin }) {
+    if (!PARTNER[startingServer] || !PARTNER[startingReceiver] || teamOf(startingServer) === teamOf(startingReceiver)) return null;
+    if (pointIndex <= 0) return { server: startingServer, receiver: startingReceiver, team: teamOf(startingServer), serveNumber: 1, single: true };
+
+    // Each team's spots, seen from that team: the first server and receiver
+    // are on the right, so serves go left -> left and right -> right.
+    const spots = {
+        [teamOf(startingServer)]: { left: PARTNER[startingServer], right: startingServer },
+        [teamOf(startingReceiver)]: { left: PARTNER[startingReceiver], right: startingReceiver },
+    };
+    // First point that starts with the win score reached but not the margin (21:20 -> 41)
+    const overtimeFrom = 2 * winPoints - minMargin + 1;
+
+    let team = teamOf(startingServer);
+    let served = 2; // the opening single serve counts as a finished turn
+    const nextOvertimeSpot = {}; // per team, the overtime server starts on the left
+    for (let i = 1; ; i++) {
+        const single = i >= overtimeFrom;
+        if (single || served === 2) {
+            team = otherTeam(team);
+            served = 0;
+        }
+        served++;
+        const own = spots[team];
+        const opp = spots[otherTeam(team)];
+        let spot;
+        if (single) {
+            spot = nextOvertimeSpot[team] ?? 'left';
+            nextOvertimeSpot[team] = spot === 'left' ? 'right' : 'left';
+        } else {
+            spot = served === 1 ? 'left' : 'right';
+        }
+        const server = own[spot];
+        const receiver = opp[spot];
+        if (i === pointIndex) return { server, receiver, team, serveNumber: served, single };
+        // after a serve from the left the server switches spots with the partner (not in overtime)
+        if (!single && served === 1) [own.left, own.right] = [own.right, own.left];
+    }
 }
 
 /**
  * Who serves next in a set: { team: 'a'|'b', serveNumber: 1|2, single: boolean }
  * or null without a starting server. Team level only - derived from the score
- * and the set's starting_server ('a'/'b' = players of team A, 'c'/'d' = team B),
- * so no event history is needed. First serve of a set is a single serve, then
- * the serve changes every two points; in overtime after every point.
+ * and the set's starting_server, so no event history is needed (the team
+ * doesn't depend on who received first).
  */
 export function serveInfo(a, b, startingServer, settings) {
-    if (!startingServer) return null;
-    const startingTeam = startingServer === 'a' || startingServer === 'b' ? 'a' : 'b';
-    const otherTeam = startingTeam === 'a' ? 'b' : 'a';
-    const totalPoints = a + b;
-    if (isOvertime(a, b, settings)) {
-        return { team: totalPoints % 2 === 0 ? startingTeam : otherTeam, serveNumber: 1, single: true };
-    }
-    if (totalPoints === 0) return { team: startingTeam, serveNumber: 1, single: true };
-    const servesAfterFirst = totalPoints - 1;
-    const team = Math.floor(servesAfterFirst / 2) % 2 === 0 ? otherTeam : startingTeam;
-    return { team, serveNumber: (servesAfterFirst % 2) + 1, single: false };
+    if (!PARTNER[startingServer]) return null;
+    const anyReceiver = teamOf(startingServer) === 'a' ? 'c' : 'a';
+    const info = serveRotation(a + b, startingServer, anyReceiver, { minMargin: 2, ...settings });
+    return { team: info.team, serveNumber: info.serveNumber, single: info.single };
 }
 
 /** Whether these set results end the match, and who won it ('a' | 'b' | null for a 1:1 in 2-set mode). */
