@@ -1562,7 +1562,9 @@ export class Scoreboard {
         // tick so it tracks the board across theme switches/resizes instead
         // of sitting at a fixed viewport position.
         const $board = $('.board:visible').first();
-        if ($board.length) {
+        if (this.isSpectator) {
+            this.placeSpectatorTimer($board);
+        } else if ($board.length) {
             const rect = $board[0].getBoundingClientRect();
             this.$timerWidget.css({
                 top: (rect.top + rect.height / 2) + 'px',
@@ -1576,6 +1578,30 @@ export class Scoreboard {
         this.$timerWidget.find('.timer_widget_label').text(label);
         this.$timerWidget.find('.timer_widget_time').text(timeText);
         return true;
+    }
+
+    /**
+     * Spectator board: the timer fills the free space below the sets won at the
+     * bottom of the board - between the teams while they're side by side, below
+     * team B's sets when stacked. As wide as the sets cards of the bottom row,
+     * from their lower edge (plus the score's gap) down to the board's bottom.
+     */
+    placeSpectatorTimer($board) {
+        const cards = $board.find('.sets_card').toArray().map(el => el.getBoundingClientRect());
+        if (!cards.length) return;
+        const boardRect = $board[0].getBoundingClientRect();
+        const rowTop = Math.max(...cards.map(rect => rect.top));
+        const row = cards.filter(rect => rect.top > rowTop - 2);
+        const gap = parseFloat(getComputedStyle($board.find('.score')[0]).columnGap) || 0;
+        const left = Math.min(...row.map(rect => rect.left));
+        const right = Math.max(...row.map(rect => rect.right));
+        const top = Math.max(...row.map(rect => rect.bottom)) + gap;
+        this.$timerWidget.css({
+            top: top + 'px',
+            left: left + 'px',
+            width: (right - left) + 'px',
+            height: Math.max(0, boardRect.bottom - top) + 'px',
+        });
     }
 
     /**
