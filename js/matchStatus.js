@@ -208,7 +208,9 @@ export function summarizeMatch(match, now) {
     const startedAt = Number(match?.timer?.started_at);
     if (TIMER_DURATIONS_MS[timerType] && startedAt) {
         const remainingMs = startedAt + TIMER_DURATIONS_MS[timerType] - now;
-        if (remainingMs > 0) timer = { type: timerType, label: TIMER_LABELS[timerType], remainingMs };
+        // Team that called a timeout/medical (timer.team) - none for a break or a board-started timer
+        const team = timerType !== 'break' && ['a', 'b'].includes(match.timer.team) ? match.timer.team : null;
+        if (remainingMs > 0) timer = { type: timerType, label: TIMER_LABELS[timerType], remainingMs, team };
     }
 
     const squadA = toScore(score.squad_score?.team_a_score);

@@ -185,7 +185,12 @@ function cardView(court) {
     const teamB = teamView(data.teams_info, 'b', 'Team B', display);
     const situation = [];
     if (summary.status !== 'idle' && summary.timer) {
-        situation.push({ kind: 'timer', text: `${summary.timer.label} ${formatCountdown(summary.timer.remainingMs)}` });
+        const caller = summary.timer.team === 'a' ? teamA : summary.timer.team === 'b' ? teamB : null;
+        situation.push({
+            kind: 'timer',
+            text: `${summary.timer.label} ${formatCountdown(summary.timer.remainingMs)}`,
+            team: caller ? { name: caller.name, color: caller.color } : null,
+        });
     }
 
     const gameId = Number(data.playerzone?.game_id) || null;
@@ -332,8 +337,12 @@ function buildCard(view, extraClass = '') {
         STATUS_LABELS[view.status]);
 
     // Situation tags (timeout, break, ...) sit left of the status tag, so they don't need a row of their own
-    const situation = view.situation.map((chip) => el('span', { class: `chip ${chip.kind}` },
-        chip.kind === 'timer' ? icon('timer') : null, chip.text));
+    // A timeout/medical also names the team that called it - last, so a long name is what gets cut off
+    const situation = view.situation.map((chip) => el('span', { class: `chip ${chip.kind}`, title: chip.team ? `${chip.text} · ${chip.team.name}` : null },
+        chip.kind === 'timer' ? icon('timer') : null, chip.text,
+        chip.team ? el('span', { class: 'chip_team' },
+            chip.team.color ? el('span', { class: 'chip_team_color', style: { backgroundColor: chip.team.color } }) : null,
+            el('span', { class: 'chip_team_name', text: chip.team.name })) : null));
 
     // Fixed order on every card: Playerzone, edit, stream link, open
     const links = el('div', { class: 'card_links' },

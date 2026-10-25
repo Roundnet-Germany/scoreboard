@@ -851,6 +851,31 @@ html.login_open .login_backdrop {
   font-variant-numeric: tabular-nums;
 }
 
+/* Team that called a timeout/medical, after the countdown */
+.chip .chip_team {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 10em;
+}
+
+.chip .chip_team::before {
+  content: '·';
+}
+
+.chip .chip_team_color {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.chip .chip_team_name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .card_foot {
   display: flex;
   justify-content: space-between;
