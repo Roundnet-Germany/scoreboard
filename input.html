@@ -166,6 +166,9 @@
                 <div class="container scores">
                     <div class="header_row">
                         <h3>Scores</h3>
+                        <!-- End-of-match validation (js/resultValidation.js): reopens the
+                             "Validate score" dialog, then shows the validation's state -->
+                        <button type="button" class="validation_chip hidden"></button>
                         <div class="set_counter_container">
                             <!-- Countdown for a timer with no team button of its own (break between sets, or a
                                  timeout started from the LED board/pedal) - hidden otherwise. Click to cancel,
@@ -423,12 +426,6 @@
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                                <!-- End-of-match validation (js/resultValidation.js): shown once
-                                     the match is over, until the result is validated -->
-                                <div class="result_validation">
-                                    <button id="validate_result" class="small positive hidden">Validate Result</button>
-                                    <div class="result_validation_status hidden"></div>
                                 </div>
                                 <button id="reset_scores" class="small destructive">Reset Scores <br> & New Game</button>
                             </div>
@@ -762,7 +759,45 @@
         </div>
     </div>
 
-    
+    <!-- End-of-match validation (js/resultValidation.js) - opened by
+         Scoreboard.updateResultValidation() once the match is over -->
+    <dialog class="validate_dialog" aria-labelledby="validate_dialog_title">
+        <div class="validate_dialog_head">
+            <span class="validate_dialog_badge">Match over</span>
+            <h2 id="validate_dialog_title">Validate score</h2>
+            <button type="button" class="validate_dialog_close" aria-label="Close">
+                <i class="material-symbols-rounded" aria-hidden="true">close</i>
+            </button>
+        </div>
+        <table class="validate_dialog_score">
+            <tbody></tbody>
+        </table>
+        <ul class="validate_dialog_info">
+            <li>
+                <i class="material-symbols-rounded" aria-hidden="true">groups</i>
+                <p>Check this final score with <strong>both teams</strong> before validating.</p>
+            </li>
+            <li>
+                <i class="material-symbols-rounded" aria-hidden="true">cloud_upload</i>
+                <p>Validating sends it to the tournament app, which records it as the <strong>official result</strong> - no manual entry needed.</p>
+            </li>
+            <li>
+                <i class="material-symbols-rounded" aria-hidden="true">sports_score</i>
+                <p>The court's LED scoreboard then shows each team where it plays next.</p>
+            </li>
+            <li>
+                <i class="material-symbols-rounded" aria-hidden="true">edit</i>
+                <p>Score wrong? Close this, correct it, and validate again.</p>
+            </li>
+        </ul>
+        <div class="validate_dialog_actions">
+            <button type="button" class="validate_dialog_later">Not now</button>
+            <button type="button" class="validate_dialog_ok">
+                <i class="material-symbols-rounded" aria-hidden="true">check</i>Validate score
+            </button>
+        </div>
+    </dialog>
+
 </body>
 
 </html>

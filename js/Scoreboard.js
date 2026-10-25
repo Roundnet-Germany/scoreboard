@@ -8,7 +8,7 @@ import { resolveFlag, getCountryList } from "./flags.js?v=4";
 import { historyScore, reconcileScore, recordSquadScore, cleanScoreEvents } from "./scoreHistory.js?v=4";
 // Timer durations and the set-mode convention are shared with the live overview
 import { TIMER_DURATIONS_MS, TIMER_LABELS, setModeToFormat, serveInfo, serveRotation, summarizeMatch } from "./matchStatus.js?v=4";
-import { validationStateOf, validationStatusOf, newNonce } from "./resultValidation.js?v=4";
+import { validationStateOf, validationStatusOf, newNonce, ANSWER_WAIT_MS } from "./resultValidation.js?v=4";
 import { squadScoreFromResults } from "./squadGroups.js?v=4";
 import { AutoSquadScore } from "./autoSquadScore.js?v=4";
 // Compact variants for input.html's fixed-width Cancel button.
@@ -82,9 +82,15 @@ export class Scoreboard {
         this.$resetScoresButton = $('#reset_scores');
         this.$teamTimerButtons = $('button.team_timer[timer-type][team]');
         this.$otherTimerButton = $('#other_timer');
-        this.$validateResultButton = $('#validate_result');
-        this.$validationStatus = $('.result_validation_status');
-        this.resultValidation = null; // validationStateOf() of the latest data, see updateResultValidation()
+        // End-of-match validation, see updateResultValidation()
+        this.$validationChip = $('.validation_chip');
+        this.validateDialog = document.querySelector('.validate_dialog');
+        this.resultValidation = null;       // validationStateOf() of the latest data
+        this.lastMatchData = null;
+        this.validationDismissedKey = null; // court + score the dialog was closed for ("Not now")
+        this.validationOpenTimer = null;
+        this.validationWaitTimer = null;
+        this.validationSeenAt = new Map();  // nonce -> when this page first saw it
         this.$timerWidget = $('.timer_widget');
         // Not the score history inside the statistics: updateScoreHistory() shows
         // its sets by the statistics type - toggled here by the active set as well,
@@ -741,7 +747,24 @@ export class Scoreboard {
         });
 
         // End-of-match validation, see updateResultValidation()
-        this.$validateResultButton.click(() => this.validateResult());
+        this.$validationChip.click(() => {
+            if (this.resultValidation?.canValidate) this.openValidateDialog();
+        });
+        const dialog = this.validateDialog;
+        if (dialog) {
+            dialog.querySelector('.validate_dialog_ok').addEventListener('click', () => this.validateResult());
+            dialog.querySelector('.validate_dialog_later').addEventListener('click', () => dialog.close());
+            dialog.querySelector('.validate_dialog_close').addEventListener('click', () => dialog.close());
+            // A click on the backdrop (outside the dialog's box) closes it as well
+            dialog.addEventListener('click', (event) => {
+                if (event.target === dialog) dialog.close();
+            });
+            // Closed without validating (also Escape): don't ask again for this
+            // exact score - the chip next to the Scores title reopens it
+            dialog.addEventListener('close', () => {
+                if (this.resultValidation) this.validationDismissedKey = this.validationKey(this.resultValidation);
+            });
+        }
 
         // Shared timer buttons - see writeTimerState() in main.js for the
         // RTDB side of this. Fixed durations (TIMER_DURATIONS_MS above)
@@ -886,24 +909,96 @@ export class Scoreboard {
     /** True if the signed-in account may write the selected court. */
     /**
      * End-of-match validation (js/resultValidation.js): once the match is
-     * over, "Validate Result" writes the final score as result_validated -
-     * the same node the LED boards write when the players hold a pedal on
-     * their "OK? / HOLD" screen - and the tournament app's answer
-     * (rfc_result) is shown underneath.
+     * over, the "Validate score" dialog asks to confirm the final score with
+     * both teams and writes it as result_validated - the same node the LED
+     * boards write when the players hold a pedal on their "OK? / HOLD"
+     * screen. The chip next to the Scores title reopens the dialog, then
+     * shows the tournament app's answer (rfc_result).
      */
     updateResultValidation(data) {
+        this.lastMatchData = data;
         const state = validationStateOf(data, summarizeMatch(data, Date.now()).matchOver);
         this.resultValidation = state;
-        this.$validateResultButton.toggleClass('hidden', !state.canValidate);
-        const status = validationStatusOf(state, {
-            a: data?.teams_info?.team_a?.name,
-            b: data?.teams_info?.team_b?.name,
-        });
-        this.$validationStatus
+        const canValidate = state.canValidate && this.canWriteChannel();
+        const dialog = this.validateDialog;
+
+        clearTimeout(this.validationOpenTimer);
+        if (canValidate) {
+            this.fillValidateDialog(data, state);
+            // Only once the match has looked over for a moment - a score typed
+            // over a finished-looking one doesn't flash the dialog
+            const key = this.validationKey(state);
+            if (dialog && !dialog.open && this.validationDismissedKey !== key) {
+                this.validationOpenTimer = setTimeout(() => {
+                    const current = this.resultValidation;
+                    if (current?.canValidate && this.validationKey(current) === key) this.openValidateDialog();
+                }, 1500);
+            }
+        } else if (dialog?.open) {
+            // Corrected, or validated elsewhere (the LED board, another device)
+            dialog.close();
+        }
+
+        // Without an answer (a court not linked to a tournament never gets
+        // one), "waiting" only lasts ANSWER_WAIT_MS from when this page saw it
+        clearTimeout(this.validationWaitTimer);
+        let waiting = false;
+        const nonce = data?.result_validated?.nonce;
+        if (state.validated && !state.answer && nonce) {
+            if (!this.validationSeenAt.has(nonce)) this.validationSeenAt.set(nonce, Date.now());
+            const left = this.validationSeenAt.get(nonce) + ANSWER_WAIT_MS - Date.now();
+            waiting = left > 0;
+            if (waiting) this.validationWaitTimer = setTimeout(() => this.updateResultValidation(this.lastMatchData), left);
+        }
+
+        const status = canValidate
+            ? { text: 'Validate result', tone: 'action' }
+            : validationStatusOf(state, {
+                a: data?.teams_info?.team_a?.name,
+                b: data?.teams_info?.team_b?.name,
+            }, { waiting });
+        this.$validationChip
             .toggleClass('hidden', !status)
-            .removeClass('pending positive negative')
+            .removeClass('action pending neutral positive negative')
             .addClass(status?.tone || '')
-            .text(status?.text || '');
+            .text(status?.text || '')
+            .attr('title', status?.title || status?.text || '');
+    }
+
+    /** Court + score a validation is for - "Not now" only holds for exactly that. */
+    validationKey(state) {
+        return `${this.channel}|${JSON.stringify(state.sets)}`;
+    }
+
+    openValidateDialog() {
+        const dialog = this.validateDialog;
+        if (!dialog || dialog.open) return;
+        dialog.showModal();
+        dialog.querySelector('.validate_dialog_ok').focus();
+    }
+
+    /** One row per team, one column per set - the set winner's score bold. */
+    fillValidateDialog(data, state) {
+        const tbody = this.validateDialog?.querySelector('tbody');
+        if (!tbody) return;
+        tbody.replaceChildren(...['a', 'b'].map((team) => {
+            const info = data?.teams_info?.[`team_${team}`] || {};
+            const row = document.createElement('tr');
+            const name = document.createElement('td');
+            name.className = 'team';
+            name.textContent = info.name || `Team ${team.toUpperCase()}`;
+            if (info.color) name.style.setProperty('--team-color', info.color);
+            row.appendChild(name);
+            for (const [a, b] of state.sets) {
+                const own = team === 'a' ? a : b;
+                const other = team === 'a' ? b : a;
+                const cell = document.createElement('td');
+                cell.className = own > other ? 'won' : 'lost';
+                cell.textContent = own;
+                row.appendChild(cell);
+            }
+            return row;
+        }));
     }
 
     async validateResult() {
@@ -913,12 +1008,14 @@ export class Scoreboard {
         }
         const state = this.resultValidation;
         if (!state?.canValidate) return;
-        const score = state.sets.map(([a, b]) => `${a}-${b}`).join(', ');
-        if (!confirm(`Validate the final score ${score} with both teams? It is then sent to the tournament app.`)) return;
+        const ok = this.validateDialog.querySelector('.validate_dialog_ok');
+        ok.disabled = true;
         const saved = await writeData({
             [`match-${this.channel}/result_validated`]: { nonce: newNonce(), sets: state.sets, at: serverTimestamp() },
         });
-        if (!saved) showToast("❌", "The result could not be validated");
+        ok.disabled = false;
+        if (saved) this.validateDialog.close();
+        else showToast("❌", "The result could not be validated");
     }
 
     canWriteChannel() {

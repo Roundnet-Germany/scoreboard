@@ -61,12 +61,15 @@ describe('validationStatusOf', () => {
     assert.equal(validationStatusOf({ validated: false }), null);
   });
 
-  test('waiting, recorded with next courts, refused', () => {
+  test('waiting, then just validated without an answer; recorded with next courts; refused', () => {
     assert.equal(validationStatusOf({ ...validated, answer: null }).tone, 'pending');
+    assert.equal(validationStatusOf({ ...validated, answer: null }, {}, { waiting: false }).text, 'Result validated');
     assert.deepEqual(
       validationStatusOf({ ...validated, answer: { status: 'recorded', next: { team_a: 'TERRAIN 4', team_b: 'TERMINE' } } }, { a: 'Lyon', b: 'Paris' }),
       { text: 'Result recorded · Lyon: TERRAIN 4 · Paris: TERMINE', tone: 'positive' },
     );
     assert.equal(validationStatusOf({ ...validated, answer: { status: 'rejected', message: 'AUTRES EQUIPES' } }).tone, 'negative');
+    // An answer always wins over the waiting window
+    assert.equal(validationStatusOf({ ...validated, answer: { status: 'recorded' } }, {}, { waiting: false }).tone, 'positive');
   });
 });

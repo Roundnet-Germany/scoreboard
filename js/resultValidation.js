@@ -67,15 +67,29 @@ export function newNonce(random = () => Math.floor(Math.random() * 0x100000000))
 }
 
 /**
- * Status line for the input panel, or null when there's nothing to say.
- * @returns {null | { text: string, tone: 'pending'|'positive'|'negative' }}
+ * How long a validation waits for the tournament app's answer before the
+ * panel stops saying so - a court that isn't linked to a tournament never
+ * gets one, the result simply stays validated.
  */
-export function validationStatusOf(state, teamNames = {}) {
+export const ANSWER_WAIT_MS = 20_000;
+
+/**
+ * Status chip for the input panel, or null when there's nothing to say.
+ * @param {Object} state - validationStateOf()
+ * @param {{ a?: string, b?: string }} teamNames
+ * @param {{ waiting?: boolean }} options - false once ANSWER_WAIT_MS passed without an answer
+ * @returns {null | { text: string, tone: 'pending'|'neutral'|'positive'|'negative', title?: string }}
+ */
+export function validationStatusOf(state, teamNames = {}, { waiting = true } = {}) {
     if (!state.validated) return null;
     const { answer } = state;
-    if (!answer) return { text: 'Result validated - waiting for the tournament app', tone: 'pending' };
+    if (!answer) {
+        return waiting
+            ? { text: 'Validated · waiting for the tournament app', tone: 'pending' }
+            : { text: 'Result validated', tone: 'neutral', title: 'No answer from a tournament app - this court is probably not linked to one' };
+    }
     if (answer.status === 'rejected') {
-        return { text: `Refused by the tournament app: ${answer.message || 'see the organizers'}`, tone: 'negative' };
+        return { text: `Refused: ${answer.message || 'see the organizers'}`, tone: 'negative' };
     }
     const next = ['a', 'b']
         .filter((team) => answer.next?.[`team_${team}`])
