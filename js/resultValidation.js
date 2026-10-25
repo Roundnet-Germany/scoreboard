@@ -8,6 +8,8 @@
 //   match-<channel>/rfc_result = { nonce, status: 'recorded'|'rejected', message?, next?: { team_a, team_b } }
 // (next = where each team plays next, already uppercase ASCII for the LED
 // font). An answer only counts for the validation carrying the same nonce.
+// Only asked on a court with match-<channel>/validation_required, which
+// RoundnetFranceConnect sets while it has a tournament match there.
 // No DOM, no Firebase, so it runs under `node --test` as well.
 
 import { MAX_SETS } from './matchStatus.js?v=4';
@@ -53,12 +55,15 @@ function sameSets(x, y) {
  */
 export function validationStateOf(match, matchOver) {
     const sets = validatedSetsOf(match);
+    // Set by RoundnetFranceConnect while it has a tournament match on this
+    // court - without it nobody would record the result, so nothing is asked
+    const required = match?.validation_required === true;
     const validation = match?.result_validated;
     // A validation only counts for the exact score it was given for - after a
     // correction it's stale, and RoundnetFranceConnect ignores it too.
     const validated = !!validation?.nonce && sameSets(validation.sets, sets);
     const answer = validated && match?.rfc_result?.nonce === validation.nonce ? match.rfc_result : null;
-    return { canValidate: !!matchOver && sets.length > 0 && !validated, validated, answer, sets };
+    return { required, canValidate: required && !!matchOver && sets.length > 0 && !validated, validated, answer, sets };
 }
 
 /** Random 8-hex-digit nonce, same shape as the LED board's. */
@@ -67,26 +72,33 @@ export function newNonce(random = () => Math.floor(Math.random() * 0x100000000))
 }
 
 /**
- * How long a validation waits for the tournament app's answer before the
- * panel stops saying so - a court that isn't linked to a tournament never
- * gets one, the result simply stays validated.
+ * How long a validation waits for the tournament app's answer. On a court
+ * that requires one, silence after that means something failed (the score is
+ * not recorded) - the panel says so and offers a retry. A first call after a
+ * quiet spell can take a few seconds while the Cloud Function starts up.
  */
-export const ANSWER_WAIT_MS = 20_000;
+export const ANSWER_WAIT_MS = 30_000;
 
 /**
  * Status chip for the input panel, or null when there's nothing to say.
  * @param {Object} state - validationStateOf()
  * @param {{ a?: string, b?: string }} teamNames
  * @param {{ waiting?: boolean }} options - false once ANSWER_WAIT_MS passed without an answer
- * @returns {null | { text: string, tone: 'pending'|'neutral'|'positive'|'negative', title?: string }}
+ * @returns {null | { text: string, tone: 'pending'|'neutral'|'positive'|'negative', title?: string, retry?: boolean }}
  */
 export function validationStatusOf(state, teamNames = {}, { waiting = true } = {}) {
     if (!state.validated) return null;
     const { answer } = state;
     if (!answer) {
-        return waiting
-            ? { text: 'Validated · waiting for the tournament app', tone: 'pending' }
-            : { text: 'Result validated', tone: 'neutral', title: 'No answer from a tournament app - this court is probably not linked to one' };
+        if (waiting) return { text: 'Validated · waiting for the tournament app', tone: 'pending' };
+        // Validated on a court no tournament asked for (an LED board on old firmware)
+        if (!state.required) return { text: 'Result validated', tone: 'neutral' };
+        return {
+            text: 'No answer from the tournament app · not recorded',
+            tone: 'negative',
+            title: 'The score was not recorded - click to retry, or tell the organizers',
+            retry: true,
+        };
     }
     if (answer.status === 'rejected') {
         return { text: `Refused: ${answer.message || 'see the organizers'}`, tone: 'negative' };

@@ -769,6 +769,11 @@
                 <i class="material-symbols-rounded" aria-hidden="true">close</i>
             </button>
         </div>
+        <!-- Retry after the tournament app didn't answer (see updateResultValidation()) -->
+        <p class="validate_dialog_failed hidden">
+            <i class="material-symbols-rounded" aria-hidden="true">error</i>
+            The tournament app didn't answer, so this score is not recorded yet. Retry - and if it fails again, tell the organizers.
+        </p>
         <table class="validate_dialog_score">
             <tbody></tbody>
         </table>
@@ -793,7 +798,7 @@
         <div class="validate_dialog_actions">
             <button type="button" class="validate_dialog_later">Not now</button>
             <button type="button" class="validate_dialog_ok">
-                <i class="material-symbols-rounded" aria-hidden="true">check</i>Validate score
+                <i class="material-symbols-rounded" aria-hidden="true">check</i><span class="validate_dialog_ok_label">Validate score</span>
             </button>
         </div>
     </dialog>

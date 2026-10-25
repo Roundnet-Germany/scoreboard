@@ -1409,7 +1409,8 @@ select.small {
   cursor: default;
 }
 .validation_chip.hidden { display: none; }
-.validation_chip.action { background-color: var(--primary); color: #111111; cursor: pointer; }
+.validation_chip.clickable { cursor: pointer; }
+.validation_chip.action { background-color: var(--primary); color: #111111; }
 .validation_chip.pending { background-color: var(--ui-warning-light); color: var(--ui-warning); }
 .validation_chip.neutral,
 .validation_chip.positive { background-color: var(--ui-success-light); color: var(--ui-success); }
@@ -1488,6 +1489,22 @@ select.small {
 }
 .validate_dialog_close:hover { background-color: #0000000d; }
 .validate_dialog_close .material-symbols-rounded { font-size: 20px; }
+
+/* Retry after no answer from the tournament app */
+.validate_dialog_failed {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 16px 20px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background-color: var(--ui-error-light);
+  color: var(--ui-error);
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+.validate_dialog_failed.hidden { display: none; }
+.validate_dialog_failed .material-symbols-rounded { font-size: 20px; }
 
 /* Final score: one row per team, one column per set, the winner's sets bold */
 .validate_dialog_score {

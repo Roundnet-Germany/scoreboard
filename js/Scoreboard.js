@@ -91,6 +91,7 @@ export class Scoreboard {
         this.validationOpenTimer = null;
         this.validationWaitTimer = null;
         this.validationSeenAt = new Map();  // nonce -> when this page first saw it
+        this.validationRetry = false;       // validated, no answer in time: retry offered
         this.$timerWidget = $('.timer_widget');
         // Not the score history inside the statistics: updateScoreHistory() shows
         // its sets by the statistics type - toggled here by the active set as well,
@@ -748,7 +749,7 @@ export class Scoreboard {
 
         // End-of-match validation, see updateResultValidation()
         this.$validationChip.click(() => {
-            if (this.resultValidation?.canValidate) this.openValidateDialog();
+            if (this.resultValidation?.canValidate || this.validationRetry) this.openValidateDialog();
         });
         const dialog = this.validateDialog;
         if (dialog) {
@@ -913,7 +914,9 @@ export class Scoreboard {
      * both teams and writes it as result_validated - the same node the LED
      * boards write when the players hold a pedal on their "OK? / HOLD"
      * screen. The chip next to the Scores title reopens the dialog, then
-     * shows the tournament app's answer (rfc_result).
+     * shows the tournament app's answer (rfc_result) - or, when none comes
+     * within ANSWER_WAIT_MS, that it failed, and reopens the dialog to retry.
+     * Only on a court with validation_required (a tournament match on it).
      */
     updateResultValidation(data) {
         this.lastMatchData = data;
@@ -921,6 +924,25 @@ export class Scoreboard {
         this.resultValidation = state;
         const canValidate = state.canValidate && this.canWriteChannel();
         const dialog = this.validateDialog;
+
+        // "Waiting" for the answer only lasts ANSWER_WAIT_MS from when this
+        // page saw the validation - after that it failed (retry offered)
+        clearTimeout(this.validationWaitTimer);
+        let waiting = false;
+        const nonce = data?.result_validated?.nonce;
+        if (state.validated && !state.answer && nonce) {
+            if (!this.validationSeenAt.has(nonce)) this.validationSeenAt.set(nonce, Date.now());
+            const left = this.validationSeenAt.get(nonce) + ANSWER_WAIT_MS - Date.now();
+            waiting = left > 0;
+            if (waiting) this.validationWaitTimer = setTimeout(() => this.updateResultValidation(this.lastMatchData), left);
+        }
+        const status = canValidate
+            ? { text: 'Validate result', tone: 'action' }
+            : validationStatusOf(state, {
+                a: data?.teams_info?.team_a?.name,
+                b: data?.teams_info?.team_b?.name,
+            }, { waiting });
+        this.validationRetry = !!status?.retry && this.canWriteChannel();
 
         clearTimeout(this.validationOpenTimer);
         if (canValidate) {
@@ -934,31 +956,15 @@ export class Scoreboard {
                     if (current?.canValidate && this.validationKey(current) === key) this.openValidateDialog();
                 }, 1500);
             }
-        } else if (dialog?.open) {
-            // Corrected, or validated elsewhere (the LED board, another device)
+        } else if (dialog?.open && !this.validationRetry) {
+            // Corrected, validated elsewhere (the LED board, another device),
+            // answered meanwhile, or no longer asked for (court freed)
             dialog.close();
         }
 
-        // Without an answer (a court not linked to a tournament never gets
-        // one), "waiting" only lasts ANSWER_WAIT_MS from when this page saw it
-        clearTimeout(this.validationWaitTimer);
-        let waiting = false;
-        const nonce = data?.result_validated?.nonce;
-        if (state.validated && !state.answer && nonce) {
-            if (!this.validationSeenAt.has(nonce)) this.validationSeenAt.set(nonce, Date.now());
-            const left = this.validationSeenAt.get(nonce) + ANSWER_WAIT_MS - Date.now();
-            waiting = left > 0;
-            if (waiting) this.validationWaitTimer = setTimeout(() => this.updateResultValidation(this.lastMatchData), left);
-        }
-
-        const status = canValidate
-            ? { text: 'Validate result', tone: 'action' }
-            : validationStatusOf(state, {
-                a: data?.teams_info?.team_a?.name,
-                b: data?.teams_info?.team_b?.name,
-            }, { waiting });
         this.$validationChip
             .toggleClass('hidden', !status)
+            .toggleClass('clickable', canValidate || this.validationRetry)
             .removeClass('action pending neutral positive negative')
             .addClass(status?.tone || '')
             .text(status?.text || '')
@@ -972,7 +978,12 @@ export class Scoreboard {
 
     openValidateDialog() {
         const dialog = this.validateDialog;
-        if (!dialog || dialog.open) return;
+        if (!dialog || dialog.open || !this.resultValidation) return;
+        // Retry after no answer: same score, says what went wrong
+        const retry = this.validationRetry && !this.resultValidation.canValidate;
+        this.fillValidateDialog(this.lastMatchData, this.resultValidation);
+        dialog.querySelector('.validate_dialog_failed').classList.toggle('hidden', !retry);
+        dialog.querySelector('.validate_dialog_ok_label').textContent = retry ? 'Retry' : 'Validate score';
         dialog.showModal();
         dialog.querySelector('.validate_dialog_ok').focus();
     }
@@ -1007,7 +1018,7 @@ export class Scoreboard {
             return;
         }
         const state = this.resultValidation;
-        if (!state?.canValidate) return;
+        if (!state?.canValidate && !this.validationRetry) return;
         const ok = this.validateDialog.querySelector('.validate_dialog_ok');
         ok.disabled = true;
         const saved = await writeData({
