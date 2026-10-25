@@ -1808,6 +1808,12 @@
   font-weight: 600;
   line-height: 1;
   color: var(--timer-time-color);
+  /* Antonio's digits are proportional, so the card would resize every tick
+     ("0:14" is narrower than "0:50") - tabular figures where supported, and
+     a min-width wide enough for "5:00" as a fallback. */
+  font-variant-numeric: tabular-nums;
+  min-width: 1.9em;
+  text-align: center;
 }
 /* Team that called the timeout/medical (Scoreboard.js's
    updateTimerDisplay()) - name under the label, plus an accent stripe in
