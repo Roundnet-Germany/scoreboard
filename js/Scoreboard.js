@@ -22,6 +22,11 @@ const TEAM_TIMER_TYPES = ['timeout', 'medical'];
 const TIMEOUTS_PER_SET = 1;
 // Touch: how long a running timer button waits for the confirming second tap
 const CANCEL_CONFIRM_MS = 3000;
+// Material Symbols icon per team timer type - input.html's buttons, the
+// score history's markers and the chart's badges (drawTimerMarkers())
+const TIMER_ICONS = { timeout: 'timer', medical: 'medical_services' };
+const TIMER_BADGE_SIZE = 16;
+const TIMER_BADGE_FONT = "12px 'Material Symbols Rounded'";
 
 /**
  * Removes a timeout/medical event from the end of the history (in place) -
@@ -2924,18 +2929,18 @@ export class Scoreboard {
         $container.empty();
 
         // Timeout/medical markers sit between the points they were called
-        // at - a "T"/"M" chip in the calling team's row and an empty spacer
-        // of the same width in the other, so both rows stay column-aligned.
+        // at - a chip with the timer's icon (same as input.html's buttons) in
+        // the calling team's row and an empty spacer of the same width in the
+        // other, so both rows stay column-aligned.
         // <span>s, not <div>s, so the .score_item:first-of-type/last-of-type
         // corner rounding still finds the first/last score cell.
         const markers = this.getTeamTimerMarkers(set);
         const appendMarkers = (pointIndex) => {
             markers.filter(m => m.pointIndex === pointIndex).forEach(m => {
                 const called = m.team === team;
-                const symbol = m.type === 'medical' ? 'M' : 'T';
                 $container.append(
                     `<span class="timer_marker${called ? ' called' : ''}" timer-type="${m.type}" called-by="${m.team}">` +
-                    (called ? `<p class="timer_marker_symbol">${symbol}</p>` : '') +
+                    (called ? `<i class="material-symbols-rounded timer_marker_symbol" aria-hidden="true">${TIMER_ICONS[m.type]}</i>` : '') +
                     `</span>`
                 );
             });
@@ -2973,9 +2978,12 @@ export class Scoreboard {
     getTeamTimerMarkers(set = this.active_set) {
         const markers = [];
         let points = 0;
+        // The score events getScoreHistory() keeps (it drops repeated or
+        // out-of-order ones) - only those count as points here
+        const counted = new Set(this.getScoreHistory(set));
         this.event_history.slice(this.getLastResetIndex() + 1).forEach(event => {
             if (event.set != set) return;
-            if (event.type === 'score' && event.team && typeof event.team === 'string' && event.score !== undefined) {
+            if (counted.has(event)) {
                 points++;
             } else if (TEAM_TIMER_TYPES.includes(event.type) && (event.team === 'a' || event.team === 'b')) {
                 markers.push({ type: event.type, team: event.team, pointIndex: points });
@@ -2987,7 +2995,8 @@ export class Scoreboard {
     /** ==============================================================================
      * Chart.js plugin body for updateScoreHistoryChart(): a dashed vertical
      * line in the calling team's color at each timeout/medical, between the
-     * two points it was called between, with a small "T"/"M" tag on top.
+     * two points it was called between, with a badge on top - the timer's
+     * icon on the team color, like the history strip's markers.
      * ============================================================================== */
     drawTimerMarkers(chart, markers) {
         const xScale = chart.scales.x;
@@ -2996,6 +3005,10 @@ export class Scoreboard {
 
         const { ctx, chartArea } = chart;
         const rootStyle = getComputedStyle(document.documentElement);
+        // The icons are font ligatures: drawn before the icon font is in, the
+        // canvas would show the word ("timer") - load it, then draw again
+        const iconsReady = document.fonts.check(TIMER_BADGE_FONT);
+        if (!iconsReady) document.fonts.load(TIMER_BADGE_FONT).then(() => chart.draw());
 
         markers.forEach(m => {
             let x;
@@ -3015,16 +3028,25 @@ export class Scoreboard {
             ctx.lineWidth = 2;
             ctx.setLineDash(m.type === 'medical' ? [2, 3] : [5, 4]);
             ctx.beginPath();
-            ctx.moveTo(x, chartArea.top + 14);
+            ctx.moveTo(x, chartArea.top + TIMER_BADGE_SIZE);
             ctx.lineTo(x, chartArea.bottom);
             ctx.stroke();
 
+            // Badge on top like the history strip's: the timer's icon on the
+            // team color - kept inside the canvas for a timeout after the last point
+            const badgeX = Math.min(Math.max(x, TIMER_BADGE_SIZE / 2), chart.width - TIMER_BADGE_SIZE / 2);
             ctx.setLineDash([]);
             ctx.fillStyle = color;
-            ctx.font = "600 11px 'Antonio', sans-serif";
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            ctx.fillText(m.type === 'medical' ? 'M' : 'T', x, chartArea.top);
+            ctx.beginPath();
+            ctx.roundRect(badgeX - TIMER_BADGE_SIZE / 2, chartArea.top, TIMER_BADGE_SIZE, TIMER_BADGE_SIZE, 3);
+            ctx.fill();
+            if (iconsReady) {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = TIMER_BADGE_FONT;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(TIMER_ICONS[m.type], badgeX, chartArea.top + TIMER_BADGE_SIZE / 2);
+            }
             ctx.restore();
         });
     }
@@ -3041,7 +3063,9 @@ export class Scoreboard {
         const scoresTeamA = this.scoreHistoryToTeamPoints(this.getScoreHistory(), 'a');
         const scoresTeamB = this.scoreHistoryToTeamPoints(this.getScoreHistory(), 'b');
         const labels = scoresTeamA.map((_, i) => `${i + 1}`);
-        const timerMarkers = this.getTeamTimerMarkers();
+        // Read by the timerMarkers plugin on every draw - the chart itself is
+        // only created once, so it can't hold on to the markers of that moment
+        this.scoreChartTimerMarkers = this.getTeamTimerMarkers();
 
         if (this.scoreChart) {
             this.scoreChart.data.labels = labels;
@@ -3058,7 +3082,7 @@ export class Scoreboard {
             type: 'line',
             plugins: [{
                 id: 'timerMarkers',
-                afterDatasetsDraw: (chart) => this.drawTimerMarkers(chart, timerMarkers),
+                afterDatasetsDraw: (chart) => this.drawTimerMarkers(chart, this.scoreChartTimerMarkers),
             }],
             data: {
                 labels: labels,
