@@ -1723,9 +1723,16 @@ select#Squad_Score_Mode {
   transition: width .3s linear;
 }
 
+.team_timer .team_timer_icon,
 .team_timer .team_timer_name,
 .team_timer .team_timer_info {
   position: relative; /* above the gauge */
+}
+
+/* Icon instead of the name - compact layout only, see below */
+.team_timer .team_timer_icon {
+  display: none;
+  font-size: 16px;
 }
 
 .team_timer .team_timer_name {
@@ -1757,6 +1764,7 @@ select#Squad_Score_Mode {
 /* No separate Cancel button: hovering the running button swaps its label
    and countdown for "Cancel" (the gauge keeps filling behind it), and
    clicking it cancels - see Scoreboard.js's $teamTimerButtons handler. */
+.team_timer.running:hover > .team_timer_icon,
 .team_timer.running:hover > .team_timer_name,
 .team_timer.running:hover > .team_timer_info {
   visibility: hidden;
@@ -1795,11 +1803,15 @@ select#Squad_Score_Mode {
   background-color: var(--secondary);
 }
 
-/* Phones: same narrower column as the +1/-1 buttons, countdown under the
-   label instead of beside it. */
-@media only screen and (max-width: 600px) and (pointer: coarse) {
+/* Phones, upright and sideways (landscape phones are wider than 600px but
+   never taller than ~500px - tablets keep the full buttons): an icon
+   instead of "Timeout"/"Medical" with the countdown or "N left" under it,
+   so the column takes as little room from the player names as possible.
+   The full label stays in the tooltip (updateTeamTimerButtons()). */
+@media only screen and (max-width: 600px) and (pointer: coarse),
+       only screen and (max-height: 500px) and (pointer: coarse) {
   .points .team_timers .team_timer_group {
-    width: 64px;
+    width: 44px;
   }
 
   .team_timer {
@@ -1809,6 +1821,18 @@ select#Squad_Score_Mode {
     padding: 1px 2px 2px 2px;
     font-size: .7rem;
     line-height: 1.1;
+  }
+
+  .team_timer .team_timer_icon {
+    display: block;
+  }
+
+  .team_timer .team_timer_name {
+    display: none;
+  }
+
+  .team_timer.running:hover::after {
+    font-size: .6rem;
   }
 
   .team_timer .team_timer_info {
