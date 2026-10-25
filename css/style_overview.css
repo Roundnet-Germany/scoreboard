@@ -1,0 +1,1159 @@
+/* Live overview (index.html) - same palette and type as the input panel
+   (style_input.css), kept quieter: white cards on the dark page, the yellow
+   only where something needs attention. */
+
+:root {
+  /* Search, org filter and account element share one height */
+  --control-height: 40px;
+  --primary: #fcc155;
+  --white: #ffffff;
+  --page: #13141A;
+  --text-primary: #111111;
+  --text-secondary: #00000099;
+  --text-tertiary: #00000066;
+  --line: #0000000f;
+  --surface-muted: #00000008;
+  --light-2: #fdf2dd;
+  --light-3: #fae3b7;
+  --ui-success: #04914a;
+  --ui-success-light: #04b90422;
+  --ui-error: #e14c62;
+  --ui-error-light: #e14c6222;
+  --ui-warning: #b85f00;
+  --ui-warning-light: #f5a62333;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Barlow Semi Condensed', sans-serif;
+}
+
+html, body {
+  background-color: var(--page);
+  color: var(--text-primary);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.material-symbols-rounded {
+  font-family: 'Material Symbols Rounded';
+  font-size: 18px;
+  line-height: 1;
+  font-variation-settings: 'FILL' 0, 'wght' 500;
+}
+
+.wrapper {
+  display: flex;
+  justify-content: center;
+  padding: 14px 16px 32px;
+}
+
+.wrapper > .inner {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 1280px;
+}
+
+/* ------------------------------ Header ------------------------------ */
+
+.page_head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 14px 0 4px;
+}
+
+.page_head .title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+/* Link to the other page (Live matches | Input panel) - same look in both headers */
+.tab_link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px 4px 7px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: #ffffffb3;
+  text-decoration: none;
+  background-color: #ffffff12;
+  transition: background-color .2s ease, color .2s ease;
+}
+
+.tab_link:hover {
+  color: var(--white);
+  background-color: #ffffff22;
+}
+
+.tab_link .material-symbols-rounded {
+  font-size: 16px;
+}
+
+.tab_link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.5rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--white);
+  line-height: 1.1;
+}
+
+.page_spinner {
+  display: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--white);
+  animation: spin 800ms linear infinite;
+}
+
+html.is-loading .page_spinner {
+  display: inline-block;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.controls {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 760px;
+}
+
+.filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--control-height);
+  padding: 0 10px;
+  border-radius: 6px;
+  background-color: var(--white);
+  font-size: 0.95rem;
+}
+
+.filter input,
+.filter select {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.filter.search {
+  flex: 1 1 200px;
+}
+
+.filter.search i {
+  color: var(--text-tertiary);
+}
+
+.filter.search input {
+  width: 100%;
+}
+
+.filter.select select {
+  cursor: pointer;
+  padding-right: 2px;
+}
+
+.filter:has(:focus-visible) {
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+/* ------------------------------ Account ------------------------------ */
+
+.account {
+  display: flex;
+  align-items: center;
+}
+
+.account_login {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--control-height);
+  padding: 0 12px 0 10px;
+  border: none;
+  border-radius: 6px;
+  background-color: var(--primary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Signed in: same element as in the input panel's header (style_input.css) */
+.account_user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--control-height);
+  padding: 0 5px 0 10px;
+  border-radius: 6px;
+  background-color: var(--white);
+}
+
+.account_details {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  min-width: 0;
+}
+
+.account_name {
+  font-size: 1rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.account_email {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.account_tag {
+  margin-left: -2px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--light-3);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.account_logout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 5px;
+  background-color: #00000011;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.account_login:hover,
+.account_logout:hover {
+  opacity: 0.8;
+}
+
+.account_login:focus-visible,
+.account_logout:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Login dialog (native <dialog>, opened non-modal - see bindAccount()) */
+.login_dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 201;
+  width: min(400px, calc(100vw - 32px));
+  height: fit-content;
+  margin: auto;
+  padding: 20px;
+  border: none;
+  border-radius: 10px;
+  background-color: var(--white);
+  color: var(--text-primary);
+  box-shadow: 0 10px 40px #00000066;
+}
+
+.login_backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background-color: #000000aa;
+  backdrop-filter: blur(4px);
+}
+
+html.login_open .login_backdrop {
+  display: block;
+}
+
+.login_dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login_dialog h2 {
+  margin-bottom: 8px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.login_dialog label {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.login_dialog input {
+  height: 38px;
+  margin-bottom: 6px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background-color: #00000011;
+  font: inherit;
+  font-size: 1rem;
+}
+
+.login_dialog input:focus-visible {
+  outline: 2px solid var(--primary);
+}
+
+.login_error {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background-color: var(--ui-error-light);
+  color: var(--ui-error);
+  font-size: 0.9rem;
+}
+
+.login_actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.login_actions button {
+  height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login_actions .primary {
+  background-color: var(--primary);
+}
+
+.login_actions .secondary {
+  background-color: #00000011;
+}
+
+.login_actions button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* ------------------------------ Summary ------------------------------ */
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.summary_item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background-color: #ffffff0d;
+  color: var(--white);
+}
+
+.summary_value {
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary_label {
+  font-size: 0.85rem;
+  color: #ffffffaa;
+}
+
+.summary_item.live:not(.zero) .summary_value {
+  color: #ff7a8c;
+}
+
+.summary_item.zero .summary_value {
+  color: #ffffff55;
+}
+
+.error {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background-color: var(--ui-error-light);
+  color: #ff9aa9;
+}
+
+/* ------------------------------ Sections ------------------------------ */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.section h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #ffffffcc;
+}
+
+.section_toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.section_toggle .chevron {
+  margin-left: auto;
+  font-size: 22px;
+  color: #ffffff99;
+  transition: transform 0.2s ease;
+}
+
+/* Closed: points down (opens), open: points up (closes) */
+.section:not(.collapsed) .section_toggle .chevron {
+  transform: rotate(180deg);
+}
+
+.section_toggle:hover .chevron {
+  color: var(--white);
+}
+
+.section_toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.section_count {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background-color: #ffffff1a;
+  color: #ffffffcc;
+}
+
+.section_count:empty {
+  display: none;
+}
+
+.empty_state {
+  padding: 28px 16px;
+  border-radius: 6px;
+  border: 1px dashed #ffffff26;
+  text-align: center;
+  color: #ffffff88;
+}
+
+.card_grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+  gap: 10px;
+}
+
+.card_grid:empty {
+  display: none;
+}
+
+/* ------------------------------ Card ------------------------------ */
+
+.match_card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 12px 10px;
+  border-radius: 8px;
+  background-color: var(--white);
+  min-width: 0;
+}
+
+/* The whole card opens the scoreboard */
+.match_card[data-href] {
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+
+.match_card[data-href]:hover {
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.match_card.idle {
+  background-color: #ffffffd9;
+}
+
+.card_head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.card_title {
+  display: flex;
+  align-items: center;
+  gap: 0 8px;
+  min-width: 0;
+}
+
+.game_title {
+  flex: none;
+  max-width: 100%;
+  font-size: 1.15rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event_label {
+  min-width: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Sits at the far left, as tall as the title's capitals, not its line box */
+.event_logo {
+  height: 0.85rem;
+  max-width: 40px;
+  flex: none;
+  object-fit: contain;
+}
+
+.status_badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background-color: var(--surface-muted);
+  color: var(--text-secondary);
+}
+
+.status_badge.live {
+  background-color: var(--ui-error-light);
+  color: var(--ui-error);
+}
+
+.status_badge.ready {
+  background-color: var(--light-2);
+  color: var(--ui-warning);
+}
+
+.status_badge.finished {
+  background-color: var(--ui-success-light);
+  color: var(--ui-success);
+}
+
+.live_dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: currentColor;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live_dot { animation: none; }
+}
+
+.card_meta {
+  margin-top: -6px;
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Score table: one row per team, one column per set */
+.score_table {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 6px;
+  background-color: var(--surface-muted);
+}
+
+.team_row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.team_color {
+  align-self: stretch;
+  width: 4px;
+  flex: none;
+  border-radius: 2px;
+  background-color: #00000022;
+}
+
+.team_info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.team_name_row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Club or team logos in the flag's place - two clubs overlap a little, like on the boards */
+.team_logos {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.team_logos:empty {
+  display: none;
+}
+
+.team_logos img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.team_logos img + img {
+  margin-left: -7px;
+}
+
+.team_flag {
+  width: 20px;
+  height: 14px;
+  flex: none;
+  object-fit: cover;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px #0000001a;
+}
+
+.team_name,
+.team_players {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.team_name {
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+.team_row.winner .team_name {
+  font-weight: 700;
+}
+
+.team_players {
+  font-size: 0.82rem;
+  color: var(--text-tertiary);
+}
+
+/* Serve: fixed width on both rows so the scores stay aligned */
+.serve {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  width: 14px;
+  flex: none;
+}
+
+/* rg theme colours: yellow for a serve left, light grey for the used one */
+.serve_dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.serve_dot.left {
+  background-color: var(--primary);
+}
+
+.serve_dot.used {
+  background-color: #e3e3e3;
+}
+
+.squad_score,
+.set_score,
+.squad_result,
+.squad_result * {
+  font-family: 'Barlow Condensed', sans-serif;
+}
+
+.squad_score,
+.set_score {
+  flex: none;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The rg theme's group counter: a narrower box in its red tint */
+.squad_score {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 28px;
+  height: 34px;
+  padding-bottom: 2px;
+  margin-right: 4px;
+  border-radius: 4px;
+  background-color: rgba(197, 81, 81, 0.2);
+  font-size: 1.2rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.squad_score.leading {
+  font-weight: 600;
+}
+
+.squad_score.trailing {
+  font-weight: 400;
+}
+
+.set_score {
+  /* Like the rg theme's set counters, in grey: one flat box per set,
+     the set winner's score bold, the loser's light, the rest in between */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 34px;
+  height: 34px;
+  padding-bottom: 2px;
+  border-radius: 4px;
+  background-color: #00000010;
+  font-size: 1.2rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.set_score.set_won {
+  font-weight: 600;
+}
+
+.set_score.set_lost {
+  font-weight: 400;
+}
+
+/* The set being played: framed like the rg theme's active set */
+.set_score.active {
+  border: 1px solid #00000038;
+  font-weight: 600;
+}
+
+/* Tags in the card head: situation (timeout, break, ...) left of the status */
+.card_tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background-color: var(--surface-muted);
+  color: var(--text-secondary);
+}
+
+.chip .material-symbols-rounded {
+  font-size: 14px;
+}
+
+.chip.timer {
+  background-color: var(--light-3);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Team that called a timeout/medical, after the countdown */
+.chip .chip_team {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 10em;
+}
+
+.chip .chip_team::before {
+  content: '·';
+}
+
+.chip .chip_team_color {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.chip .chip_team_name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card_foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.card_time {
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.card_links {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--text-primary);
+  background-color: var(--surface-muted);
+  transition: background-color 0.15s ease;
+}
+
+.link:hover {
+  background-color: #00000014;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+button.link {
+  border: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.link.icon_only {
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+}
+
+/* Background = the logo's own cream, so the logo fills the button seamlessly;
+   the "PZ" lettering covers ~70% of the image, so 26px makes it as big as
+   the 18px icons next to it */
+.link.pz {
+  background-color: #fff3dd;
+}
+
+.link.pz:hover {
+  background-color: #fce8c4;
+}
+
+.link.pz img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+/* ------------------------------ Squad game ------------------------------ */
+
+/* Subgames of one squad game on several courts: one block across the grid */
+.squad_card {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 12px 10px;
+  border-radius: 8px;
+  background-color: var(--white);
+  min-width: 0;
+}
+
+.squad_card.idle {
+  background-color: #ffffffd9;
+}
+
+.squad_board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background-color: var(--surface-muted);
+}
+
+.squad_team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 32px;
+}
+
+.squad_team.b {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.squad_team .team_name {
+  font-size: 1.2rem;
+}
+
+.squad_team.leading .team_name {
+  font-weight: 700;
+}
+
+.squad_result {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 5px;
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+/* Once a squad leads, the other number steps back */
+.squad_result .trailing {
+  color: var(--text-tertiary);
+}
+
+.squad_result .leading {
+  font-weight: 700;
+}
+
+.squad_result .separator {
+  font-size: 1.2rem;
+  /* The colon sits on the baseline - lifted to the digits' middle */
+  margin-top: -0.18em;
+}
+
+.subgame_grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 8px;
+}
+
+/* A subgame: the regular card, outlined inside the squad block */
+.match_card.subgame {
+  padding: 10px 10px 8px;
+  gap: 8px;
+  box-shadow: inset 0 0 0 1px #00000014;
+}
+
+.match_card.subgame.idle {
+  background-color: var(--white);
+  opacity: 0.75;
+}
+
+.match_card.subgame .game_title {
+  font-size: 1.02rem;
+}
+
+.match_card.subgame .team_row {
+  min-height: 34px;
+}
+
+.page_foot {
+  margin-top: 12px;
+  font-size: 0.85rem;
+  color: #ffffff66;
+  text-align: center;
+}
+
+/* Phones held sideways: search, org and account as a row of their own across the width */
+@media (max-height: 520px) and (orientation: landscape) {
+  .controls {
+    flex-basis: 100%;
+    max-width: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .wrapper {
+    padding: 8px 16px 24px;
+  }
+
+  /* Header: the pages and the login (icon only) in the first row; signed
+     in, the account across the width, search and org below it */
+  .page_head {
+    flex-wrap: wrap;
+  }
+
+  .controls {
+    display: contents;
+  }
+
+  .page_head .title { order: 0; }
+  .account { order: 1; }
+  .filter.search { order: 2; }
+  .filter.select { order: 3; }
+
+  .filter.search,
+  .filter.select,
+  .filter.select select {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .account_login {
+    width: var(--control-height);
+    padding: 0;
+    justify-content: center;
+  }
+
+  .account_login .material-symbols-rounded {
+    font-size: 20px;
+  }
+
+  .account_login_label {
+    display: none;
+  }
+
+  .account:has(.account_user) {
+    flex: 1 1 100%;
+  }
+
+  .account_user {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .account_details {
+    flex: 1;
+  }
+
+  .account_name,
+  .account_email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .summary_item {
+    padding: 8px 10px;
+  }
+
+  .summary_value {
+    font-size: 1.3rem;
+  }
+
+  .squad_board {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .squad_team .team_name {
+    font-size: 1.05rem;
+  }
+
+  .squad_result {
+    font-size: 1.35rem;
+    padding: 2px 8px;
+  }
+}

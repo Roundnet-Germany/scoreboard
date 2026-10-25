@@ -12,6 +12,8 @@
   --ui-success-light: #04b90433;
   --ui-error: #e14c62;
   --ui-error-light: #e14c6233;
+  --ui-warning: #e07b00;
+  --ui-warning-light: #f5a62333;
 }
 
 * {
@@ -354,7 +356,88 @@ header {
 }
 
 header h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--white);
+  line-height: 1.1;
+}
+
+header .header_left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Link to the other page (Input panel | Live matches) - same look as on the overview */
+header .tab_link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px 4px 7px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: #ffffffb3;
+  text-decoration: none;
+  background-color: #ffffff12;
+  transition: background-color .2s ease, color .2s ease;
+}
+
+header .tab_link:hover {
+  color: var(--white);
+  background-color: #ffffff22;
+}
+
+header .tab_link i {
+  font-size: 16px;
+}
+
+/* Logout inside the account element - same as on the overview (style_overview.css) */
+header .account_logout {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 5px;
+  background-color: #00000011;
+  color: var(--text-primary);
+}
+
+header .account_logout i {
+  font-size: 18px;
+}
+
+/* Loading state (html.is-loading): until the selected court's data is in -
+   on page load, after login and on a court switch. Content is dimmed and
+   can't be used yet, so nothing is typed over data that's still coming. */
+header h1 .page_spinner {
+  display: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--white);
+  animation: page-spinner-spin 800ms linear infinite;
+}
+
+html.is-loading header h1 .page_spinner {
+  display: inline-block;
+}
+
+/* Only what's inside the boxes is greyed out - the boxes keep their background */
+html.is-loading .scoreboard > .inner > :not(header) {
+  pointer-events: none;
+}
+
+.scoreboard > .inner > :not(header) .container > * {
+  transition: opacity 150ms;
+}
+
+html.is-loading .scoreboard > .inner > :not(header) .container > * {
+  opacity: 0.5;
+}
+
+@keyframes page-spinner-spin {
+  to { transform: rotate(360deg); }
 }
 
 header .header_right {
@@ -380,11 +463,70 @@ header .header_right .user {
   margin-bottom: 1px;
 }
 
+header .header_right .user .user_details {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
 header .header_right .user #username {
   font-size: 1rem;
   font-weight: 500;
-  margin-bottom: 1px;
   /* text-transform: uppercase; */
+}
+
+header .header_right .user #user_email {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+header .header_right .user #admin_tag {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--light-3);
+  color: var(--text-primary);
+}
+
+/* Connection badge next to the court select (see renderConnectionStatus() in main.js) */
+.connection_status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  background-color: var(--light-3);
+}
+
+.connection_status.hidden {
+  display: none;
+}
+
+.connection_status .connection_icon {
+  font-size: 18px;
+  font-variation-settings: 'FILL' 1, 'wght' 500;
+}
+
+.connection_status[data-state="online"] {
+  color: var(--ui-success);
+  background-color: var(--ui-success-light);
+}
+
+.connection_status[data-state="poor"] {
+  color: var(--ui-warning);
+  background-color: var(--ui-warning-light);
+}
+
+.connection_status[data-state="offline"] {
+  color: var(--ui-error);
+  background-color: var(--ui-error-light);
 }
 
 .row_section {
@@ -533,32 +675,441 @@ select.small {
   flex-wrap: wrap-reverse;
 }
 
-#Max_Sets {
-  max-width: 82px; 
+/* Game details and the PZ connection share the row equally - same basis and
+   growth for both, so they wrap below 2 x 320px like before */
+.game_details,
+.playerzone {
+  flex: 1 1 320px;
 }
 
-.game_details {
-  flex-basis: 340px;
+.game_details .game_settings_row {
+  gap: 8px;
 }
 
-.data_import {
+.game_details .game_settings_row .input_container {
+  flex: 1 1 0;
+}
+
+/* Keep the fields at the top when the Playerzone container next to it grows */
+.game_details > .inner > * {
+  flex-grow: 0;
+}
+
+.playerzone .pz_logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+}
+
+.playerzone {
   background-color: var(--light-2);
-  flex-basis: 196px;
-  /* max-width: 230px; */
 }
 
-.data_import .input_container {
-  flex-grow: 1;
-}
-
-.data_import .input_container textarea {
-  flex-grow: 1;
+.playerzone input:not([type='color']) {
   background-color: var(--white);
 }
 
-.data_import:has(textarea:placeholder-shown ) button#import_data {
+.playerzone .pz_id_row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.playerzone .pz_id_row input {
+  flex-grow: 1;
+}
+
+/* Same height as the input next to it */
+.playerzone .pz_id_row button {
+  height: auto;
+}
+
+.playerzone .pz_field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Dropdown with search (PlayerzoneDropdown in js/playerzone.js) */
+.pz_dropdown {
+  position: relative;
+  min-width: 0;
+}
+
+.pz_dropdown_trigger {
+  width: 100%;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px 8px 8px 12px;
+  border-radius: 4px;
+  background-color: var(--white);
+  font-size: 1.075rem;
+  font-weight: 400;
+  text-align: left;
+}
+
+.pz_dropdown_trigger:hover {
   opacity: 1;
-  /* cursor: default; */
+}
+
+.pz_dropdown_trigger:active {
+  transform: none;
+}
+
+.pz_dropdown_trigger:focus-visible,
+.pz_dropdown.open .pz_dropdown_trigger {
+  outline: none;
+  box-shadow: inset 0px 0px 0px 2px var(--primary);
+}
+
+.pz_dropdown_trigger:disabled {
+  cursor: default;
+  opacity: .6;
+}
+
+.pz_dropdown_value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pz_dropdown_value.placeholder {
+  color: var(--text-secondary);
+}
+
+.pz_dropdown_trigger i {
+  font-size: 1.25rem;
+  transition: transform .2s ease;
+}
+
+.pz_dropdown.open .pz_dropdown_trigger i {
+  transform: rotate(180deg);
+}
+
+.pz_dropdown_panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 6px;
+  background-color: var(--white);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .25);
+}
+
+.pz_dropdown.open .pz_dropdown_panel {
+  display: flex;
+}
+
+.playerzone input.pz_dropdown_search {
+  width: 100%;
+  font-size: 1rem;
+  padding: 6px 10px 7px 10px;
+  background-color: #00000011;
+}
+
+.pz_dropdown_list {
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  overflow-y: auto;
+  outline: none;
+}
+
+.pz_dropdown_group {
+  padding: 6px 8px 2px 8px;
+  font-size: .8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.pz_dropdown_option {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 8px 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pz_dropdown_option.grouped {
+  padding-left: 16px;
+}
+
+.pz_dropdown_option.active {
+  background-color: var(--light-2);
+}
+
+.pz_dropdown_option.selected {
+  font-weight: 600;
+}
+
+.pz_dropdown_sublabel {
+  flex-shrink: 0;
+  font-size: .85rem;
+  color: var(--text-secondary);
+}
+
+.pz_dropdown_list .pz_hint {
+  padding: 6px 8px;
+}
+
+/* Collapsible game list */
+.playerzone .pz_games_section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.playerzone .pz_games_header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.playerzone .pz_games_title {
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 4px 3px 0;
+  background-color: transparent;
+  font-weight: 600;
+}
+
+.playerzone .pz_games_title:active {
+  transform: none;
+}
+
+.playerzone .pz_games_actions {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+}
+
+.playerzone .pz_games_chevron i {
+  transition: transform .2s ease;
+}
+
+/* Down while collapsed, up while open - like the dropdowns */
+.playerzone .pz_games_section:not(.collapsed) .pz_games_chevron i {
+  transform: rotate(180deg);
+}
+
+.playerzone .pz_games_count {
+  font-size: .85rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.playerzone .pz_games_section.collapsed .pz_games {
+  display: none;
+}
+
+.playerzone .pz_games_actions button {
+  padding: 2px 6px;
+}
+
+.playerzone .pz_games_actions button i {
+  font-size: 1.15rem;
+}
+
+/* Manual game id, set apart from the picker */
+.playerzone .pz_manual {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid #0000001a;
+  overflow: visible;
+}
+
+/* Spinner while a game is loading (game rows and the Load button) */
+@keyframes pz-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.playerzone .pz_spinner,
+.playerzone #pz_load_id.loading::after {
+  content: "";
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: pz-spin .7s linear infinite;
+}
+
+.playerzone .pz_spinner {
+  display: none;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.playerzone .pz_game.loading .pz_spinner {
+  display: block;
+}
+
+.playerzone .pz_game.loading i {
+  display: none;
+}
+
+.playerzone .pz_game.loading,
+.playerzone #pz_load_id.loading {
+  pointer-events: none;
+}
+
+.playerzone #pz_load_id {
+  position: relative;
+}
+
+.playerzone #pz_load_id.loading {
+  color: transparent;
+}
+
+.playerzone #pz_load_id.loading::after {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  border-color: var(--text-primary);
+  border-top-color: transparent;
+}
+
+/* Liga games: chevron to open their subgames */
+.playerzone .pz_liga_chevron {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-size: 1.25rem;
+  transition: transform .2s ease;
+}
+
+.playerzone .pz_liga[open] .pz_liga_chevron {
+  transform: rotate(180deg);
+}
+
+.playerzone .pz_linked {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background-color: var(--light-3);
+}
+
+.playerzone .pz_linked.hidden {
+  display: none;
+}
+
+.playerzone .pz_linked_details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.playerzone .pz_linked_teams {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerzone .pz_linked_id,
+.playerzone .pz_game_meta,
+.playerzone .pz_hint {
+  font-size: .85rem;
+  color: var(--text-secondary);
+}
+
+.playerzone .pz_games {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.playerzone .pz_games:empty {
+  display: none;
+}
+
+.playerzone .pz_games.loading {
+  opacity: .5;
+}
+
+.playerzone .pz_game,
+.playerzone .pz_liga > summary {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 6px;
+  width: 100%;
+  padding: 4px 8px 5px 8px;
+  border-radius: 4px;
+  background-color: var(--white);
+  text-align: left;
+  white-space: normal;
+  font-size: .95rem;
+}
+
+.playerzone .pz_game .pz_game_meta,
+.playerzone .pz_liga > summary .pz_game_meta {
+  grid-column: 1;
+}
+
+.playerzone .pz_game .pz_game_teams,
+.playerzone .pz_liga > summary .pz_game_teams {
+  grid-column: 1;
+}
+
+.playerzone .pz_game i {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-size: 1.1rem;
+}
+
+.playerzone .pz_game:active {
+  transform: none;
+}
+
+.playerzone .pz_game.done,
+.playerzone .pz_liga.done > summary {
+  opacity: .5;
+}
+
+.playerzone .pz_game.linked {
+  box-shadow: inset 0px 0px 0px 2px var(--primary);
+}
+
+.playerzone .pz_liga > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.playerzone .pz_liga > summary::-webkit-details-marker {
+  display: none;
+}
+
+.playerzone .pz_liga[open] > summary {
+  background-color: var(--light-3);
+}
+
+.playerzone .pz_liga > .pz_game,
+.playerzone .pz_liga > .pz_hint {
+  margin: 4px 0 0 12px;
+  width: calc(100% - 12px);
 }
 
 .scores .set_counter_container {
@@ -856,33 +1407,15 @@ select.small {
   margin-bottom: 2px;
 }
 
-select#Match_Stats_Type {
+select#Match_Stats_Type,
+select#Team_Indicator_Type,
+select#Squad_Score_Mode {
   height: auto;
   padding: 0px 0px 3px 2px;
 }
 
 .controls .output .setting_entry {
   flex-grow: 1;
-}
-
-/* .hidden (base.css) collapses via max-width/max-height:0, which relies on
-   the element being able to shrink below its content size - true for a
-   block element, but NOT for a flex item, which defaults to min-width:auto
-   (content-based) unless overridden. min-width:auto beats max-width:0 in
-   the flex sizing algorithm, so #cancel_timer/.timer_status - flex items
-   inside .timer_buttons - kept their full content width and a reserved gap
-   even while "hidden" (invisible via opacity:0, but still occupying space),
-   which is what made the visible buttons stop short of the same right edge
-   the toggle switches above reach. display:none sidesteps the whole
-   min-width:auto quirk by removing the item from flex layout entirely. */
-.timer_buttons .hidden {
-  display: none;
-}
-
-.timer_status {
-  font-size: .85rem;
-  font-weight: 600;
-  color: var(--secondary);
 }
 
 .output .output_entry {
@@ -929,6 +1462,28 @@ select#Match_Stats_Type {
 @media only screen and (max-width: 600px) {
   .wrapper {
     margin: 8px;
+  }
+
+  /* Header: account first, then the court - each across the whole width */
+  header .header_right {
+    flex-direction: column-reverse;
+    width: 100%;
+  }
+
+  header .header_right .container {
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  header .header_right .setting_entry {
+    flex: 1;
+    min-width: 0;
+  }
+
+  header .header_right #channel {
+    flex: 1;
+    min-width: 0;
   }
 
   .input_group {
@@ -1042,6 +1597,8 @@ select#Match_Stats_Type {
   flex-direction: column;
   gap: 12px;
   align-items: flex-start;
+  min-width: 210px;
+  flex-basis: 220px;
 }
 
 .container.player_extras .inner .input_group {
@@ -1056,3 +1613,267 @@ select#Match_Stats_Type {
   gap: 4px;
 }
 
+
+/* Club logo / team logo preview next to the team name (see ensureLogoIndicators()) */
+.logo-indicator {
+  --logo-size: 36px;
+  display: none;
+  flex: none;
+  align-items: center;
+  align-self: center;
+}
+
+.logo-indicator.visible:not(.empty) {
+  display: inline-flex;
+}
+
+.logo-indicator img {
+  flex: none;
+  width: var(--logo-size);
+  height: var(--logo-size);
+  object-fit: contain;
+}
+
+.logo-indicator img + img {
+  margin-left: calc(var(--logo-size) * -0.4);
+}
+
+/* Squad score while it's set to automatic (see updateAutoSquadScore()):
+   locked - no arrows, no focus, the number subtle */
+.group_score .counter[readonly] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+  padding: 0px 0px 5px 0px !important;
+  color: var(--text-secondary);
+  pointer-events: none;
+  user-select: none;
+}
+
+.group_score .counter[readonly]::-webkit-inner-spin-button,
+.group_score .counter[readonly]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  display: none;
+  margin: 0;
+}
+
+.group_score:has(.counter[readonly]) {
+  cursor: not-allowed;
+}
+
+/* Login box: way out for anyone who only wants to watch */
+#auth .auth_back {
+  font-size: 0.9rem;
+  color: #00000099;
+}
+
+/* Per-team Timeout/Medical buttons (Scoreboard.js's
+   updateTeamTimerButtons()) - a column right of the +1/-1 buttons in the
+   Scores card, one stacked Timeout/Medical pair per team row (the row
+   already says which team, so no name/stripe here). Timer type on the
+   left, countdown or "N left" on the right, and a gauge (.timer_gauge) in
+   the team's color filling the button left to right as the running timer
+   elapses. Everything is fixed-width on purpose - buttons, the countdown
+   column (tabular digits) and the Cancel button - so the card never
+   resizes while a countdown runs. .used (no timeout left this set) only
+   greys the button out; it stays clickable so an operator can still
+   correct things. */
+.points .team_timers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.points .team_timers .team_timer_group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-grow: 1;
+  width: 120px;
+}
+
+.team_timer {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex: 1 1 0px;
+  min-height: 0px;
+}
+
+.team_timer .timer_gauge {
+  position: absolute;
+  top: 0px;
+  bottom: 0px;
+  left: 0px;
+  width: 0%;
+  background-color: var(--A_Color, #cccccc);
+  opacity: .35;
+  pointer-events: none;
+}
+
+.team_timer[team="b"] .timer_gauge {
+  background-color: var(--B_Color, #cccccc);
+}
+
+/* Animate only while running: the width is updated every 250ms (syncTimerTicker()),
+   a matching linear transition turns those steps into a smooth fill. */
+.team_timer.running .timer_gauge {
+  transition: width .3s linear;
+}
+
+.team_timer .team_timer_icon,
+.team_timer .team_timer_name,
+.team_timer .team_timer_info {
+  position: relative; /* above the gauge */
+}
+
+/* Icon instead of the name - compact layout only, see below */
+.team_timer .team_timer_icon {
+  display: none;
+  font-size: 16px;
+}
+
+.team_timer .team_timer_name {
+  min-width: 0px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team_timer .team_timer_info {
+  flex: none;
+  min-width: 34px;
+  text-align: right;
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+  opacity: .7;
+}
+
+.team_timer.running .team_timer_info {
+  font-size: .9rem;
+  font-weight: 700;
+  opacity: 1;
+}
+
+.team_timer.used {
+  opacity: .45;
+}
+
+/* No separate Cancel button: the running button swaps its label and
+   countdown for "Cancel" (the gauge keeps filling behind it), and clicking
+   it then cancels - see Scoreboard.js's $teamTimerButtons handler.
+   - mouse: on hover, but not while .fresh - the pointer is still on the
+     button that was just clicked to start the timer (cleared on mouseleave)
+   - touch: no hover (a tap leaves :hover stuck), the first tap sets
+     .confirm_cancel ("Cancel?") for a few seconds, the second one cancels */
+.team_timer.running::after {
+  position: absolute;
+  inset: 0px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--ui-error);
+}
+
+.team_timer.running.confirm_cancel > .team_timer_icon,
+.team_timer.running.confirm_cancel > .team_timer_name,
+.team_timer.running.confirm_cancel > .team_timer_info {
+  visibility: hidden;
+}
+
+.team_timer.running.confirm_cancel::after {
+  content: 'Cancel?';
+}
+
+.team_timer.running.confirm_cancel {
+  opacity: 1; /* not the generic button:hover fade - keep the gauge readable */
+  box-shadow: inset 0px 0px 0px 2px var(--ui-error);
+}
+
+@media (hover: hover) {
+  .team_timer.running:not(.fresh):hover > .team_timer_icon,
+  .team_timer.running:not(.fresh):hover > .team_timer_name,
+  .team_timer.running:not(.fresh):hover > .team_timer_info {
+    visibility: hidden;
+  }
+
+  .team_timer.running:not(.fresh):hover::after {
+    content: 'Cancel';
+  }
+
+  .team_timer.running:not(.fresh):hover {
+    opacity: 1;
+    box-shadow: inset 0px 0px 0px 2px var(--ui-error);
+  }
+
+  .team_timer.running.fresh:hover {
+    opacity: 1;
+  }
+}
+
+/* Break / board-started timer (no team button of its own) - same look as
+   a running team button, in the Scores header left of Active Set, only
+   present while such a timer runs. */
+#other_timer {
+  flex: none;
+  width: 110px;
+  margin-right: 8px;
+}
+
+#other_timer.hidden {
+  display: none;
+}
+
+#other_timer .timer_gauge {
+  background-color: var(--secondary);
+}
+
+/* Phones, upright and sideways (landscape phones are wider than 600px but
+   never taller than ~500px - tablets keep the full buttons): an icon
+   instead of "Timeout"/"Medical" with the countdown or "N left" under it,
+   so the column takes as little room from the player names as possible.
+   The full label stays in the tooltip (updateTeamTimerButtons()). */
+@media only screen and (max-width: 600px) and (pointer: coarse),
+       only screen and (max-height: 500px) and (pointer: coarse) {
+  .points .team_timers .team_timer_group {
+    width: 44px;
+  }
+
+  .team_timer {
+    flex-direction: column;
+    justify-content: center;
+    gap: 0px;
+    padding: 1px 2px 2px 2px;
+    font-size: .7rem;
+    line-height: 1.1;
+  }
+
+  .team_timer .team_timer_icon {
+    display: block;
+  }
+
+  .team_timer .team_timer_name {
+    display: none;
+  }
+
+  .team_timer.running::after {
+    font-size: .6rem;
+  }
+
+  .team_timer .team_timer_info {
+    min-width: 0px;
+    text-align: center;
+    font-size: .65rem;
+  }
+
+  .team_timer.running .team_timer_info {
+    font-size: .75rem;
+  }
+
+  #other_timer {
+    width: 76px;
+  }
+}

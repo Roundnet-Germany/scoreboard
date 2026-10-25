@@ -1,26 +1,54 @@
-import { themes, readData, getPathsAndValues, getColorBrightness, rgb2hex, writeData, writeTimerState, showToast, copyToClipboard } from "./main.js?v=3";
+import { themes, DEFAULT_BRAND_LOGO, subscribeToMatch, getPathsAndValues, getColorBrightness, rgb2hex, writeData, readData, serverTimestamp, writeTimerState, copyToClipboard, changeEventHistory, normalizeEventHistory } from "./main.js?v=4";
+import { showToast } from "./toast.js?v=4";
+import { PlayerzonePicker, fetchGame, syncToPlayerzone, sendSyncBeacon } from "./playerzone.js?v=4";
 
-// Fixed durations for the shared timeout/medical/break timer - matches
-// led_scoreboard/include/score_actions.h's BREAK/TIMEOUT/MEDICAL_*_MS
-// exactly. Never sent over the wire; every reader (this page, the LED
-// board, the manager server) keeps its own copy so match-<channel>/timer
-// only ever has to say *which* timer is running, not how long it lasts.
-const TIMER_DURATIONS_MS = { timeout: 60_000, medical: 300_000, break: 180_000 };
-const TIMER_LABELS = { timeout: 'Timeout', medical: 'Medical Timeout', break: 'Break' };
-import { resolveFlag, getCountryList } from "./flags.js?v=3";
+// Mutually exclusive "team indicator" settings, see the Team Indicator handler
+const TEAM_INDICATOR_MODES = ['show_color', 'show_flag', 'show_club_logo', 'show_team_logo'];
+import { resolveFlag, getCountryList } from "./flags.js?v=4";
+import { historyScore, reconcileScore, recordSquadScore, cleanScoreEvents } from "./scoreHistory.js?v=4";
+// Timer durations and the set-mode convention are shared with the live overview
+import { TIMER_DURATIONS_MS, TIMER_LABELS, setModeToFormat, serveInfo, serveRotation } from "./matchStatus.js?v=4";
+import { squadScoreFromResults } from "./squadGroups.js?v=4";
+import { AutoSquadScore } from "./autoSquadScore.js?v=4";
+// Compact variants for input.html's fixed-width Cancel button.
+const TIMER_SHORT_LABELS = { timeout: 'Timeout', medical: 'Medical', break: 'Break' };
+// Timer types that are called by one team - both get a team on
+// match-<channel>/timer and a matching event in event_history (see
+// startTimer()). A break is between sets, never team-owned.
+const TEAM_TIMER_TYPES = ['timeout', 'medical'];
+// Regular timeouts allowed per team per set - only displayed ("0 left" +
+// greyed button on input.html), never enforced, so an operator can still
+// correct a mistake.
+const TIMEOUTS_PER_SET = 1;
+// Touch: how long a running timer button waits for the confirming second tap
+const CANCEL_CONFIRM_MS = 3000;
+// Material Symbols icon per team timer type - input.html's buttons, the
+// score history's markers and the chart's badges (drawTimerMarkers())
+const TIMER_ICONS = { timeout: 'timer', medical: 'medical_services' };
+const TIMER_BADGE_SIZE = 16;
+const TIMER_BADGE_FONT = "12px 'Material Symbols Rounded'";
 
-// Same convention as led_scoreboard/include/firebase.h's _parseSetMode() and
-// the manager server's setModeToFormat() (firebaseBridge.js): 0=BO1 (never
-// auto-starts a break), 1=2 sets (always does), 2=BO3 (only while the match
-// isn't already decided) - see startTimer('break') callers below.
-function setModeToFormat(raw) {
-    const text = String(raw || '').trim();
-    if (!text) return 2;
-    const lower = text.toLowerCase();
-    if (text === '1' || /\b1\s*set\b/.test(lower)) return 0;
-    if (text === '2' || /\b2\s*sets?\b/.test(lower)) return 1;
-    return 2; // any other value (e.g. "3", "Best of 3") -> BO3
+/**
+ * Removes a timeout/medical event from the end of the history (in place) -
+ * only if it's still the newest one, since inside changeEventHistory()'s
+ * transaction the list is the server's and may have a point added since.
+ */
+function removeIfLastEvent(list, event) {
+    const last = list[list.length - 1];
+    if (last && last.type === event.type && last.team === event.team && last.started_at === event.started_at) list.pop();
 }
+
+/** Settings a spectator picks for themselves (setViewerSettings()) instead of taking the court's. */
+const VIEWER_SETTINGS = ['show_score_history', 'show_score_history_chart', 'show_match_statistics', 'show_match_preview', 'match_stats_type'];
+
+/** A typed score that jumps by more than one point waits this long for the next keystroke. */
+const SCORE_TYPING_DELAY_MS = 700;
+
+/** Text-like fields upload after a short pause in typing instead of on every keystroke. */
+const TEXT_UPLOAD_DELAY_MS = 300;
+// Name input of each player id ('a'/'b' = team A, 'c'/'d' = team B)
+const PLAYER_NAME_INPUTS = { a: 'A_Player_1', b: 'A_Player_2', c: 'B_Player_1', d: 'B_Player_2' };
+const isTextField = ($elem) => $elem.is('textarea, input:not([type]), input[type="text"], input[type="url"], input[type="color"]');
 
 
 /* ==============================================================================
@@ -45,17 +73,19 @@ export class Scoreboard {
         this.$channelInput = $('#channel');
         this.$scoreChangeButtons = $('.button[team][change]');
         this.$setChangeButtons = $('.set_controls_container .button');
-        this.$scoreboardInputs = this.$html_frame.find($('input:not([type=submit]), textarea'));
+        // Only inputs bound to match data - the Playerzone picker's own fields must not upload
+        this.$scoreboardInputs = this.$html_frame.find($('input:not([type=submit])[fb-data], textarea[fb-data]'));
         this.$setCounter = $('#Set_Count');
         this.$winPoints = $('#win_points');
         this.$hardcap = $('#Hardcap');
         this.$resetScoresButton = $('#reset_scores');
-        this.$startTimeoutButton = $('#start_timeout');
-        this.$startMedicalButton = $('#start_medical');
-        this.$cancelTimerButton = $('#cancel_timer');
-        this.$timerStatus = $('.timer_status');
+        this.$teamTimerButtons = $('button.team_timer[timer-type][team]');
+        this.$otherTimerButton = $('#other_timer');
         this.$timerWidget = $('.timer_widget');
-        this.$sets = $('.set');
+        // Not the score history inside the statistics: updateScoreHistory() shows
+        // its sets by the statistics type - toggled here by the active set as well,
+        // it showed other sets for a moment while the statistics faded out
+        this.$sets = $('.set').not('.score_history_in_stats .set');
         this.$setScoreCounterA = $('.a_sets_won');
         this.$setScoreCounterB = $('.b_sets_won');
         this.$activeScoreCounterA = $('.a_score_active');
@@ -77,6 +107,8 @@ export class Scoreboard {
             "show_player_names": 1,
             "show_color": 1,
             "show_flag": 0,
+            "show_club_logo": 0,
+            "show_team_logo": 0,
             "show_group_score": 0,
             "show_serve_indicator": 0,
             "show_score_history": 0,
@@ -84,21 +116,52 @@ export class Scoreboard {
             "show_match_statistics": 0,
             "show_match_preview": 0,
             "match_stats_type": "match",
+            // "manual" (typed in) or "auto" (counted from the linked squad subgames, see AutoSquadScore)
+            "group_score_mode": "manual",
         };
         // Raw teams_info.team_x.name/flag as last received from Firebase -
         // kept independently of the DOM so applyFlag() can fall back to
         // resolveFlag(name) whenever an explicit flag code isn't set,
-        // regardless of which of the two paths arrives first on a given poll.
+        // regardless of which of the two paths arrives first on a given update.
         this.teamNames = { a: '', b: '' };
         this.teamFlags = { a: '', b: '' };
+        // teams_info.team_x.player_1/2_club_logo and teams_info.team_x.logo,
+        // for the club logo / team logo indicators (see applyLogos())
+        this.teamClubLogos = { a: ['', ''], b: ['', ''] };
+        this.teamLogos = { a: '', b: '' };
         this.active_set = 1;
-        // { type: "timeout"|"medical"|"break", startedAt: <epoch ms> } | null -
+        // { type: "timeout"|"medical"|"break", team: "a"|"b"|null, startedAt: <epoch ms> } | null -
         // mirrors match-<channel>/timer, see processDataAndUpdateFields().
         this.timerState = null;
-        this.ScoreHistoryChart = null;
+        this.scoreChart = null;
         this.event_history = [];
-        this.data_interval = null;
-        this.update_interval = null;
+        // Unsubscribe function of the active Firebase listener (subscribeToChannel())
+        this.unsubscribeMatch = null;
+        // requestRender() batches several changes into one updateUI()
+        this.renderScheduled = false;
+        // Only runs while a timer is active (see syncTimerTicker())
+        this.timer_interval = null;
+        // Pending show/hide timeouts of the overlays, see toggleOverlay()
+        this.overlayTimeouts = new Map();
+        // match-<channel>/playerzone = { game_id, main_game_id, event_id } of the selected court, or null
+        this.playerzoneLink = null;
+        // match-<channel>/active_set as last seen from Firebase - a write that
+        // raises it ends a set (see uploadData())
+        this.remoteActiveSet = null;
+        // Input only: game picker of the "Playerzone" container (see playerzone.js)
+        this.playerzonePicker = null;
+        // Input only: watches the subgames of the linked squad game while the squad score is automatic
+        this.autoSquad = null;
+        // Live data as last applied to the page, per flattened path - an
+        // update only touches the fields whose value actually changed
+        // (processDataAndUpdateFields()). Cleared on a channel switch.
+        this.lastAppliedValues = new Map();
+        // [fb-data] elements by path, collected once (fieldElements())
+        this.fieldElementsByPath = null;
+        // Text fields waiting for their debounced upload: element -> timeout
+        this.pendingUploads = new Map();
+        // Flag sizes are measured from the layout - only redone when that may have changed
+        this.layoutDirty = true;
         
         // Game settings
         this.gameSettings = {
@@ -115,46 +178,132 @@ export class Scoreboard {
 
     /* ==============================================================================
      * Initialize the scoreboard with event listeners and data synchronization
-     * Sets up intervals for UI updates and data fetching based on board type
-     * Input: Daten-Polling erst nach Login (startDataSync()), um Permission denied zu vermeiden
+     * Renders on demand instead of on a fixed tick (requestRender()): on new
+     * data from Firebase, on local input, on resize and once fonts have loaded
+     * (the flag sizes depend on the font metrics).
+     * Input: Daten-Listener erst nach Login (startDataSync()), um Permission denied zu vermeiden
      * ============================================================================== */
     init() {
         this.initEventListeners();
         this.populateFlagSelects();
 
-        // Update UI every 300ms for smooth real-time updates
-        this.update_interval = setInterval(() => {
-            this.updateUI();
-        }, 300);
+        const relayout = () => {
+            this.layoutDirty = true;
+            this.requestRender();
+        };
+        $(window).on('resize', relayout);
+        if (document.fonts) {
+            document.fonts.ready.then(relayout);
+            document.fonts.addEventListener('loadingdone', relayout);
+        }
 
         if (this.type === 'input') {
-            // Input: Daten-Polling erst nach Login starten (main.js ruft startDataSync() auf)
-            // Kein insertLiveData() und kein data_interval hier – sonst Permission denied auf dem Login-Screen
+            this.playerzonePicker = new PlayerzonePicker($('.container.playerzone'), (gameId) => this.loadPlayerzoneGame(gameId));
+            this.autoSquad = new AutoSquadScore((update) => this.applyAutoSquadScore(update));
+            // Closing the tab: best-effort interim result for the linked game
+            window.addEventListener('pagehide', () => {
+                this.flushPendingUploads();
+                if (this.playerzoneLink?.game_id && this.canWriteChannel()) sendSyncBeacon(this.playerzoneLink.game_id);
+            });
+            // Render local input (scores, selects, toggles, ...) right away -
+            // including input that doesn't upload anything (yet), e.g. before login.
+            $(document).on('input change', () => this.requestRender());
+            // Input: Daten-Listener erst nach Login starten (main.js ruft startDataSync() auf)
         } else {
-            // Output: sofort Daten laden und Intervall starten
-            this.insertLiveData();
-            this.data_interval = setInterval(() => {
-                this.insertLiveData();
-            }, 500);
+            // Output: listen to the channel live right away
+            this.subscribeToChannel();
+            // No match to show (invalid ?org=&court= link): nothing to wait for
+            if (!this.channel) this.markLoaded('data');
+            // Whatever is missing by then, show the page anyway
+            setTimeout(() => $('html').removeClass('is-loading'), 6000);
         }
 
         // Set theme for output type
         if (this.type === 'output') {
             this.setTheme(this.theme);
         }
+
+        this.requestRender();
     }
 
     /**
-     * Startet das Daten-Polling für Input-Modus (nach erfolgreichem Login).
+     * Startet den Daten-Listener für Input-Modus (nach erfolgreichem Login).
      * Wird von main.js aufgerufen, sobald der User eingeloggt ist.
      */
     startDataSync() {
-        if (this.type !== 'input' || this.data_interval !== null) return;
+        if (this.type !== 'input' || this.unsubscribeMatch !== null) return;
         if (window.AUTH_DEBUG) console.log("[Scoreboard] startDataSync aufgerufen");
-        this.insertLiveData();
-        this.data_interval = setInterval(() => {
-            this.insertLiveData();
-        }, 2000);
+        this.subscribeToChannel();
+    }
+
+    /**
+     * (Re-)subscribe the Firebase listener to the current channel. Replaces the
+     * old polling via get() every 500ms/2s: Firebase now reports changes itself
+     * as soon as they happen.
+     */
+    subscribeToChannel() {
+        if (this.unsubscribeMatch) this.unsubscribeMatch();
+        this.unsubscribeMatch = null;
+        // The new channel's data has to be applied in full
+        this.lastAppliedValues.clear();
+        // Input: dimmed with a spinner until this channel's data is in
+        if (this.type === 'input' && this.channel) this.setInputLoading(true);
+        this.layoutDirty = true;
+        const channel = this.channel;
+        if (!channel) return;
+        this.unsubscribeMatch = subscribeToMatch(channel, (data) => {
+            // Ignore late events from a previous channel
+            if (channel !== this.channel) return;
+            this.processDataAndUpdateFields(data);
+            if (this.type === 'input') {
+                this.remoteActiveSet = Number(data?.active_set) || null;
+                this.updatePlayerzoneLink(data);
+                this.updateAutoSquadScore();
+            }
+            this.sanitizeStartingSelections();
+            this.requestRender();
+            // Shown once this first data is rendered
+            if (this.type === 'output') queueMicrotask(() => this.markLoaded('data'));
+            else queueMicrotask(() => this.setInputLoading(false));
+        });
+    }
+
+    /**
+     * Input page: loading state (html.is-loading - spinner next to the title,
+     * content dimmed and locked, see style_input.css). Lifted after 8s at the
+     * latest, so a slow or failing connection never locks the panel for good.
+     */
+    setInputLoading(loading) {
+        clearTimeout(this.inputLoadingTimeout);
+        $('html').toggleClass('is-loading', loading);
+        if (loading) this.inputLoadingTimeout = setTimeout(() => this.setInputLoading(false), 8000);
+    }
+
+    /**
+     * Output page: reveals it (removes html.is-loading, see display.html) once
+     * both the theme's stylesheet and the first match data are in.
+     */
+    markLoaded(part) {
+        this.loaded = this.loaded || new Set();
+        this.loaded.add(part);
+        if (this.loaded.has('theme') && this.loaded.has('data')) $('html').removeClass('is-loading');
+    }
+
+    /**
+     * Schedules an updateUI() right after the current task. Several calls
+     * before that (e.g. a Firebase event and an input event at the same time)
+     * result in a single render pass. Deliberately not requestAnimationFrame:
+     * that pauses as soon as the browser considers the page invisible (covered
+     * window in an OBS window capture, inactive browser source), and the
+     * scoreboard would freeze.
+     */
+    requestRender() {
+        if (this.renderScheduled) return;
+        this.renderScheduled = true;
+        queueMicrotask(() => {
+            this.renderScheduled = false;
+            this.updateUI();
+        });
     }
 
 
@@ -168,8 +317,8 @@ export class Scoreboard {
         this.updateIndicators();
         this.updateSettings();
         this.updateTimerDisplay();
-        this.handleEventHistory();
         this.updateCurrentPlayersDisplay();
+        this.syncTimerTicker();
         
         // Only update score history for output type
         if (this.type === 'output') {
@@ -178,6 +327,9 @@ export class Scoreboard {
             this.updateMatchStatistics();
             this.updateTeamRGX();
         }
+
+        // Pages building on the board (spectator.js) catch up after each render
+        this.onRender?.();
     }
 
 
@@ -185,14 +337,18 @@ export class Scoreboard {
      * Apply theme styling and HTML structure based on theme configuration
      * ============================================================================== */
     setTheme(theme) {
-        // Simplified fallback logic
+        // Displays without a (known) theme show the spectator board - also old
+        // ?theme=full links, the theme it replaced
         if (!(theme in themes)) {
-            theme = this.type === 'output' ? 'full' : 'rg';
+            theme = this.type === 'output' ? 'spectator' : 'rg';
             this.theme = theme;
         }
 
         const html_structure = themes[theme].html_structure;
         const css_path = themes[theme].css_path;
+        // Spectator view: overlays opened by the viewer, not the court's settings (see setViewerSettings())
+        this.isSpectator = this.type === 'output' && !!themes[theme].spectator;
+        $('html').attr('data-theme', theme);
         const extensionIndex = css_path.lastIndexOf('.');
         const css_path_input = css_path.slice(0, extensionIndex) + "_input" + css_path.slice(extensionIndex);
 
@@ -206,19 +362,60 @@ export class Scoreboard {
         // forces a re-fetch of CSS that was already loaded, briefly leaving
         // the page unstyled (raw HTML, in normal flow, no opacity:0/
         // position:fixed on .overlay) while the new links load.
-        $('link[rel="stylesheet"][href*="css/style-v"]').remove();
-        $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('href', css_path).appendTo('head');
+        // The 'css/style-v' half of the selector is what clears the theme link
+        // that display.html ships in its own <head>; [theme-stylesheet] catches
+        // the ones this method appended on an earlier call, whatever they're
+        // named (style-irf.css doesn't match the 'style-v' pattern, and
+        // without this a theme switch would leave the old sheet behind).
+        $('link[rel="stylesheet"][href*="css/style-v"], link[theme-stylesheet]').remove();
+        // Once the sheet is in, layout and fonts change - re-render so the
+        // JS-measured sizes (flags, timer widget position) pick that up.
+        // display.html stays hidden (html.is-loading) until the theme's sheet
+        // is in, instead of first loading a default theme and then swapping
+        $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('theme-stylesheet', '').attr('href', css_path)
+            .on('load', () => {
+                this.markLoaded('theme');
+                this.layoutDirty = true;
+                this.requestRender();
+            })
+            .on('error', () => this.markLoaded('theme'))
+            .appendTo('head');
+
+        // Federation logo in the overlay headers - per-theme, falling back to
+        // the RG badge for themes that don't define one.
+        $('.brand_logo').attr('src', themes[theme].brand_logo || DEFAULT_BRAND_LOGO);
+
+        // Fixed event mark ahead of the event name, in the cut that suits
+        // the ground each copy sits on - the board's strip is dark, the
+        // overlay headers are light. Most themes don't have one; for those
+        // the attribute is removed rather than set to '', since an empty src
+        // makes the browser re-request the page itself.
+        const eventLogo = themes[theme].event_logo || {};
+        ['dark_bg', 'light_bg'].forEach((ground) => {
+            const $el = $(`.event_logo_${ground}`);
+            if (eventLogo[ground]) {
+                $el.attr('src', eventLogo[ground]);
+            } else {
+                $el.removeAttr('src');
+            }
+        });
 
         if (this.type === 'input') {
-            $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('href', css_path_input).appendTo('head');
+            $('<link>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('theme-stylesheet', '').attr('href', css_path_input).appendTo('head');
         } else if (this.type === 'output') {
             // Set corresponding html
             $('.scoreboard').hide();
             $(`.scoreboard[theme="${html_structure}"]`).show();
 
-            $('.score_history').toggleClass('hidden', html_structure !== 'vertical_score');
-            $('.match_statistics').toggleClass('hidden', html_structure !== 'vertical_score');
-            $('.match_preview').toggleClass('hidden', html_structure !== 'vertical_score');
+            // Spectator view: the overlays' placeholder texts (player clubs, RGX, ...)
+            // would show as real data wherever a court has none - start them empty.
+            // Runs before the first data is applied (the listener answers asynchronously).
+            if (this.isSpectator) $('.overlay [fb-data]').not('img, input, select').text('');
+
+            const overlays = html_structure === 'vertical_score' || this.isSpectator;
+            $('.score_history').toggleClass('hidden', !overlays);
+            $('.match_statistics').toggleClass('hidden', !overlays);
+            $('.match_preview').toggleClass('hidden', !overlays);
         }
     }
 
@@ -230,15 +427,15 @@ export class Scoreboard {
     initEventListeners() {
         // Channel input dropdown listener
         this.$channelInput.change((event) => {
-            this.channel = $(event.target).val();
-            this.insertLiveData();
-            this.updateUI();
+            // Text still being typed belongs to the court it was typed on
+            this.flushPendingUploads();
+            this.channel = Number($(event.target).val());
+            this.subscribeToChannel();
+            this.requestRender();
         });
 
-        // Data import button handler
-        $('#import_data').click(() => {
-            this.importDataFromJson();
-        });
+        // Playerzone: remove the linked game from the PZ live view
+        $('#pz_end_game').click(() => this.endPlayerzoneGame());
 
         // Starting team dropdown listener
         this.$html_frame.find('.starting_team_selector select').change((event) => {
@@ -314,50 +511,66 @@ export class Scoreboard {
         });
 
         // Score input handler
-        this.$scoreboardInputs.filter('[fb-data*="score"]').on('input', (event) => {
+        // Score fields only - not the "Show Score History" toggles, whose paths contain "score" too.
+        // +1/-1 buttons and the number field's arrows (keys or spinner) count
+        // right away; typed digits wait for the next keystroke, so typing "15"
+        // over a 10 doesn't first record a 1 (see SCORE_TYPING_DELAY_MS).
+        // Typing comes as an InputEvent with an inputType, the arrows don't.
+        const $scoreFields = this.$scoreboardInputs.filter('[fb-data^="score."][fb-data$="_score"]');
+        $scoreFields.on('input', (event) => {
             const $target = $(event.target);
-            const { team, set } = this.getScoreElemDetails($target);
-            const newScore = Number($target.val()) || 0; // Default to 0 if NaN
-            const isSquadScore = $target.attr('fb-data').includes('squad_score');
-            const eventType = isSquadScore ? 'squad_score' : 'score';
+            const elem = event.target;
+            clearTimeout(this.pendingUploads.get(elem));
+            this.pendingUploads.delete(elem);
+            // An emptied field (operator about to type a new number) isn't a score yet
+            if ($target.val().trim() === '') return;
 
-            // Get oldScore from event history for this set and team
-            let oldScore = 0;
-            for (let i = this.event_history.length - 1; i >= 0; i--) {
-                const ev = this.event_history[i];
-                if (
-                    ev.type === eventType &&
-                    ev.team === team &&
-                    (isSquadScore || ev.set == set)
-                ) {
-                    oldScore = Number(ev.score) || 0;
-                    break;
-                }
+            const typed = !!event.originalEvent?.inputType;
+            if (event.isTrigger || !typed) {
+                this.commitScore($target);
+            } else {
+                this.pendingUploads.set(elem, setTimeout(() => {
+                    this.pendingUploads.delete(elem);
+                    this.commitScore($target);
+                }, SCORE_TYPING_DELAY_MS));
             }
-
-            // Add or remove from event history
-            if (!isNaN(newScore) && !isNaN(oldScore)) {
-                // Handle score decrease (remove history events)
-                if (newScore < oldScore && !isSquadScore) {
-                    this.removeEventHistoryEvents(team, newScore, set);
-                } else { // Add new event to history
-                    const eventData = {
-                        type: eventType,
-                        team: team,
-                        score: newScore,
-                        set: isSquadScore ? 'squad' : Number(set)
-                    };
-                    this.event_history.push(eventData);
-                }
+        });
+        // Leaving the field (or Enter) counts a typed score right away - an
+        // empty field gets its last score back instead
+        $scoreFields.on('change', (event) => {
+            const $target = $(event.target);
+            const elem = event.target;
+            const pending = this.pendingUploads.has(elem);
+            clearTimeout(this.pendingUploads.get(elem));
+            this.pendingUploads.delete(elem);
+            if ($target.val().trim() === '') {
+                $target.val(this.recordedScore($target));
+                this.requestRender();
+            } else if (pending) {
+                this.commitScore($target);
             }
-
-            this.updateCurrentPlayersDisplay();
-            this.uploadData([$target]);
         });
 
         // Non-score input handler
         this.$scoreboardInputs.not('[fb-data*="score"]').on('input', (event) => {
-            this.uploadData([$(event.target)]);
+            const $target = $(event.target);
+            if (isTextField($target)) this.scheduleUpload($target);
+            else this.uploadData([$target]);
+        });
+        // Starting server/receiver selects list the player names while open
+        // ("A (Max)") but show just the letter when closed - they are only
+        // 45px wide, one per set.
+        const $playerSelects = this.$html_frame.find('select[fb-data$=".starting_server"], select[fb-data$=".starting_receiver"]');
+        $playerSelects.on('mousedown focus', (event) => this.setPlayerOptionLabels($(event.currentTarget), true));
+        $playerSelects.on('change blur', (event) => this.setPlayerOptionLabels($(event.currentTarget), false));
+
+        // Leaving a text field saves it right away
+        this.$scoreboardInputs.not('[fb-data*="score"]').on('change', (event) => {
+            const elem = event.target;
+            if (!this.pendingUploads.has(elem)) return;
+            clearTimeout(this.pendingUploads.get(elem));
+            this.pendingUploads.delete(elem);
+            this.uploadData([$(elem)]);
         });
 
         // Score change buttons handler
@@ -374,13 +587,14 @@ export class Scoreboard {
             }
         });
 
-        // Set counter input handler
+        // Set counter input handler - the counter's value is the new active set
+        // (typed, or set by the +1/-1 buttons below before they trigger this)
         this.$setCounter.on('input', () => {
+            const value = Number(this.$setCounter.val());
+            if (value >= 1 && value <= 7) this.active_set = value;
             this.updateSets();
-            this.event_history.push({
-                type: 'set',
-                set: this.active_set,
-            });
+            const set = this.active_set;
+            this.updateEventHistory((list) => list.push({ type: 'set', set }));
         });
 
         // Set change buttons handler
@@ -399,19 +613,27 @@ export class Scoreboard {
                 // (getSetScore()/setWinner() below both read it) so the
                 // countdown appears here too even on a channel with no
                 // physical board attached to independently trigger it.
+                // Gated on the set actually having a winner - otherwise an
+                // operator bumping the set counter for any other reason
+                // (fixing a mis-click, pre-staging the next set) would fire
+                // the shared break countdown with no set actually won.
                 if (change > 0) {
                     const format = setModeToFormat(this.gameSettings.set_mode);
                     const winner = this.setWinner(currentSet);
                     const setsA = this.getSetScore('a') + (winner === 'a' ? 1 : 0);
                     const setsB = this.getSetScore('b') + (winner === 'b' ? 1 : 0);
                     const matchOver = setsA >= 2 || setsB >= 2;
-                    if (format === 1 || (format === 2 && !matchOver)) {
+                    if (winner !== null && (format === 1 || (format === 2 && !matchOver))) {
                         this.startTimer('break');
                     }
                 }
 
+                // Set the counter first: trigger('input') also runs the generic
+                // input handler, which uploads the counter's current value -
+                // a stale one there would be written back and, via the
+                // listener, reset active_set.
                 this.active_set = newSet;
-                this.$setCounter.trigger('input');
+                this.$setCounter.val(newSet).trigger('input');
                 this.updateSets();
                 this.uploadData([this.$setCounter]);
             }
@@ -420,6 +642,8 @@ export class Scoreboard {
         // Settings entries handler
         this.$settingsEntries.click((event) => {
             const $trigger = $(event.target);
+            // Controls without their own setting (e.g. the team indicator toggle, handled below)
+            if (!$trigger.attr('fb-data')) return;
             const value = $trigger.prop('checked') ? 1 : 0;
             const part = $trigger.attr('fb-data').split('.').pop();
             this.settings[part] = value;
@@ -440,19 +664,8 @@ export class Scoreboard {
             // Update toggle switch appearance
             $toggleSwitch.toggleClass('active', $checkbox.prop('checked'));
 
-            // Colors and flags are mutually exclusive - turning one on turns
-            // the other off, rather than just picking a display-time priority,
-            // so the stored settings themselves never disagree with what's shown.
-            if (isAdminSetting && value === 1 && (part === 'show_color' || part === 'show_flag')) {
-                const otherPart = part === 'show_color' ? 'show_flag' : 'show_color';
-                const $other = $(`.toggle-switch input[fb-data="admin_settings.${otherPart}"]`);
-                if ($other.length && $other.prop('checked')) {
-                    $other.prop('checked', false);
-                    $other.closest('.toggle-switch').removeClass('active');
-                    this.settings[otherPart] = 0;
-                    uploadTargets.push($other);
-                }
-            }
+            // No setting of its own (team indicator toggle, see below)
+            if (!fbData) return;
 
             if (isAdminSetting) {
                 this.settings[part] = value;
@@ -462,6 +675,34 @@ export class Scoreboard {
             this.uploadData(uploadTargets);
         });
         
+        // Team indicator: select (color / flag / club logo) + toggle. Stored as
+        // the show_color / show_flag / show_club_logo / show_team_logo settings, at most
+        // one of them on - so the stored settings never disagree with what's shown.
+        // Already on 'input': a real click renders in between 'input' and 'change'
+        // (requestRender() runs as a microtask), and that render would set the
+        // controls back from the not yet updated settings - 'change' then saw the
+        // old state and the toggle couldn't be switched. 'change' stays for
+        // browsers without 'input' on checkboxes; an unchanged state uploads nothing.
+        $('#Team_Indicator_Type, #Show_Team_Indicator').on('input change', () => {
+            const mode = $('#Team_Indicator_Type').val();
+            const isOn = $('#Show_Team_Indicator').prop('checked');
+            const next = TEAM_INDICATOR_MODES.map((key) => (isOn && key === mode ? 1 : 0));
+            if (TEAM_INDICATOR_MODES.every((key, i) => Number(this.settings[key] || 0) === next[i])) return;
+            const uploadTargets = TEAM_INDICATOR_MODES.map((key, i) => {
+                this.settings[key] = next[i];
+                return $(`input[fb-data="admin_settings.${key}"]`).prop('checked', next[i] === 1);
+            });
+            this.updateSettings();
+            this.uploadData(uploadTargets);
+        });
+
+        // Squad score mode: typed in or counted from the linked subgames
+        $('#Squad_Score_Mode').change((event) => {
+            this.settings.group_score_mode = $(event.target).val();
+            this.uploadData([$(event.target)]);
+            this.updateAutoSquadScore();
+        });
+
         // Match stats type selector handler
         $('#Match_Stats_Type').change((event) => {
             const value = $(event.target).val();
@@ -484,22 +725,47 @@ export class Scoreboard {
         });
 
         // Reset scores button handler
-        this.$resetScoresButton.click(() => {
-            let $elems = $('[fb-data*="score"]:not(select)');
-            $elems.val(0);
-            this.active_set = 1;
-            this.updateSets();
-            this.event_history = [];
-            this.event_history.push({ type: 'reset' });
-            this.uploadData();
+        this.$resetScoresButton.click(async () => {
+            if (!this.canWriteChannel()) {
+                showToast("❌", "You don't have access to this court");
+                return;
+            }
+            // Keep the linked game's score in the PZ before it's gone
+            await this.syncLinkedPlayerzoneGame(this.channel);
+            this.resetScores();
         });
 
         // Shared timer buttons - see writeTimerState() in main.js for the
         // RTDB side of this. Fixed durations (TIMER_DURATIONS_MS above)
         // match the LED board's own hardcoded ones, so no duration is sent.
-        this.$startTimeoutButton.click(() => this.startTimer('timeout'));
-        this.$startMedicalButton.click(() => this.startTimer('medical'));
-        this.$cancelTimerButton.click(() => this.cancelTimer());
+        // Clicking the button of the timer that's currently running cancels
+        // it (it reads "Cancel" on hover, see style_input.css) - there's no
+        // separate Cancel button.
+        // With a mouse it reads "Cancel" on hover - but not while the pointer
+        // is still on the button that just started it (.fresh, until it
+        // leaves). Touch has no hover: the first tap asks "Cancel?", a second
+        // one within CANCEL_CONFIRM_MS cancels (see style_input.css).
+        const onRunningTimerClick = ($button) => {
+            if (matchMedia('(hover: hover)').matches || $button.hasClass('confirm_cancel')) {
+                $button.removeClass('confirm_cancel');
+                this.cancelTimer();
+                return;
+            }
+            $button.addClass('confirm_cancel');
+            clearTimeout($button.data('confirmTimeout'));
+            $button.data('confirmTimeout', setTimeout(() => $button.removeClass('confirm_cancel'), CANCEL_CONFIRM_MS));
+        };
+        this.$teamTimerButtons.click((event) => {
+            const $button = $(event.currentTarget);
+            if ($button.hasClass('running')) {
+                onRunningTimerClick($button);
+            } else {
+                $button.addClass('fresh');
+                this.startTimer($button.attr('timer-type'), $button.attr('team'));
+            }
+        });
+        this.$otherTimerButton.click(() => onRunningTimerClick(this.$otherTimerButton));
+        this.$teamTimerButtons.add(this.$otherTimerButton).on('mouseleave', (event) => $(event.currentTarget).removeClass('fresh'));
 
         // Logout button handler (nutzt User.logout() für Firebase signOut)
         this.$logoutButton.click(() => {
@@ -514,73 +780,337 @@ export class Scoreboard {
 
 
     /* ==============================================================================
-     * Import data from JSON format in the textarea
-     * Parses JSON data and applies it to the form fields
+     * Reset all scores and the event history, then upload everything
+     * ("Reset Scores & New Game", also offered when loading another PZ game)
      * ============================================================================== */
-    importDataFromJson() {
-        const jsonText = $('#Data_Import').val().trim();
-        
-        if (!jsonText) {
-            showToast("❌", "Please enter JSON data in the textarea");
-            return;
-        }
-
-        try {
-            const data = JSON.parse(jsonText);
-            
-            // Check if data has the expected structure
-            if (!data || typeof data !== 'object') {
-                showToast("❌", "Invalid JSON format");
-                return;
-            }
-
-            // Process the data and update form fields using the common function
-            this.processDataAndUpdateFields(data, true);
-
-            // Find all updated elements for database upload
-            const updatedElements = [];
-            const pathsAndValues = getPathsAndValues(data);
-
-            $.each(Object.entries(pathsAndValues), (_, [path, value]) => {
-                const $elem = $(`[fb-data="${path}"]`);
-                if ($elem.length > 0) {
-                    updatedElements.push($elem);
-                }
-            });
-
-            // Upload the imported data to database
-            if (updatedElements.length > 0) {
-                this.uploadData(updatedElements);
-                showToast("✅", `Successfully imported ${updatedElements.length} fields`);
-                
-                // Clear the textarea after successful import
-                $('#Data_Import').val('');
-            } else {
-                showToast("⚠️", "No matching fields found for the imported data");
-            }
-
-        } catch (error) {
-            console.error("JSON parsing error:", error);
-            showToast("❌", "Invalid JSON format: " + error.message);
-        }
+    resetScores() {
+        let $elems = $('[fb-data*="score"]:not(select)');
+        $elems.val(0);
+        this.active_set = 1;
+        this.updateSets();
+        this.updateEventHistory((list) => {
+            list.length = 0;
+            list.push({ type: 'reset' });
+        });
+        this.uploadData();
     }
 
 
-    /** ==============================================================================
-     * Fetch and process live data from Firebase
-     * Handles different data types: event history, admin settings, team colors, and general values
+    /* ==============================================================================
+     * Import a game data object (match-<channel> format, e.g. from the Playerzone)
+     * into the form fields - locked fields are skipped - and return the
+     * elements it touched, for uploadData()
+     * @param {Object} data - Data object to import
+     * @returns {Array} jQuery elements matching the imported paths
      * ============================================================================== */
-    async insertLiveData() {
-        if (window.AUTH_DEBUG) console.log("[Scoreboard] insertLiveData start, channel=" + this.channel + ", type=" + this.type);
-        try {
-            const data = await readData(this.channel);
-            this.processDataAndUpdateFields(data);
-            this.sanitizeStartingSelections();
-            if (window.AUTH_DEBUG) console.log("[Scoreboard] insertLiveData ok, channel=" + this.channel);
-        } catch (err) {
-            if (window.AUTH_DEBUG) console.warn("[Scoreboard] insertLiveData error, channel=" + this.channel, err?.code || err?.message, err);
-            throw err;
+    importData(data) {
+        this.processDataAndUpdateFields(data, true);
+
+        const updatedElements = [];
+        $.each(Object.keys(getPathsAndValues(data)), (_, path) => {
+            const $elem = this.fieldElements(path);
+            if ($elem.length > 0) {
+                updatedElements.push($elem);
+            }
+        });
+        return updatedElements;
+    }
+
+
+    /* ==============================================================================
+     * Automatic squad score: while admin_settings.group_score_mode is 'auto' and
+     * the court carries a Playerzone subgame, AutoSquadScore watches the other
+     * subgames of its main game, and the result is written as this court's
+     * score.squad_score - so every display shows it like a typed-in one. The
+     * subgame results are kept in match-<channel>/squad_auto as well, so a
+     * subgame still counts after "End game" (see squadGroups.js).
+     * ============================================================================== */
+    autoSquadMainGame() {
+        if (this.type !== 'input' || this.settings.group_score_mode !== 'auto' || !this.canWriteChannel()) return null;
+        return Number(this.playerzoneLink?.main_game_id) || null;
+    }
+
+    /** (Re)starts or stops the watcher and locks the squad score fields while it's set to automatic. */
+    updateAutoSquadScore() {
+        if (!this.autoSquad) return;
+        const mainGameId = this.autoSquadMainGame();
+        this.autoSquad.watch(mainGameId ? this.channel : null, mainGameId);
+        // Locked as soon as it's automatic - to type it in, switch back to manual
+        const auto = this.settings.group_score_mode === 'auto';
+        $('#A_Score_Team, #B_Score_Team')
+            .prop('readonly', auto)
+            .attr('tabindex', auto ? -1 : null)
+            .attr('title', !auto ? null : mainGameId
+                ? 'Counted automatically from the squad game\'s subgames'
+                : 'Automatic - counted once a Playerzone subgame is loaded on this court (switch to manual to type it in)');
+    }
+
+    /** Writes the counted squad score (and the known subgame results) if they changed. */
+    applyAutoSquadScore({ channel, mainGameId, results, own }) {
+        if (channel !== this.channel || mainGameId !== this.autoSquadMainGame()) return;
+        const names = { a: own.teams_info?.team_a?.name, b: own.teams_info?.team_b?.name };
+        const score = squadScoreFromResults(results, names);
+        const current = own.score?.squad_score || {};
+        const updates = {};
+
+        if (Number(current.team_a_score) !== score.a || Number(current.team_b_score) !== score.b) {
+            updates[`/match-${channel}/score/squad_score/team_a_score`] = score.a;
+            updates[`/match-${channel}/score/squad_score/team_b_score`] = score.b;
+            this.updateEventHistory((list) => {
+                recordSquadScore(list, { team: 'a', score: score.a });
+                recordSquadScore(list, { team: 'b', score: score.b });
+            });
         }
+
+        // Key order differs between Firebase and here - compare a canonical form
+        const canonical = (list) => Object.entries(list || {})
+            .map(([gameId, result]) => `${gameId}:${result?.side}:${result?.winner || ''}`).sort().join('|');
+        const stored = own.squad_auto;
+        if (Number(stored?.main_game_id) !== mainGameId || canonical(stored?.results) !== canonical(results)) {
+            updates[`/match-${channel}/squad_auto`] = { main_game_id: mainGameId, results };
+        }
+
+        if (Object.keys(updates).length) writeData(updates);
+    }
+
+    /** True if the signed-in account may write the selected court. */
+    canWriteChannel() {
+        return !!(this.user && this.channel && this.user.channels.includes(Number(this.channel)));
+    }
+
+    /**
+     * Changes the event history: right away on this page, and atomically in
+     * Firebase (see changeEventHistory() in main.js) if this account may
+     * write the selected court.
+     */
+    updateEventHistory(mutate) {
+        mutate(this.event_history);
+        if (this.canWriteChannel()) changeEventHistory(this.channel, mutate);
+    }
+
+    /** Score of a score field as last recorded (event history, squad score: last stored value). */
+    recordedScore($field) {
+        const path = $field.attr('fb-data');
+        const { team, set } = this.getScoreElemDetails($field);
+        if (!path.includes('squad_score') && team && set) return historyScore(this.event_history, team, set);
+        return Number(this.lastAppliedValues.get(path)) || 0;
+    }
+
+    /** Records a score field's value: event history first, then the score itself. */
+    commitScore($field) {
+        if ($field.val().trim() === '') return;
+        const { team, set } = this.getScoreElemDetails($field);
+        const score = Number($field.val()) || 0;
+        if ($field.attr('fb-data').includes('squad_score')) {
+            this.updateEventHistory((list) => recordSquadScore(list, { team, score }));
+        } else {
+            this.updateEventHistory((list) => reconcileScore(list, { team, set, score }));
+        }
+        this.updateCurrentPlayersDisplay();
+        this.uploadData([$field]);
+    }
+
+    /** Uploads a text field after a short pause in typing - see TEXT_UPLOAD_DELAY_MS. */
+    scheduleUpload($elem) {
+        const elem = $elem[0];
+        clearTimeout(this.pendingUploads.get(elem));
+        this.pendingUploads.set(elem, setTimeout(() => {
+            this.pendingUploads.delete(elem);
+            this.uploadData([$elem]);
+        }, TEXT_UPLOAD_DELAY_MS));
+    }
+
+    /** Uploads every field still waiting for its debounced upload (text or typed score), now. */
+    flushPendingUploads() {
+        if (!this.pendingUploads.size) return;
+        const elems = [...this.pendingUploads.keys()];
+        this.pendingUploads.forEach((timeout) => clearTimeout(timeout));
+        this.pendingUploads.clear();
+        const isScore = (elem) => /^score\..*_score$/.test(elem.getAttribute('fb-data') || '');
+        elems.filter(isScore).forEach((elem) => this.commitScore($(elem)));
+        const others = elems.filter((elem) => !isScore(elem));
+        if (others.length) this.uploadData(others.map((elem) => $(elem)));
+    }
+
+    /** True if any set on the selected court has points. */
+    hasPoints() {
+        return this.$html_frame.find('input[fb-data^="score.set_"][fb-data$="_score"]').toArray()
+            .some((elem) => Number($(elem).val()) > 0);
+    }
+
+
+    /* ==============================================================================
+     * Load a Playerzone game onto the selected court: fetch it, import it
+     * like a manual import (locked fields stay) and link it for the PZ live
+     * view (match-<channel>/playerzone, live_games/<game_id>)
+     * @param {number} gameId - PZ game id (from the picker or pasted)
+     * @returns {Promise<boolean>} true once loaded and linked
+     * ============================================================================== */
+    async loadPlayerzoneGame(gameId) {
+        if (!this.canWriteChannel()) {
+            showToast("❌", "You don't have access to this court");
+            return false;
+        }
+        const channel = this.channel;
+
+        let data;
+        try {
+            data = await fetchGame(gameId);
+        } catch (err) {
+            showToast("❌", err.message);
+            return false;
+        }
+        const { playerzone, ...gameData } = data || {};
+        if (!playerzone?.game_id) {
+            showToast("❌", "Invalid response from Playerzone");
+            return false;
+        }
+        // Event name like the game description (locked fields stay) - from the
+        // picker's event list while the PZ doesn't send it yet
+        if (!gameData.tournament_name) {
+            const eventName = this.playerzonePicker?.eventName(playerzone.event_id);
+            if (eventName) gameData.tournament_name = eventName;
+        }
+
+        // Game currently on this court, and wherever the new game is listed as live right now
+        let oldGameId, existingEntry;
+        try {
+            [oldGameId, existingEntry] = await Promise.all([
+                readData(`match-${channel}/playerzone/game_id`),
+                readData(`live_games/${playerzone.game_id}`),
+            ]);
+        } catch (err) {
+            console.error("[Playerzone] reading the current link failed", err);
+            showToast("❌", "Couldn't read the current court data - please try again.");
+            return false;
+        }
+        // The court was switched while loading
+        if (channel !== this.channel) return false;
+
+        const isOtherGame = Number(oldGameId) !== Number(playerzone.game_id);
+        const reset = isOtherGame && this.hasPoints()
+            && confirm('There are still points on this court. Reset the scores for the new game?');
+
+        // Save the previous game's score in the PZ while the court still carries it
+        if (isOtherGame && oldGameId) {
+            await syncToPlayerzone(oldGameId);
+            if (channel !== this.channel) return false;
+        }
+
+        const updatedElements = this.importData(gameData);
+        if (reset) {
+            this.resetScores(); // uploads every field, the imported ones included
+        } else if (updatedElements.length > 0) {
+            this.uploadData(updatedElements);
+        }
+
+        const linked = await this.linkPlayerzoneGame(channel, playerzone, oldGameId, existingEntry);
+        const teams = `${gameData.teams_info?.team_a?.name || '?'} – ${gameData.teams_info?.team_b?.name || '?'}`;
+        if (linked === 'foreign') {
+            showToast("⚠️", `Loaded ${teams} - but it's already live on another organisation's court, so the Playerzone won't show it as live here.`, 8000);
+        } else if (linked) {
+            showToast("✅", `Loaded ${teams}`, 3000);
+        }
+        return !!linked;
+    }
+
+    /**
+     * One multi-path update: match-<channel>/playerzone and live_games/<game_id>
+     * for the new game, and the old game's live_games entry removed - but only
+     * if it still points at this court (it may be running on another one by now).
+     * @returns {Promise<boolean|'foreign'>} true if saved, 'foreign' if saved without
+     *          the live_games entry because another org's court holds it
+     */
+    async linkPlayerzoneGame(channel, playerzone, oldGameId, existingEntry) {
+        const gameId = Number(playerzone.game_id);
+        const mainGameId = playerzone.main_game_id ?? null;
+        const court = this.user.courtForChannel(channel);
+        const updates = {
+            [`/match-${channel}/playerzone`]: { game_id: gameId, main_game_id: mainGameId, event_id: playerzone.event_id ?? null },
+            // Otherwise the PZ would go by the previous game's last change and could hide this one right away
+            [`/match-${channel}/updated_at`]: serverTimestamp(),
+        };
+
+        // Listed as live on a court of another org: that entry isn't ours to take over
+        const foreignChannel = existingEntry && Number(existingEntry.channel) !== channel
+            && !this.user.isAdmin && !this.user.channels.includes(Number(existingEntry.channel));
+        if (!foreignChannel) {
+            updates[`/live_games/${gameId}`] = {
+                channel,
+                main_game_id: mainGameId,
+                org: court?.org ?? null,
+                court: court?.court ?? null,
+                since: serverTimestamp(),
+            };
+        }
+
+        if (oldGameId != null && Number(oldGameId) !== gameId) {
+            try {
+                const oldEntry = await readData(`live_games/${Number(oldGameId)}`);
+                if (oldEntry && Number(oldEntry.channel) === channel) updates[`/live_games/${Number(oldGameId)}`] = null;
+            } catch (err) {
+                console.warn("[Playerzone] reading the old live_games entry failed", err);
+            }
+        }
+
+        const saved = await writeData(updates);
+        return saved && foreignChannel ? 'foreign' : saved;
+    }
+
+    /* ==============================================================================
+     * "End game": remove the linked game from the PZ live view of this court
+     * ============================================================================== */
+    async endPlayerzoneGame() {
+        if (!this.canWriteChannel()) {
+            showToast("❌", "You don't have access to this court");
+            return;
+        }
+        const channel = this.channel;
+        // From Firebase rather than this tab's state - the game may have been loaded elsewhere
+        const gameId = await this.syncLinkedPlayerzoneGame(channel);
+        const updates = { [`/match-${channel}/playerzone`]: null };
+        if (gameId) {
+            try {
+                const entry = await readData(`live_games/${gameId}`);
+                if (entry && Number(entry.channel) === channel) updates[`/live_games/${gameId}`] = null;
+            } catch (err) {
+                console.warn("[Playerzone] reading the live_games entry failed", err);
+            }
+        }
+        if (await writeData(updates)) showToast("✅", "Game ended - no longer shown as live in the Playerzone", 3000);
+    }
+
+    /**
+     * Store the score of the game linked to a court as interim result in the
+     * PZ. The game id is read from Firebase, not this tab's state, so a game
+     * loaded in another tab or on another device is saved too.
+     * @returns {Promise<number|null>} the linked game id
+     */
+    async syncLinkedPlayerzoneGame(channel) {
+        let gameId = null;
+        try {
+            gameId = Number(await readData(`match-${channel}/playerzone/game_id`)) || null;
+        } catch (err) {
+            console.warn("[Playerzone] reading the linked game failed", err);
+            gameId = Number(this.playerzoneLink?.game_id) || null;
+        }
+        if (gameId) await syncToPlayerzone(gameId);
+        return gameId;
+    }
+
+    /** Shows the PZ game linked to the selected court (from the live match data). */
+    updatePlayerzoneLink(data) {
+        const link = data?.playerzone?.game_id ? data.playerzone : null;
+        this.playerzoneLink = link;
+        const $linked = $('.playerzone .pz_linked');
+        $linked.toggleClass('hidden', !link);
+        if (link) {
+            const teamA = data.teams_info?.team_a?.name || 'Team A';
+            const teamB = data.teams_info?.team_b?.name || 'Team B';
+            $linked.find('.pz_linked_teams').text(`${teamA} – ${teamB}`).attr('title', `${teamA} – ${teamB}`);
+            $linked.find('.pz_linked_id').text(`Game ID ${link.game_id}`);
+        }
+        this.playerzonePicker?.setLinkedGame(link?.game_id);
     }
 
 
@@ -601,30 +1131,48 @@ export class Scoreboard {
         // synced timer just because the import didn't mention it.
         if (!isImport) {
             this.timerState = (data && data.timer && data.timer.type)
-                ? { type: data.timer.type, startedAt: data.timer.started_at || null }
+                ? { type: data.timer.type, team: data.timer.team || null, startedAt: data.timer.started_at || null }
                 : null;
         }
 
-        const pathsAndValues = getPathsAndValues(data);
+        // event_history is taken as a whole (array, or object once it has gaps) -
+        // a court without one has none, rather than keeping the previous court's
+        const { event_history: eventHistory, ...fields } = data || {};
+        if (!isImport) this.event_history = normalizeEventHistory(eventHistory);
 
-        // Process each path and value
+        const pathsAndValues = getPathsAndValues(fields);
+
+        // Process each path and value - live data only where it changed since the last update
         $.each(Object.entries(pathsAndValues), (_, [path, value]) => {
-            const $allElements = $(`[fb-data="${path}"]`);
+            if (!isImport) {
+                const key = value !== null && typeof value === 'object' ? JSON.stringify(value) : value;
+                if (this.lastAppliedValues.has(path) && this.lastAppliedValues.get(path) === key) return;
+                this.lastAppliedValues.set(path, key);
+                if (path.startsWith('teams_info') || path.startsWith('admin_settings')) this.layoutDirty = true;
+            }
+            const $allElements = this.fieldElements(path);
 
-            if (path.includes('event_history')) {
-                this.event_history = Array.isArray(value) ? value : [];
-            } else if (path.includes('admin_settings')) {
+            // Only cached here - the <img>s with this fb-data (player cards)
+            // are still filled by the branches below
+            const clubLogo = path.match(/^teams_info\.team_([ab])\.player_([12])_club_logo$/);
+            const teamLogo = path.match(/^teams_info\.team_([ab])\.logo$/);
+            const isLocked = isImport && $allElements.toArray().some((el) => this.isFieldLocked($(el)));
+            if (clubLogo && !isLocked) this.teamClubLogos[clubLogo[1]][Number(clubLogo[2]) - 1] = value || '';
+            if (teamLogo && !isLocked) this.teamLogos[teamLogo[1]] = value || '';
+
+            // event_history is handled above, before the per-path loop
+            if (path.includes('admin_settings')) {
                 this.insertAdminSetting(path, value);
             } else if (path.includes('teams_info') && path.includes('color')) {
                 this.insertColor($allElements.first(), path, value);
             } else if (path.includes('teams_info') && path.endsWith('.flag')) {
                 // Only cache the raw code here - do NOT touch .flag-indicator
-                // visibility/src from the data-poll path (every 500ms-2s on
-                // output/input alike). That used to make the flag flash
-                // visible on every poll regardless of "Show as Flags", since
-                // it raced against updateColorIndicatorVisibility()'s own
-                // 300ms cycle re-hiding it. applyFlag() is now only ever
-                // called from there, which is also the sole owner of visibility.
+                // visibility/src from the data path. That used to make the
+                // flag flash visible on every data update regardless of "Show
+                // as Flags", since it raced against
+                // updateColorIndicatorVisibility() re-hiding it. applyFlag() is
+                // now only ever called from there, which is also the sole
+                // owner of visibility.
                 const team = path.includes('team_a') ? 'a' : path.includes('team_b') ? 'b' : null;
                 if (team) this.teamFlags[team] = value || '';
                 $allElements.each((_, elem) => {
@@ -669,7 +1217,7 @@ export class Scoreboard {
                     }
                 });
             } else if (path.includes('_is_pro')) {
-                let $rgxElem = $(`[fb-data="${path.replace('_is_pro', '_rgx')}"]`)
+                let $rgxElem = this.fieldElements(path.replace('_is_pro', '_rgx'));
                 $rgxElem.toggleClass('pro', value === 1 || value === true);
                 $rgxElem.closest('.rgx').toggleClass('pro', value === 1 || value === true);
 
@@ -700,6 +1248,24 @@ export class Scoreboard {
         });        
     }
 
+
+    /**
+     * The [fb-data] elements for a data path. Collected once into a lookup
+     * table: cheaper than an attribute selector per field and update, and a
+     * key from the database never ends up inside a selector.
+     */
+    fieldElements(path) {
+        if (!this.fieldElementsByPath) {
+            const byPath = new Map();
+            $('[fb-data]').each((_, elem) => {
+                const key = elem.getAttribute('fb-data');
+                if (!byPath.has(key)) byPath.set(key, []);
+                byPath.get(key).push(elem);
+            });
+            this.fieldElementsByPath = new Map([...byPath].map(([key, elems]) => [key, $(elems)]));
+        }
+        return this.fieldElementsByPath.get(path) || $();
+    }
 
     /** ============================================================================== 
      * Set value on an element based on its type
@@ -759,11 +1325,15 @@ export class Scoreboard {
      * ============================================================================== */
     async insertAdminSetting(path, value) {
         const part = path.split('.').pop();
+        if (this.isSpectator && VIEWER_SETTINGS.includes(part)) return;
         this.settings[part] = value;
         
         // Special handling for match statistics type
         if (part === 'match_stats_type') {
             $('#Match_Stats_Type').val(value);
+        }
+        if (part === 'group_score_mode') {
+            $('#Squad_Score_Mode').val(value === 'auto' ? 'auto' : 'manual');
         }
     }
 
@@ -777,11 +1347,11 @@ export class Scoreboard {
      *
      * On input.html, a fallback-derived code also gets written back to
      * teams_info.team_x.flag, so it becomes the same kind of explicit fact a
-     * manual pick would be - other consumers of that field (index.html, a
+     * manual pick would be - other consumers of that field (display.html, a
      * second admin's browser, TournamentLiveScores/Fwango) then see it
      * directly instead of each re-deriving their own guess from the name,
      * and the country <select> picks it up as its selected option on the
-     * next poll instead of sitting on "Auto-detect" forever. Not done on
+     * next data update instead of sitting on "Auto-detect" forever. Not done on
      * output.html: it has no write auth, so writeData() there would just
      * fail silently against Firebase's own rules (there are none here, so it
      * would actually succeed, but a read-only display page has no business
@@ -798,13 +1368,20 @@ export class Scoreboard {
         // confirmed flags should be visible right now - this only decides
         // per-team whether there's actually a flag to show.
         if (code) {
-            $flagElems.attr('src', `https://flagcdn.com/${code.toLowerCase()}.svg`).show();
+            const src = `https://flagcdn.com/${code.toLowerCase()}.svg`;
+            $flagElems.each((_, el) => {
+                if (el.getAttribute('src') !== src) {
+                    el.setAttribute('src', src);
+                    this.layoutDirty = true;
+                }
+            });
+            $flagElems.show();
         } else {
             $flagElems.removeAttr('src').hide();
         }
 
         if (!isExplicit && code && this.type === 'input' && this.user && this.user.channels.includes(Number(this.channel))) {
-            // Set locally right away so the next ~300ms tick already sees an
+            // Set locally right away so the next render already sees an
             // explicit value and doesn't fire the same write again while the
             // round-trip through Firebase is still in flight.
             this.teamFlags[team] = code;
@@ -888,12 +1465,13 @@ export class Scoreboard {
         const team = path.includes('team_a') ? 'a' : path.includes('team_b') ? 'b' : null;
         if (!team) return;
 
+        // CSS variable on both pages - input.html's per-team timer buttons
+        // (stripe + gauge) use it too, not just the output themes.
+        $('html').css(`--${team.toUpperCase()}_Color`, color);
+
         if ($elem.is('input')) {
             $elem.val(value);
         } else {
-            // Add color to CSS variable
-            $('html').css(`--${team.toUpperCase()}_Color`, color);
-
             const $teamElems = $(`.team.team_${team}`);
 
             // Simplified brightness logic
@@ -919,7 +1497,7 @@ export class Scoreboard {
         // Check if selected channel is allowed
         if (!this.user || !this.channel || !this.user.channels.includes(Number(this.channel))) {
             if (this.channel) {
-                showToast("❌", "You're not authenticated for this channel");
+                showToast("❌", "You don't have access to this court");
             }
             return;
         }
@@ -931,8 +1509,11 @@ export class Scoreboard {
 
         // Prepare data for upload
         const newData = {};
-        this.handleEventHistory();
-        newData[`/match-${this.channel}/event_history`] = this.event_history;
+        const channel = this.channel;
+        const previousActiveSet = this.remoteActiveSet;
+        // event_history isn't part of this - it's changed atomically on its own (updateEventHistory())
+        // The Playerzone hides a live game whose court hasn't changed for a while
+        newData[`/match-${this.channel}/updated_at`] = serverTimestamp();
 
         // Process each element
         $.each(elemList, (_, elem) => {
@@ -954,52 +1535,158 @@ export class Scoreboard {
                 !pathToVariable.includes('starting_server') && 
                 !pathToVariable.includes('starting_receiver') && 
                 !pathToVariable.includes('admin_settings')) {
-                try {
-                    finalValue = parseInt(value);
-                } catch (error) {
-                    console.error(value, " can't be converted to integer");
-                    return;
-                }
+                finalValue = parseInt(value, 10);
+                // An emptied field: leave the stored value alone - NaN would make Firebase reject the whole update
+                if (Number.isNaN(finalValue)) return;
             }
 
             newData[pathToVariable] = finalValue;
         });
 
-        writeData(newData);
-        // console.log(newData)
+        const saved = await writeData(newData);
+
+        // A set just ended (active_set raised): interim result for the linked PZ game
+        const activeSet = newData[`/match-${channel}/active_set`];
+        if (saved && previousActiveSet && activeSet > previousActiveSet && this.playerzoneLink?.game_id && channel === this.channel) {
+            syncToPlayerzone(this.playerzoneLink.game_id);
+        }
     }
 
     /** ==============================================================================
-     * Start a shared timeout/medical timer - writes match-<channel>/timer via
+     * Start a shared timeout/medical/break timer - writes match-<channel>/timer via
      * writeTimerState() (main.js), picked up by the LED board (directly, or
      * via the manager server's Firebase bridge) and this page's own output
      * display alike. No duration is sent - every reader keeps the same
      * fixed durations locally (TIMER_DURATIONS_MS above, matching
      * led_scoreboard's score_actions.h).
-     * @param {string} type - 'timeout' or 'medical'
+     *
+     * A timeout/medical is called by one team: `team` goes onto the timer
+     * node (for the live widget) and a matching event is appended to
+     * event_history (for the score history, chart and statistics - the timer
+     * node itself is deleted once the countdown ends, so it can't be the
+     * record). Timers started from the LED board/pedal carry no team and
+     * never get a history event.
+     * @param {string} type - 'timeout', 'medical' or 'break'
+     * @param {string|null} team - 'a' or 'b' for timeout/medical, null for break
      * ============================================================================== */
-    startTimer(type) {
+    startTimer(type, team = null) {
         if (!this.user || !this.channel || !this.user.channels.includes(Number(this.channel))) {
-            showToast("❌", "You're not authenticated for this channel");
+            showToast("❌", "You don't have access to this court");
             return;
         }
+        const teamTimer = TEAM_TIMER_TYPES.includes(type) && (team === 'a' || team === 'b');
+        if (!teamTimer) team = null;
+
+        // Same button pressed twice while its timer is still running - don't
+        // restart the countdown or log a second timeout.
+        if (teamTimer && this.isTimerActive() &&
+            this.timerState.type === type && this.getActiveTimerTeam() === team) {
+            return;
+        }
+
+        if (teamTimer) {
+            // Switching to the other team (or timeout <-> medical) before any
+            // point was played means the first press was a mistake - replace
+            // its history event instead of logging both.
+            const mistake = this.isTimerActive() && this.lastEventIsActiveTeamTimer()
+                ? this.event_history[this.event_history.length - 1] : null;
+            const event = {
+                type: type,
+                team: team,
+                set: Number(this.active_set),
+                score_a: this.getScore(this.active_set, 'a'),
+                score_b: this.getScore(this.active_set, 'b'),
+                started_at: Date.now(),
+            };
+            this.updateEventHistory((list) => {
+                if (mistake) removeIfLastEvent(list, mistake);
+                list.push(event);
+            });
+        }
+
         // Set locally right away, same reasoning as applyFlag(): the next UI
         // tick already reflects it instead of waiting on the round trip.
-        this.timerState = { type, startedAt: Date.now() };
-        writeTimerState(this.channel, type);
+        this.timerState = { type, team, startedAt: Date.now() };
+        writeTimerState(this.channel, type, team);
     }
 
     /** ==============================================================================
      * Cancel the currently active shared timer (timeout/medical/break) from
-     * either tool - deletes match-<channel>/timer.
+     * either tool - deletes match-<channel>/timer. If no point has been
+     * played since the timeout was called, its history event is removed
+     * too (treated as a mis-click rather than a timeout that was taken).
      * ============================================================================== */
     cancelTimer() {
         if (!this.user || !this.channel || !this.user.channels.includes(Number(this.channel))) {
-            showToast("❌", "You're not authenticated for this channel");
+            showToast("❌", "You don't have access to this court");
             return;
+        }
+        if (this.isTimerActive() && this.lastEventIsActiveTeamTimer()) {
+            const event = this.event_history[this.event_history.length - 1];
+            this.updateEventHistory((list) => removeIfLastEvent(list, event));
         }
         this.timerState = null;
         writeTimerState(this.channel, null);
+    }
+
+    /** True while this.timerState is a known timer that hasn't run out yet. */
+    isTimerActive() {
+        const state = this.timerState;
+        const duration = state && TIMER_DURATIONS_MS[state.type];
+        return !!duration && !!state.startedAt && Date.now() - state.startedAt < duration;
+    }
+
+    /** ==============================================================================
+     * Team that called the currently running timeout/medical, or null.
+     * Normally straight from match-<channel>/timer/team, but the manager
+     * server's bridge (CENTRAL-mode boards) re-writes the whole timer node
+     * as {type, started_at} whenever the board pushes, dropping `team` - so
+     * fall back to the latest matching event_history entry whose countdown
+     * would still be running.
+     * ============================================================================== */
+    getActiveTimerTeam() {
+        const state = this.timerState;
+        if (!state || !TEAM_TIMER_TYPES.includes(state.type)) return null;
+        if (state.team === 'a' || state.team === 'b') return state.team;
+
+        const duration = TIMER_DURATIONS_MS[state.type];
+        for (let i = this.event_history.length - 1; i > this.getLastResetIndex(); i--) {
+            const ev = this.event_history[i];
+            if (ev.type !== state.type) continue;
+            if (ev.started_at && Date.now() - ev.started_at < duration) return ev.team || null;
+            break;
+        }
+        return null;
+    }
+
+    /** The last event_history entry is the running timeout/medical's own event (no point played since). */
+    lastEventIsActiveTeamTimer() {
+        const last = this.event_history[this.event_history.length - 1];
+        return !!last && TEAM_TIMER_TYPES.includes(last.type) &&
+            last.type === this.timerState?.type && last.team === this.getActiveTimerTeam();
+    }
+
+    /** ==============================================================================
+     * Timeout/medical events for a set (or every set, set = null) since the
+     * last reset.
+     * ============================================================================== */
+    getTeamTimerEvents(set = this.active_set) {
+        return this.event_history.slice(this.getLastResetIndex() + 1).filter(event =>
+            TEAM_TIMER_TYPES.includes(event.type) &&
+            (event.team === 'a' || event.team === 'b') &&
+            (set === null || event.set == set)
+        );
+    }
+
+    /** Regular timeouts a team still has in a set - display only, see TIMEOUTS_PER_SET. */
+    getTimeoutsLeft(team, set = this.active_set) {
+        const used = this.getTeamTimerEvents(set).filter(ev => ev.type === 'timeout' && ev.team === team).length;
+        return Math.max(0, TIMEOUTS_PER_SET - used);
+    }
+
+    /** Team display name, falling back to "Team A"/"Team B". */
+    getTeamLabel(team) {
+        return (this.teamNames[team] || '').trim() || `Team ${team.toUpperCase()}`;
     }
 
     /** ==============================================================================
@@ -1007,36 +1694,51 @@ export class Scoreboard {
      * to the Timers buttons) and, for output.html, the .timer_widget card -
      * both driven by this.timerState, which processDataAndUpdateFields()
      * keeps in sync with match-<channel>/timer. Also toggles input.html's
-     * Cancel button. Ticks down locally every updateUI() cycle (300ms)
-     * between the underlying ~500ms/2s data polls, then hides itself once
-     * time's up. Purely a reader: the RTDB node itself is only ever cleared
+     * Cancel button. Ticks down locally via syncTimerTicker() while a timer
+     * is running, then hides itself once time's up. Purely a reader: the RTDB node itself is only ever cleared
      * by whichever board/bridge is authoritative for it (fixed durations
      * mean the board that started/adopted a timer knows exactly when it
      * ends) - this never writes back on natural expiry.
      * ============================================================================== */
     updateTimerDisplay() {
-        const state = this.timerState;
-        const duration = state && TIMER_DURATIONS_MS[state.type];
-        const remainingMs = duration && state.startedAt ? duration - (Date.now() - state.startedAt) : 0;
-        const active = !!duration && remainingMs > 0;
+        this.updateTeamTimerButtons();
 
-        this.$cancelTimerButton.toggleClass('hidden', !active);
-        this.$timerStatus.toggleClass('hidden', !active);
+        const state = this.timerState;
+        const active = this.isTimerActive();
 
         if (!active) {
+            this.$otherTimerButton.addClass('hidden').removeClass('fresh confirm_cancel');
             this.$timerWidget.removeClass('visible');
-            return;
+            return false;
         }
 
+        const remainingMs = TIMER_DURATIONS_MS[state.type] - (Date.now() - state.startedAt);
         const totalSec = Math.ceil(remainingMs / 1000);
         const mm = Math.floor(totalSec / 60);
         const ss = totalSec % 60;
         const timeText = `${mm}:${String(ss).padStart(2, '0')}`;
         const label = TIMER_LABELS[state.type] || state.type;
+        const team = this.getActiveTimerTeam();
+        const teamLabel = team ? this.getTeamLabel(team) : '';
 
-        this.$timerStatus.text(`${label} ${timeText}`);
+        // A team timer shows its countdown inside that team's button
+        // (updateTeamTimerButtons()); a break or a board/pedal-started timer
+        // has no button of its own, so input.html shows it on #other_timer
+        // in the Scores header instead - same countdown + gauge, click to cancel.
+        // Appearing right under the pointer (layout shift) isn't a request to cancel either
+        if (!team && this.$otherTimerButton.hasClass('hidden')) {
+            this.$otherTimerButton.removeClass('hidden').toggleClass('fresh', this.$otherTimerButton.is(':hover'));
+        }
+        this.$otherTimerButton.toggleClass('hidden', !!team);
+        if (!team) {
+            const elapsedMs = Date.now() - state.startedAt;
+            this.$otherTimerButton.find('.team_timer_name').text(TIMER_SHORT_LABELS[state.type] || label);
+            this.$otherTimerButton.find('.team_timer_info').text(timeText);
+            this.$otherTimerButton.find('.timer_gauge').css('width', `${Math.min(100, (elapsedMs / TIMER_DURATIONS_MS[state.type]) * 100)}%`);
+            this.$otherTimerButton.attr('title', `${label} - click to cancel`);
+        }
 
-        if (this.type !== 'output' || !this.$timerWidget.length) return;
+        if (this.type !== 'output' || !this.$timerWidget.length) return true;
 
         // Sit at the same vertical level as, and just to the right of,
         // whichever theme's .board is actually visible right now (setTheme()
@@ -1044,7 +1746,9 @@ export class Scoreboard {
         // tick so it tracks the board across theme switches/resizes instead
         // of sitting at a fixed viewport position.
         const $board = $('.board:visible').first();
-        if ($board.length) {
+        if (this.isSpectator) {
+            this.placeSpectatorTimer($board);
+        } else if ($board.length) {
             const rect = $board[0].getBoundingClientRect();
             this.$timerWidget.css({
                 top: (rect.top + rect.height / 2) + 'px',
@@ -1054,31 +1758,95 @@ export class Scoreboard {
 
         this.$timerWidget
             .attr('data-timer-type', state.type)
+            .attr('data-timer-team', team || '')
             .addClass('visible');
         this.$timerWidget.find('.timer_widget_label').text(label);
+        this.$timerWidget.find('.timer_widget_team').text(teamLabel).toggleClass('hidden', !teamLabel);
         this.$timerWidget.find('.timer_widget_time').text(timeText);
+        return true;
     }
 
-    handleEventHistory() {
-        if (this.event_history.length > 200) {
-            this.event_history = this.event_history.slice(-200);
-        }
+    /**
+     * Spectator board: the timer fills the free space below the sets won at the
+     * bottom of the board - between the teams while they're side by side, below
+     * team B's sets when stacked. As wide as the sets cards of the bottom row,
+     * from their lower edge (plus the score's gap) down to the board's bottom.
+     */
+    placeSpectatorTimer($board) {
+        const cards = $board.find('.sets_card').toArray().map(el => el.getBoundingClientRect());
+        if (!cards.length) return;
+        const boardRect = $board[0].getBoundingClientRect();
+        const rowTop = Math.max(...cards.map(rect => rect.top));
+        const row = cards.filter(rect => rect.top > rowTop - 2);
+        const gap = parseFloat(getComputedStyle($board.find('.score')[0]).columnGap) || 0;
+        const left = Math.min(...row.map(rect => rect.left));
+        const right = Math.max(...row.map(rect => rect.right));
+        const top = Math.max(...row.map(rect => rect.bottom)) + gap;
+        this.$timerWidget.css({
+            top: top + 'px',
+            left: left + 'px',
+            width: (right - left) + 'px',
+            height: Math.max(0, boardRect.bottom - top) + 'px',
+        });
     }
 
     /** ==============================================================================
-     * Remove score history events when score is decreased
-     * This maintains accurate event history for undo functionality
-     * @param {string} team - Team identifier ('a' or 'b')
-     * @param {number} newScore - The new score value
+     * input.html's per-team Timeout/Medical buttons (in the Scores card, one
+     * column per team row, so the label is just the timer type and the team
+     * name only goes in the tooltip): on the right either the running countdown (with a gauge filling the button
+     * left to right as time elapses) or, for regular timeouts, "N left" in
+     * the active set (greyed at 0, still clickable).
      * ============================================================================== */
-    removeEventHistoryEvents(team, newScore, set = this.active_set) {
-        const reversedHistory = this.event_history.slice().reverse();
-        $.each(reversedHistory, (index, event) => {
-            if (event.type === 'score' && event.team === team && event.score > newScore && event.set == set) {
-                this.event_history.splice(this.event_history.length - 1 - index, 1);
-                return false; // break the loop
+    updateTeamTimerButtons() {
+        if (!this.$teamTimerButtons.length) return;
+        const active = this.isTimerActive();
+        const activeTeam = active ? this.getActiveTimerTeam() : null;
+        const duration = active ? TIMER_DURATIONS_MS[this.timerState.type] : 0;
+        const elapsedMs = active ? Date.now() - this.timerState.startedAt : 0;
+
+        this.$teamTimerButtons.each((_, elem) => {
+            const $button = $(elem);
+            const type = $button.attr('timer-type');
+            const team = $button.attr('team');
+            const teamLabel = this.getTeamLabel(team);
+            const running = active && this.timerState.type === type && activeTeam === team;
+
+            $button.attr('title', running ? `${TIMER_LABELS[type]} - ${teamLabel} - click to cancel` : `${TIMER_LABELS[type]} - ${teamLabel}`);
+            $button.toggleClass('running', running);
+            if (!running) $button.removeClass('fresh confirm_cancel');
+
+            let info = '';
+            if (running) {
+                const totalSec = Math.ceil((duration - elapsedMs) / 1000);
+                info = `${Math.floor(totalSec / 60)}:${String(totalSec % 60).padStart(2, '0')}`;
+            } else if (type === 'timeout') {
+                info = `${this.getTimeoutsLeft(team)} left`;
             }
+            $button.find('.team_timer_info').text(info);
+            if (type === 'timeout') $button.toggleClass('used', !running && this.getTimeoutsLeft(team) === 0);
+
+            // Width = share of the timer already elapsed. Only animated
+            // while .running (see style_input.css), so it snaps back to 0
+            // instead of draining backwards when the timer ends/switches.
+            const progress = running ? Math.min(100, (elapsedMs / duration) * 100) : 0;
+            $button.find('.timer_gauge').css('width', `${progress}%`);
         });
+    }
+
+    /**
+     * The countdown has to keep running without new data - so it gets its own
+     * small tick that only calls updateTimerDisplay() and only exists while a
+     * timer is running. Called from updateUI().
+     */
+    syncTimerTicker() {
+        if (this.timerState && !this.timer_interval) {
+            this.timer_interval = setInterval(() => {
+                if (!this.updateTimerDisplay()) {
+                    clearInterval(this.timer_interval);
+                    this.timer_interval = null;
+                }
+            }, 250);
+        }
     }
 
     /** ==============================================================================
@@ -1091,13 +1859,22 @@ export class Scoreboard {
         let startIndex = this.getLastResetIndex();
 
         const slicedEventHistory = this.event_history.slice(startIndex + 1);
-        return slicedEventHistory.filter(event => 
-            event.type === 'score' && 
-            event.set == set && 
-            event.team && 
+        const events = slicedEventHistory.filter(event =>
+            event.type === 'score' &&
+            event.set == set &&
+            event.team &&
             typeof event.team === 'string' &&
             event.score !== undefined
         );
+        // Read robustly even if the stored history is off (old data, a board
+        // scoring without events): rising scores only, none above the actual one
+        // (no limit while a field is empty or missing - NaN, not 0)
+        const finalScore = (team) => {
+            const $elem = this.getScoreElem(set, team).first();
+            const raw = String($elem.is('input') ? $elem.val() : $elem.text()).trim();
+            return raw === '' ? NaN : Number(raw);
+        };
+        return cleanScoreEvents(events, { a: finalScore('a'), b: finalScore('b') });
     }
 
     /** ==============================================================================
@@ -1457,7 +2234,7 @@ export class Scoreboard {
      * has no valid serve order and used to permanently freeze score input for
      * the set (see the guards in getServingPlayerAtPoint/getReceivingPlayerAtPoint).
      * Idempotent: no-op once the receiver is on the opposing team, so it's
-     * safe to call on every data poll as a self-healing pass against stale data.
+     * safe to call on every data update as a self-healing pass against stale data.
      * ============================================================================== */
     sanitizeStartingSelections() {
         if (this.type !== 'input') return;
@@ -1484,14 +2261,7 @@ export class Scoreboard {
      * @returns {string} Player name or fallback
      * ============================================================================== */
     getPlayerName(playerId) {
-        const playerMap = {
-            'a': 'A_Player_1',
-            'b': 'A_Player_2', 
-            'c': 'B_Player_1',
-            'd': 'B_Player_2'
-        };
-        
-        const inputId = playerMap[playerId];
+        const inputId = PLAYER_NAME_INPUTS[playerId];
         if (inputId) {
             const $input = $(`#${inputId}`);
             if ($input.length > 0) {
@@ -1503,81 +2273,15 @@ export class Scoreboard {
         return `Player ${playerId.toUpperCase()}`;
     }
 
-
-    playerLocationTransformation(input, inputType, set) {
-        const startingServer = this.getStartingServer(set);
-        const startingReceiver = this.getStartingReceiver(set);
-        
-        let list;
-        if (startingServer == 'a' && startingReceiver == 'c') {
-            list = {
-                a: 'b',
-                b: 'a',
-                c: 'd',
-                d: 'c'
-            }
-        } else if (startingServer == 'a' && startingReceiver == 'd') {
-            list = {
-                a: 'b',
-                b: 'a',
-                c: 'c',
-                d: 'd'
-            }
-        } else if (startingServer == 'b' && startingReceiver == 'c') {
-            list = {
-                a: 'a',
-                b: 'b',
-                c: 'd',
-                d: 'c'
-            }
-        } else if (startingServer == 'b' && startingReceiver == 'd') {
-            list = {
-                a: 'a',
-                b: 'b',
-                c: 'c',
-                d: 'd'
-            }
-        } else if (startingServer == 'c' && startingReceiver == 'a') {
-            list = {
-                a: 'd',
-                b: 'c',
-                c: 'b',
-                d: 'a'
-            }
-        } else if (startingServer == 'c' && startingReceiver == 'b') {
-            list = {
-                a: 'c',
-                b: 'd',
-                c: 'b',
-                d: 'a'
-            }
-        } else if (startingServer == 'd' && startingReceiver == 'a') {
-            list = {
-                a: 'd',
-                b: 'c',
-                c: 'a',
-                d: 'b'
-            }
-        } else if (startingServer == 'd' && startingReceiver == 'b') {
-            list = {
-                a: 'c',
-                b: 'd',
-                c: 'a',
-                d: 'b'
-            }
-        }
-        
-        if (inputType == 'player') {
-            for (const [key, value] of Object.entries(list)) {
-                if (value === input) {
-                    return String(key);
-                }
-            }
-        } else if (inputType == 'location') {
-            return list[input];
-        }
+    /** Option labels of a player select: "A (Max)" with names, or just "A". */
+    setPlayerOptionLabels($select, withNames) {
+        $select.find('option').each((i, option) => {
+            const letter = option.value.toUpperCase();
+            const name = withNames ? $(`#${PLAYER_NAME_INPUTS[option.value]}`).val()?.trim() : '';
+            option.textContent = name ? `${letter} (${name})` : letter;
+        });
     }
-    
+
 
     /** ==============================================================================
      * Check if a field is locked (should not be overwritten during manual import)
@@ -1598,81 +2302,15 @@ export class Scoreboard {
      * @returns {Object|null} Object with team and serve number, or null if no serve data
      * ============================================================================== */
     getServeInfo() {
-        // Get the starting team for this set from database
-        const startingTeam = this.getStartingTeam(this.active_set);
-        if (!startingTeam) return null;
-        
-        // Count total points in this set
-        const totalPoints = this.getTotalPointsInSet(this.active_set);
-        
-        // Check if we're in overtime mode
-        const isOvertime = this.isInOvertime(this.active_set);
-        
-        if (isOvertime) {
-            // Overtime rules: serve changes after every point
-            const servingTeam = totalPoints % 2 === 0 ? startingTeam : (startingTeam === 'a' ? 'b' : 'a');
-            return {
-                team: servingTeam,
-                serveNumber: 1, // Always single serve in overtime
-                isOvertime: true
-            };
-        } else {
-            // Normal rules: first serve is single, then alternates every 2 points
-            let servingTeam, serveNumber;
-            if (totalPoints === 0) {
-                servingTeam = startingTeam;
-                serveNumber = 1;
-            } else {
-                const servesAfterFirst = totalPoints - 1;
-                const serveGroup = Math.floor(servesAfterFirst / 2);
-                const isStartingTeamServe = serveGroup % 2 === 0;
-                servingTeam = isStartingTeamServe ? (startingTeam === 'a' ? 'b' : 'a') : startingTeam;
-                serveNumber = (servesAfterFirst % 2) + 1;
-            }
-
-            return {
-                team: servingTeam,
-                serveNumber: serveNumber,
-                isOvertime: false
-            };
-        }        
+        // Shared with the live overview (matchStatus.js)
+        const set = this.active_set;
+        const info = serveInfo(this.getScore(set, 'a'), this.getScore(set, 'b'), this.getStartingServer(set), {
+            winPoints: this.gameSettings.win_points,
+            hardcap: this.gameSettings.hardcap,
+            minMargin: this.gameSettings.min_win_margin,
+        });
+        return info && { team: info.team, serveNumber: info.serveNumber, isOvertime: info.single && this.getTotalPointsInSet(set) > 0 };
     }
-
-    /** ==============================================================================
-     * Check if a set is in overtime mode
-     * Overtime occurs when winning score is reached but 2-point margin is not met
-     * OR when hardcap is reached by either team
-     * @param {number} set - Set number to check (defaults to active set)
-     * @returns {boolean} True if set is in overtime
-     * ============================================================================== */
-    isInOvertime(set = this.active_set, pointIndex = null) {
-        let scoreA, scoreB;
-        if (pointIndex == null) {
-            scoreA = this.getScore(set, 'a');
-            scoreB = this.getScore(set, 'b');
-        } else {
-            scoreA = this.getScoreAtPointIndex(set, 'a', pointIndex);
-            scoreB = this.getScoreAtPointIndex(set, 'b', pointIndex);
-        }
-        // console.log(pointIndex, scoreA, scoreB);
-
-        // Check if hardcap is reached by either team (see setWinner() for why
-        // this only applies when hardcap is configured above win_points).
-        if (this.gameSettings.hardcap > this.gameSettings.win_points &&
-            scoreA !== scoreB && (scoreA >= this.gameSettings.hardcap || scoreB >= this.gameSettings.hardcap)) {
-            return true;
-        }
-
-        // Check if winning score is reached
-        if (scoreA >= this.gameSettings.win_points || scoreB >= this.gameSettings.win_points) {
-            // Check if 2-point margin is met
-            const scoreDifference = Math.abs(scoreA - scoreB);
-            return scoreDifference < this.gameSettings.min_win_margin;
-        }
-        
-        return false;
-    }
-
 
     /** ==============================================================================
      * Get the starting server for a specific set
@@ -1774,6 +2412,13 @@ export class Scoreboard {
             $toggleSwitch.toggleClass('active', value === 1);
         });
 
+        // Team indicator row: the select shows the active mode; while none is
+        // on it keeps the last pick, so switching the toggle on restores it
+        const activeIndicator = TEAM_INDICATOR_MODES.find((key) => this.settings[key] === 1);
+        if (activeIndicator) $('#Team_Indicator_Type').val(activeIndicator);
+        $('#Show_Team_Indicator').prop('checked', !!activeIndicator)
+            .closest('.toggle-switch').toggleClass('active', !!activeIndicator);
+
         // Update visibility states
         this.updateGroupScoreVisibility();
         this.updateColorIndicatorVisibility();
@@ -1792,8 +2437,10 @@ export class Scoreboard {
     }
 
     updateColorIndicatorVisibility() {
-        const showColor = this.settings.show_color === 1;
-        const showFlag = this.settings.show_flag === 1;
+        // Club logos or the team logo - both in the flag's slot
+        const logoMode = this.settings.show_club_logo === 1 ? 'club' : this.settings.show_team_logo === 1 ? 'team' : null;
+        const showColor = this.settings.show_color === 1 && !logoMode;
+        const showFlag = this.settings.show_flag === 1 && !logoMode;
         // Colors and flags are two independent settings, but mutually
         // exclusive by choice - flags wins if a stale channel somehow has
         // both set (the toggle-switch handler keeps them exclusive going
@@ -1803,7 +2450,10 @@ export class Scoreboard {
         // "flags on, colors off" show neither.
         const flagsOn = showFlag;
 
-        $('.color-indicator').toggle(showColor && !showFlag);
+        // .color_indicator (underscore) is the overlays' own bar - a separate
+        // class from the board's .color-indicator, which is why it used to
+        // ignore this setting entirely and stayed on even in flags mode.
+        $('.color-indicator, .overlay .color_indicator').toggle(showColor && !showFlag);
         $('.flag-indicator').toggle(flagsOn);
         // .flag-indicator-wrap (input.html only) stays visible whenever
         // flags mode is on regardless of whether a flag currently resolves,
@@ -1818,20 +2468,81 @@ export class Scoreboard {
             this.applyFlag('a');
             this.applyFlag('b');
             // Explicit pixel sizing, not CSS - see syncFlagWrapHeights()/
-            // syncOutputFlagSizes().
-            this.syncFlagWrapHeights();
+            // syncOutputFlagSizes(). Measuring forces a layout, so only when
+            // something it depends on may have changed (resize, fonts, theme,
+            // team data, settings - see layoutDirty).
+            if (this.layoutDirty || !this.flagsWereOn) {
+                this.syncFlagWrapHeights();
+                this.syncOutputFlagSizes();
+                this.layoutDirty = false;
+            }
+        }
+        this.flagsWereOn = flagsOn;
+
+        // Logos take the flags' place (same slot, same size)
+        this.ensureLogoIndicators();
+        $('.logo-indicator').toggleClass('visible', !!logoMode);
+        if (logoMode) {
+            this.applyLogos('a', logoMode);
+            this.applyLogos('b', logoMode);
             this.syncOutputFlagSizes();
         }
     }
 
     /** ==============================================================================
-     * Set every .flag-indicator <img> on an output page (index.html) to an
+     * One .logo-indicator per team next to every .flag-indicator of an
+     * output page (board, overlays, score history), and next to the color
+     * picker on input.html - created once, so display.html doesn't need a
+     * second copy of every flag slot.
+     * ============================================================================== */
+    ensureLogoIndicators() {
+        if (this.logoIndicatorsCreated) return;
+        this.logoIndicatorsCreated = true;
+        const create = (team, extraClass = '') =>
+            $('<span class="logo-indicator" aria-hidden="true"></span>').addClass(`team_${team} ${extraClass}`.trim());
+
+        if (this.type === 'input') {
+            ['a', 'b'].forEach((team) => {
+                this.$html_frame.find(`.teams .team .color-indicator.${team}_color`).after(create(team));
+            });
+            return;
+        }
+        $('.flag-indicator').each((_, el) => {
+            const $flag = $(el);
+            const team = $flag.hasClass('team_a') ? 'a' : $flag.hasClass('team_b') ? 'b' : null;
+            if (team) $flag.after(create(team, $flag.hasClass('overlay_flag') ? 'overlay_flag' : ''));
+        });
+    }
+
+    /** ==============================================================================
+     * Fill a team's .logo-indicator elements - mode 'club': its players' club
+     * logos, one if both play for the same club (or only one has a logo), two
+     * slightly overlapping ones otherwise, like the Playerzone shows them;
+     * mode 'team': the team logo (teams_info.team_x.logo).
+     * @param {string} team - Team identifier ('a' or 'b')
+     * @param {string} mode - 'club' or 'team'
+     * ============================================================================== */
+    applyLogos(team, mode) {
+        const urls = mode === 'team' ? [this.teamLogos[team]] : this.teamClubLogos[team];
+        const logos = [...new Set(urls.map((url) => (url || '').trim()).filter(Boolean))];
+        const key = logos.join(' ');
+        $(`.logo-indicator.team_${team}`).each((_, el) => {
+            const $indicator = $(el);
+            $indicator.toggleClass('empty', !logos.length);
+            if ($indicator.attr('data-logos') === key) return; // unchanged - don't reload the images
+            $indicator.attr('data-logos', key).empty();
+            logos.forEach((url) => $('<img alt="">').attr('src', url).appendTo($indicator));
+        });
+    }
+
+    /** ==============================================================================
+     * Set every .flag-indicator <img> on an output page (display.html) to an
      * explicit height (scaled by FLAG_HEIGHT_SCALE) with a proportional
      * width via a plain 4:3 multiplication done in JS - not left to CSS
      * height:77%/aspect-ratio + !important, which kept getting silently
      * defeated per-theme across several rounds with no way to verify live.
-     * The "full" theme never has a .flag-indicator at all (removed per
-     * request - flags aren't offered there).
+     * The spectator board's flag sits in a .teamname-row like the stream
+     * themes' main board, so it's measured the same way.
      *
      * Main scoreboard branch measures .teamname's cap-height (top of a
      * capital letter to the baseline), not .name, .team, or .teamname's own
@@ -1852,35 +2563,50 @@ export class Scoreboard {
      * method had when it measured .team: an un-sized flag briefly renders at
      * its raw SVG intrinsic size (large) on first paint, inflating the
      * measured container, which produces a too-large height that shrinks a
-     * bit on each ~300ms update tick instead of landing on the right size
+     * bit on each render instead of landing on the right size
      * immediately.
      * ============================================================================== */
     syncOutputFlagSizes() {
         const SCORE_HISTORY_FLAG_SCALE = 0.65; // relative to the legend's fixed 22px slot
 
-        $('.flag-indicator').each((_, el) => {
+        $('.flag-indicator, .logo-indicator').each((_, el) => {
             const $flag = $(el);
+            const isLogo = $flag.hasClass('logo-indicator');
+            // input.html sizes its logos in CSS
+            if (isLogo && this.type === 'input') return;
             // input.html's flag <img> lives inside .flag-indicator-wrap and
             // is already sized (relative to .details, not .team) by
             // syncFlagWrapHeights() - skip it here to avoid the two fighting
             // over the same element with conflicting target heights.
             if ($flag.closest('.flag-indicator-wrap').length) return;
 
-            const $team = $flag.closest('.team');
-            if (!$team.length) return;
-
             let heightPx;
             if ($flag.closest('.match_statistics .score_history_in_stats').length) {
                 // Fixed in this context (see the matching .color-indicator
                 // rule in style-output.css), not relative to anything.
                 heightPx = 22 * SCORE_HISTORY_FLAG_SCALE;
+            } else if ($flag.hasClass('overlay_flag')) {
+                // Overlay team headers carry the name in an <h4>, not a
+                // .teamname, and the statistics overlay's header isn't inside
+                // a .team either - so neither lookup below applies. The <h4>
+                // is always the flag's next sibling (see display.html).
+                const $reference = $flag.nextAll('h4').first();
+                if (!$reference.length) return;
+                heightPx = this.measureCapHeight($reference[0]);
             } else {
+                const $team = $flag.closest('.team');
+                if (!$team.length) return;
                 const $reference = $team.find('.teamname').first();
                 if (!$reference.length) return;
                 heightPx = this.measureCapHeight($reference[0]);
             }
             if (!heightPx) return;
 
+            if (isLogo) {
+                // Square slots; a second logo overlaps the first by 40%
+                $flag[0].style.setProperty('--logo-size', `${heightPx}px`);
+                return;
+            }
             $flag[0].style.setProperty('height', `${heightPx}px`, 'important');
             $flag[0].style.setProperty('width', `${heightPx * 4 / 3}px`, 'important');
         });
@@ -1938,7 +2664,19 @@ export class Scoreboard {
      * ============================================================================== */
     supportsOverlays() {
         const themeConfig = themes[this.theme];
-        return !!themeConfig && themeConfig.html_structure === 'vertical_score';
+        return !!themeConfig && (themeConfig.html_structure === 'vertical_score' || !!themeConfig.spectator);
+    }
+
+    /** ==============================================================================
+     * Spectator view: the overlays are opened by the viewer, so the court's own
+     * settings for them (set for the stream in the input panel) are ignored
+     * there - see insertAdminSetting(). Everything else (colors, names, serve)
+     * still follows the court.
+     * ============================================================================== */
+    setViewerSettings(values) {
+        Object.assign(this.settings, values);
+        this.updateSettings();
+        this.requestRender();
     }
 
     updateMatchStatisticsVisibility() {
@@ -1949,45 +2687,55 @@ export class Scoreboard {
         // vertical_score themes either - it defers to this toggle).
         if (!this.supportsOverlays()) return;
 
-        const isVisible = this.settings.show_match_statistics === 1;
-
-        if (isVisible) {
-            // Add animation class first, then show
-            this.$matchStatisticsContainer.addClass('animate');
-
-            // Small delay to ensure CSS is applied before showing
-            setTimeout(() => {
-                this.$matchStatisticsContainer.addClass('show').removeClass('hidden');
-            }, 400);
-        } else {
-            this.$matchStatisticsContainer.removeClass('animate');
-            setTimeout(() => {
-                this.$matchStatisticsContainer.removeClass('animate show').addClass('hidden');
-            }, 300);
-        }
+        this.toggleOverlay(this.$matchStatisticsContainer, this.settings.show_match_statistics === 1);
     }
 
     updateMatchPreviewVisibility() {
         if (!this.supportsOverlays()) return;
 
-        const isVisible = this.settings.show_match_preview === 1;
+        this.toggleOverlay(this.$matchPreviewContainer, this.settings.show_match_preview === 1);
+    }
+
+    /**
+     * Shows/hides an overlay with its animation. A still pending timeout of a
+     * previous call is cancelled - otherwise a quick off/on (e.g. a first render
+     * with defaults, immediately followed by the real data) could remove the
+     * 'animate' class again afterwards.
+     */
+    toggleOverlay($container, isVisible) {
+        const el = $container[0];
+        if (!el) return;
+        // Same target state as last call: leave its pending timeout alone,
+        // otherwise back-to-back renders would keep pushing the 'show' back.
+        const pending = this.overlayTimeouts.get(el);
+        if (pending && pending.isVisible === isVisible) return;
+        if (pending) clearTimeout(pending.id);
+
         if (isVisible) {
-            this.$matchPreviewContainer.addClass('animate');
-            setTimeout(() => {
-                this.$matchPreviewContainer.addClass('show').removeClass('hidden');
-            }, 400);
+            // Add animation class first, then show
+            $container.addClass('animate');
+
+            // Small delay to ensure CSS is applied before showing
+            this.overlayTimeouts.set(el, { isVisible, id: setTimeout(() => {
+                $container.addClass('show').removeClass('hidden');
+            }, 400) });
         } else {
-            this.$matchPreviewContainer.removeClass('animate');
-            setTimeout(() => {
-                this.$matchPreviewContainer.removeClass('animate show').addClass('hidden');
-            }, 300);
+            $container.removeClass('animate');
+            this.overlayTimeouts.set(el, { isVisible, id: setTimeout(() => {
+                $container.removeClass('animate show').addClass('hidden');
+            }, 300) });
         }
     }
 
     updateUrlOutput() {
         const baseUrl = window.location.origin + window.location.pathname;
-        const newUrl = baseUrl.replace("input.html", "index.html");
-        let urlOutput = `${newUrl}?channel=${this.channel}`;
+        const newUrl = baseUrl.replace("input.html", "display.html");
+        // Org/court link as long as the channel belongs to a court - it stays
+        // valid even if the internal channel number changes at some point.
+        const court = this.user?.courtForChannel(this.channel);
+        let urlOutput = court
+            ? `${newUrl}?org=${encodeURIComponent(court.org)}&court=${court.court}`
+            : `${newUrl}?channel=${this.channel}`;
 
         if (this.theme) {
             urlOutput += `&theme=${this.theme}`;
@@ -1996,29 +2744,37 @@ export class Scoreboard {
         this.$urlOutput.text(urlOutput).attr('href', urlOutput);
     }
 
+    /**
+     * Court selection after login: one option per court (value = internal
+     * channel number). Admins see the courts of all orgs, grouped by org.
+     */
     updateAvailableChannels() {
         this.$channelInput.empty();
 
-        if (!this.user) return;
+        if (!this.user || this.user.courts.length === 0) return;
 
-        let channelExists = false;
-
-        $.each(this.user.channels, (i, channel) => {
-            this.$channelInput.append($('<option></option>').val(channel).html(channel));
-            if (channel === this.channel) {
-                channelExists = true;
-            }
+        const orgIds = [...new Set(this.user.courts.map((c) => c.org))];
+        orgIds.forEach((orgId) => {
+            const courts = this.user.courts.filter((c) => c.org === orgId);
+            const $target = orgIds.length > 1
+                ? $('<optgroup></optgroup>').attr('label', courts[0].orgName).appendTo(this.$channelInput)
+                : this.$channelInput;
+            courts.forEach((c) => {
+                $('<option></option>').val(c.channel).text(c.court).attr('title', `match-${c.channel}`).appendTo($target);
+            });
         });
 
-        if (channelExists) {
-            this.$channelInput.val(this.channel);
-        } else {
-            this.channel = this.user.channels[0];
-            this.$channelInput.val(this.channel);
-            setTimeout(() => {
-                showToast("ℹ️", `Due to authentification the channel got changed to "${this.user.channels[0]}".`, 2000);
-            }, 2200);
+        if (!this.user.courtForChannel(this.channel)) {
+            const requested = this.channel;
+            this.channel = this.user.courts[0].channel;
+            // Only report it if a specific channel was requested (e.g. via ?channel=)
+            if (requested) {
+                setTimeout(() => {
+                    showToast("ℹ️", `You don't have access to channel ${requested} - switched to Court ${this.user.courts[0].court}.`, 3000);
+                }, 2200);
+            }
         }
+        this.$channelInput.val(this.channel);
     }
 
     
@@ -2043,163 +2799,35 @@ export class Scoreboard {
 
 
     /** ==============================================================================
-     * Get the player that was serving at a specific point in the score history
+     * Get the player serving at a specific point of a set (see serveRotation())
      * @param {number} pointIndex - Index of the point (0-based)
      * @param {number} set - Set number (defaults to active set)
      * @returns {string|null} Player identifier ('a', 'b', 'c', 'd') or null if not available
      * ============================================================================== */
     getServingPlayerAtPoint(pointIndex, set = this.active_set) {
-        const startingServer = this.getStartingServer(set);
-        const startingReceiver = this.getStartingReceiver(set);
-        const isOvertime = this.isInOvertime(set, pointIndex);
-
-        let serveOrder;
-        if (startingServer == 'a' && startingReceiver == 'c') {
-            serveOrder = ['a', 'd', 'b', 'c'];
-        } else if (startingServer == 'a' && startingReceiver == 'd') {
-            serveOrder = ['a', 'c', 'b', 'd'];
-        } else if (startingServer == 'b' && startingReceiver == 'c') {
-            serveOrder = ['b', 'd', 'a', 'c'];
-        } else if (startingServer == 'b' && startingReceiver == 'd') {
-            serveOrder = ['b', 'c', 'a', 'd'];
-        } else if (startingServer == 'c' && startingReceiver == 'a') {
-            serveOrder = ['c', 'b', 'd', 'a'];
-        } else if (startingServer == 'c' && startingReceiver == 'b') {
-            serveOrder = ['c', 'a', 'd', 'b'];
-        } else if (startingServer == 'd' && startingReceiver == 'a') {
-            serveOrder = ['d', 'b', 'c', 'a'];
-        } else if (startingServer == 'd' && startingReceiver == 'b') {
-            serveOrder = ['d', 'a', 'c', 'b'];
-        }
-
-        // Same-team combo (see matching guard in getReceivingPlayerAtPoint) -
-        // no valid serve order, so bail out instead of crashing below.
-        if (!serveOrder) return null;
-
-        const startIndex = serveOrder.indexOf(startingServer);
-        // const startIndex = serveOrder.indexOf(this.playerLocationTransformation(startingServer, 'player', set));
-        if (pointIndex === 0) {
-            return startingServer;
-        } else {
-            let player, steps, pointsTillOvertime;
-            if (!isOvertime) {
-                steps = Math.floor(((pointIndex + 1) / 2) % 4);
-                player = serveOrder[(startIndex + steps) % 4];
-            } else {
-                pointsTillOvertime = this.gameSettings.win_points * 2 - 2;
-                steps = Math.floor(((((pointsTillOvertime + 1) / 2) % 4) + (pointIndex - pointsTillOvertime) % 4) % 4);
-                player = serveOrder[(startIndex + steps) % 4];
-            }
-            
-            return player;
-            // return this.playerLocationTransformation(serveOrder[(startIndex + steps) % 4], 'location', set);
-        }
+        return this.getServeRotation(pointIndex, set)?.server ?? null;
     }
 
 
     /** ==============================================================================
-     * Get the receiving player at a specific point in a set
+     * Get the receiving player at a specific point in a set (see serveRotation())
      * @param {number} pointIndex - Point index (0-based)
      * @param {number} set - Set number
      * @returns {string|null} Player identifier ('a', 'b', 'c', 'd') or null
      * ============================================================================== */
-    getReceivingPlayerAtPoint(pointIndex, set) {
-        const startingServer = this.getStartingServer(set);
-        const startingReceiver = this.getStartingReceiver(set);
-        const isOvertime = this.isInOvertime(set, pointIndex);
+    getReceivingPlayerAtPoint(pointIndex, set = this.active_set) {
+        return this.getServeRotation(pointIndex, set)?.receiver ?? null;
+    }
 
-        let receivingOrder, overtimeOrder15, overtimeOrder21;
-        if (startingServer == 'a' && startingReceiver == 'c') {
-            receivingOrder = ['c', 'b', 'a', 'c', 'd', 'a', 'b', 'd'];
-            overtimeOrder15 = ['a', 'd', 'b', 'c'];
-            overtimeOrder21 = ['b', 'd', 'a', 'c'];
-        } else if (startingServer == 'a' && startingReceiver == 'd') {
-            receivingOrder = ['d', 'b', 'a', 'd', 'c', 'a', 'b', 'c'];
-            overtimeOrder15 = ['a', 'c', 'b', 'd'];
-            overtimeOrder21 = ['b', 'c', 'a', 'd'];
-        } else if (startingServer == 'b' && startingReceiver == 'c') {
-            receivingOrder = ['c', 'a', 'b', 'c', 'd', 'b', 'a', 'd'];
-            overtimeOrder15 = ['b', 'c', 'a', 'd'];
-            overtimeOrder21 = ['a', 'd', 'b', 'c'];
-        } else if (startingServer == 'b' && startingReceiver == 'd') {
-            receivingOrder = ['d', 'a', 'b', 'd', 'c', 'b', 'a', 'c'];
-            overtimeOrder15 = ['b', 'd', 'a', 'c'];
-            overtimeOrder21 = ['a', 'c', 'b', 'd'];
-        } else if (startingServer == 'c' && startingReceiver == 'a') {
-            receivingOrder = ['a', 'd', 'c', 'a', 'b', 'c', 'd', 'b'];
-            overtimeOrder15 = ['c', 'b', 'd', 'a'];
-            overtimeOrder21 = ['d', 'b', 'c', 'a'];
-        } else if (startingServer == 'c' && startingReceiver == 'b') {
-            receivingOrder = ['b', 'd', 'c', 'b', 'a', 'c', 'd', 'a'];
-            overtimeOrder15 = ['c', 'a', 'd', 'b'];
-            overtimeOrder21 = ['d', 'a', 'c', 'b'];
-        } else if (startingServer == 'd' && startingReceiver == 'a') {
-            receivingOrder = ['a', 'c', 'd', 'a', 'b', 'd', 'c', 'b'];
-            overtimeOrder15 = ['d', 'b', 'c', 'a'];
-            overtimeOrder21 = ['c', 'b', 'd', 'a'];
-        } else if (startingServer == 'd' && startingReceiver == 'b') {
-            receivingOrder = ['b', 'c', 'd', 'b', 'a', 'd', 'c', 'a'];
-            overtimeOrder15 = ['d', 'a', 'c', 'b'];
-            overtimeOrder21 = ['c', 'a', 'd', 'b'];
-        }
-
-        // Starting server/receiver from the same team (e.g. both default to
-        // 'a' before an operator sets the receiver) has no valid serve order -
-        // bail out instead of leaving receivingOrder undefined, which would
-        // throw on the next line and abort updateCurrentPlayersDisplay()
-        // before it reaches uploadData(), silently blocking every score input.
-        if (!receivingOrder) return null;
-
-        // TODO: fix overtime
-        const startIndex = receivingOrder.indexOf(startingReceiver);
-        if (pointIndex === 0) {
-            return startingReceiver;
-        } else {
-            let steps, pointsTillOvertime;
-            if (!isOvertime) {
-                steps = Math.floor((pointIndex) % 8);
-                return receivingOrder[(startIndex + steps) % 8];
-            } else {
-                steps = Math.floor((pointIndex - 1) % 4);
-                // pointsTillOvertime = this.gameSettings.win_points * 2 - 2;
-                // let lastReceiver = receivingOrder[(startIndex + Math.floor((pointsTillOvertime) % 8)) % 8];
-                // let preLastReceiver = receivingOrder[(startIndex + Math.floor((pointsTillOvertime - 1) % 8)) % 8]
-                // let prePreLastReceiver = receivingOrder[(startIndex + Math.floor((pointsTillOvertime - 2) % 8)) % 8]
-                // let lastReceiverTeam = this.getPlayerTeam(lastReceiver);
-                // let preLastReceiverTeam = this.getPlayerTeam(preLastReceiver);
-                // let prePreLastReceiverTeam = this.getPlayerTeam(prePreLastReceiver);
-
-                // let overtimeOrder = [];
-                // if (lastReceiverTeam == 'a' && preLastReceiverTeam == 'a') {
-                //     prePreLastReceiver == 'c' ? overtimeOrder.push('c') : overtimeOrder.push('d')
-                // } else if (lastReceiverTeam == 'b' && preLastReceiverTeam == 'b') {
-                //     prePreLastReceiver == 'a' ? overtimeOrder.push('a') : overtimeOrder.push('b')
-                // }
-                
-                // overtimeOrder.push(lastReceiver)
-                // if (this.getPlayerTeam(overtimeOrder[0]) == 'a') {
-                //     prePreLastReceiver == 'a' ? overtimeOrder.push('b') : overtimeOrder.push('a')
-                // } else if (this.getPlayerTeam(overtimeOrder[0]) == 'b') {
-                //     prePreLastReceiver == 'c' ? overtimeOrder.push('d') : overtimeOrder.push('c')
-                // }
-                // if (this.getPlayerTeam(overtimeOrder[1]) == 'a') {
-                //     this.getPlayerTeam(overtimeOrder[1]) == 'a' ? overtimeOrder.push('b') : overtimeOrder.push('a'); 
-                // } else if (this.getPlayerTeam(overtimeOrder[1]) == 'b') {
-                //     this.getPlayerTeam(overtimeOrder[1]) == 'c' ? overtimeOrder.push('d') : overtimeOrder.push('c'); 
-                // }
-
-                // console.log(pointIndex, pointsTillOvertime)
-                // console.log('last receivers: ', prePreLastReceiver, preLastReceiver, lastReceiver)
-                // console.log(overtimeOrder, overtimeOrder15, overtimeOrder21);
-
-                if (this.gameSettings.win_points == 15) {
-                    return overtimeOrder15[(startIndex + steps) % 4];
-                } else {
-                    return overtimeOrder21[(startIndex + steps) % 4];
-                }
-            }
-            
-        }
+    // Null while starting server and receiver are on the same team (e.g. both
+    // default to 'a' before the receiver is set) - callers must not crash on
+    // that, or updateCurrentPlayersDisplay() would abort before uploadData()
+    // and silently block every score input.
+    getServeRotation(pointIndex, set) {
+        return serveRotation(pointIndex, this.getStartingServer(set), this.getStartingReceiver(set), {
+            winPoints: this.gameSettings.win_points,
+            minMargin: this.gameSettings.min_win_margin,
+        });
     }
 
     /** ==============================================================================
@@ -2299,9 +2927,28 @@ export class Scoreboard {
         scoresList = this.scoreHistoryToTeamPoints(this.getScoreHistory(set), team);
         
         $container.empty();
-        
+
+        // Timeout/medical markers sit between the points they were called
+        // at - a chip with the timer's icon (same as input.html's buttons) in
+        // the calling team's row and an empty spacer of the same width in the
+        // other, so both rows stay column-aligned.
+        // <span>s, not <div>s, so the .score_item:first-of-type/last-of-type
+        // corner rounding still finds the first/last score cell.
+        const markers = this.getTeamTimerMarkers(set);
+        const appendMarkers = (pointIndex) => {
+            markers.filter(m => m.pointIndex === pointIndex).forEach(m => {
+                const called = m.team === team;
+                $container.append(
+                    `<span class="timer_marker${called ? ' called' : ''}" timer-type="${m.type}" called-by="${m.team}">` +
+                    (called ? `<i class="material-symbols-rounded timer_marker_symbol" aria-hidden="true">${TIMER_ICONS[m.type]}</i>` : '') +
+                    `</span>`
+                );
+            });
+        };
+
         let streak = 0;
         $.each(scoresList, (i, score) => {
+            appendMarkers(i);
             const isActive = score > (i > 0 ? scoresList[i - 1] : 0);
             streak = isActive ? streak + 1 : 0;
             const status = isActive ? 'active' : '';
@@ -2318,27 +2965,125 @@ export class Scoreboard {
             const element = `<div class="score_item ${status}" streak="${streak}"${breakAttribute}><p class="score_number">${score}</p></div>`;
             $container.append(element);
         });
+        appendMarkers(scoresList.length);
+    }
+
+    /** ==============================================================================
+     * Where each timeout/medical of a set falls in its score history:
+     * pointIndex = number of points already played in that set when it was
+     * called (0 = before the first point). Counts points exactly like
+     * getScoreHistory(), so indices line up with the history strip and chart.
+     * @returns {Array<{type: string, team: string, pointIndex: number}>}
+     * ============================================================================== */
+    getTeamTimerMarkers(set = this.active_set) {
+        const markers = [];
+        let points = 0;
+        // The score events getScoreHistory() keeps (it drops repeated or
+        // out-of-order ones) - only those count as points here
+        const counted = new Set(this.getScoreHistory(set));
+        this.event_history.slice(this.getLastResetIndex() + 1).forEach(event => {
+            if (event.set != set) return;
+            if (counted.has(event)) {
+                points++;
+            } else if (TEAM_TIMER_TYPES.includes(event.type) && (event.team === 'a' || event.team === 'b')) {
+                markers.push({ type: event.type, team: event.team, pointIndex: points });
+            }
+        });
+        return markers;
+    }
+
+    /** ==============================================================================
+     * Chart.js plugin body for updateScoreHistoryChart(): a dashed vertical
+     * line in the calling team's color at each timeout/medical, between the
+     * two points it was called between, with a badge on top - the timer's
+     * icon on the team color, like the history strip's markers.
+     * ============================================================================== */
+    drawTimerMarkers(chart, markers) {
+        const xScale = chart.scales.x;
+        const count = chart.data.labels.length;
+        if (!xScale || !markers.length) return;
+
+        const { ctx, chartArea } = chart;
+        const rootStyle = getComputedStyle(document.documentElement);
+        // The icons are font ligatures: drawn before the icon font is in, the
+        // canvas would show the word ("timer") - load it, then draw again
+        const iconsReady = document.fonts.check(TIMER_BADGE_FONT);
+        if (!iconsReady) document.fonts.load(TIMER_BADGE_FONT).then(() => chart.draw());
+
+        markers.forEach(m => {
+            let x;
+            if (count === 0) {
+                x = chartArea.left;
+            } else if (m.pointIndex <= 0) {
+                x = xScale.getPixelForValue(0);
+            } else if (m.pointIndex >= count) {
+                x = xScale.getPixelForValue(count - 1);
+            } else {
+                x = (xScale.getPixelForValue(m.pointIndex - 1) + xScale.getPixelForValue(m.pointIndex)) / 2;
+            }
+            const color = rootStyle.getPropertyValue(`--${m.team.toUpperCase()}_Color`).trim() || '#888888';
+
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.setLineDash(m.type === 'medical' ? [2, 3] : [5, 4]);
+            ctx.beginPath();
+            ctx.moveTo(x, chartArea.top + TIMER_BADGE_SIZE);
+            ctx.lineTo(x, chartArea.bottom);
+            ctx.stroke();
+
+            // Badge on top like the history strip's: the timer's icon on the
+            // team color - kept inside the canvas for a timeout after the last point
+            const badgeX = Math.min(Math.max(x, TIMER_BADGE_SIZE / 2), chart.width - TIMER_BADGE_SIZE / 2);
+            ctx.setLineDash([]);
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.roundRect(badgeX - TIMER_BADGE_SIZE / 2, chartArea.top, TIMER_BADGE_SIZE, TIMER_BADGE_SIZE, 3);
+            ctx.fill();
+            if (iconsReady) {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = TIMER_BADGE_FONT;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(TIMER_ICONS[m.type], badgeX, chartArea.top + TIMER_BADGE_SIZE / 2);
+            }
+            ctx.restore();
+        });
     }
 
     /** ==============================================================================
      * Update Chart.js visualization of score progression
      * Creates line chart showing both teams' score progression over time
      * Uses team colors and provides visual feedback for score changes
+     * The chart is created only once; after that only its data is swapped.
+     * The colors are scriptable and re-read the team colors from the CSS
+     * variables on every update(), so color changes still come through.
      * ============================================================================== */
     updateScoreHistoryChart() {
         const scoresTeamA = this.scoreHistoryToTeamPoints(this.getScoreHistory(), 'a');
         const scoresTeamB = this.scoreHistoryToTeamPoints(this.getScoreHistory(), 'b');
         const labels = scoresTeamA.map((_, i) => `${i + 1}`);
+        // Read by the timerMarkers plugin on every draw - the chart itself is
+        // only created once, so it can't hold on to the markers of that moment
+        this.scoreChartTimerMarkers = this.getTeamTimerMarkers();
+
+        if (this.scoreChart) {
+            this.scoreChart.data.labels = labels;
+            this.scoreChart.data.datasets[0].data = scoresTeamA;
+            this.scoreChart.data.datasets[1].data = scoresTeamB;
+            this.scoreChart.update();
+            return;
+        }
 
         const ctx = document.getElementById('scoreChart').getContext('2d');
-
-        // Destroy existing chart if it exists
-        if (this.scoreChart) {
-            this.scoreChart.destroy();
-        }
+        const teamColor = (team) => getComputedStyle(document.documentElement).getPropertyValue(`--${team}_Color`).trim();
 
         this.scoreChart = new Chart(ctx, {
             type: 'line',
+            plugins: [{
+                id: 'timerMarkers',
+                afterDatasetsDraw: (chart) => this.drawTimerMarkers(chart, this.scoreChartTimerMarkers),
+            }],
             data: {
                 labels: labels,
                 datasets: [
@@ -2348,13 +3093,13 @@ export class Scoreboard {
                         pointRadius: 0,
                         pointHoverRadius: 0,
                         segment: {
-                            borderColor: getComputedStyle(document.documentElement).getPropertyValue("--A_Color").trim(),
+                            borderColor: () => teamColor('A'),
                             backgroundColor: ctx => {
                                 if (!ctx.p1 || !ctx.chart.data.datasets[1]) return '#000000';
                                 const dataset2Value = ctx.chart.data.datasets[1].data[ctx.p0DataIndex];
                                 return ctx.p1.parsed.y > dataset2Value ?
-                                    `${getComputedStyle(document.documentElement).getPropertyValue("--A_Color").trim()}44` :
-                                    `${getComputedStyle(document.documentElement).getPropertyValue("--B_Color").trim()}44`;
+                                    `${teamColor('A')}44` :
+                                    `${teamColor('B')}44`;
                             },
                         },
                         fill: '+1',
@@ -2362,8 +3107,8 @@ export class Scoreboard {
                     {
                         label: "Team B",
                         data: scoresTeamB,
-                        borderColor: getComputedStyle(document.documentElement).getPropertyValue("--B_Color").trim(),
-                        backgroundColor: `${getComputedStyle(document.documentElement).getPropertyValue("--B_Color").trim()}22`,
+                        borderColor: () => teamColor('B'),
+                        backgroundColor: () => `${teamColor('B')}22`,
                         pointRadius: 0,
                         pointHoverRadius: 0,
                         fill: "false"
@@ -2395,8 +3140,6 @@ export class Scoreboard {
                 }
             }
         });
-
-        this.scoreChart.update();
     }
 
 
@@ -2445,9 +3188,24 @@ export class Scoreboard {
             $('#team_b_break_percentage').closest('.stat_item').addClass('best');
         }
         
+        this.updateTimeoutStatistics(setNumber);
         this.updatePlayerStatistics(stats);
         this.updatePlayerSetStatistics();
         this.updateSetScoresDisplay(setNumber);
+    }
+
+    /** ==============================================================================
+     * Timeouts (and medical timeouts, when any) per team for the match
+     * (setNumber = null) or one set - from event_history, see startTimer().
+     * ============================================================================== */
+    updateTimeoutStatistics(setNumber) {
+        const events = this.getTeamTimerEvents(setNumber);
+        ['a', 'b'].forEach(team => {
+            const timeouts = events.filter(ev => ev.type === 'timeout' && ev.team === team).length;
+            const medicals = events.filter(ev => ev.type === 'medical' && ev.team === team).length;
+            $(`#team_${team}_timeouts`).text(`${timeouts}`);
+            $(`#team_${team}_medicals`).text(medicals > 0 ? `(+${medicals} medical)` : '');
+        });
     }
 
     updateMatchStatisticsTitle() {
@@ -2463,19 +3221,19 @@ export class Scoreboard {
         this.$matchStatisticsContainer.find('.center h3').text(title);
     }
 
+    /**
+     * Set scores in the statistics: all of them for the match, the other sets
+     * dimmed for a single set - dimmed rather than hidden, so switching
+     * between match and set doesn't move anything.
+     */
     updateSetScoresDisplay(setNumber) {
-        if (this.settings.match_stats_type === 'match') {
-            // Show all set scores
-            this.$matchStatisticsContainer.find('.set_stats .counter').removeClass('hide');
-        } else {            
-            if (setNumber && setNumber >= 1 && setNumber <= 7) {
-                this.$matchStatisticsContainer.find('.set_stats .counter').addClass('hide');
-                const $targetSet = this.$matchStatisticsContainer.find(`.set_stats .counter:nth-child(${setNumber})`);
-                if ($targetSet.length) {
-                    $targetSet.removeClass('hide');
-                }
-            }
+        const $counters = this.$matchStatisticsContainer.find('.set_stats .counter');
+        if (this.settings.match_stats_type === 'match' || !(setNumber >= 1 && setNumber <= 7)) {
+            $counters.removeClass('dimmed');
+            return;
         }
+        $counters.addClass('dimmed');
+        this.$matchStatisticsContainer.find(`.set_stats .counter:nth-child(${setNumber})`).removeClass('dimmed');
     }
 
     getLastResetIndex(event_history = this.event_history) {
@@ -2529,7 +3287,8 @@ export class Scoreboard {
                 eventsBySet[event.set].push(event);
             });
             Object.keys(eventsBySet).forEach(setKey => {
-                const setEvents = eventsBySet[setKey];
+                // Same cleaned events as the single-set view
+                const setEvents = this.getScoreHistory(setKey);
                 setEvents.forEach((event, setIndex) => {
                     // Wir merken uns den Index innerhalb des Satzes
                     eventsToProcess.push({ event, index: setIndex, set: event.set });
@@ -2631,17 +3390,18 @@ export class Scoreboard {
      * Update set-specific player statistics in the UI
      * ============================================================================== */
     updatePlayerSetStatistics() {
-        let completedSetsCountArray;
-        if (this.settings.match_stats_type == 'match') {
-            let completedSetsCount = this.getCompletedSetsCount();
-            completedSetsCountArray = Array.from({length: completedSetsCount}, (_, i) => i);
-            // const completedSetsCount = this.active_set;
-            if (this.active_set != completedSetsCount && this.getScore(this.active_set, 'a') + this.getScore(this.active_set, 'b') > 0) {
-                completedSetsCountArray.push(this.active_set - 1)
-            }
-        } else {
-            completedSetsCountArray = this.settings.match_stats_type === 'active_set' ? [this.active_set - 1] : [this.settings.match_stats_type - 1];
+        // Every set played so far gets its line - also for a single set, where
+        // the other sets are only dimmed (see below), so switching between
+        // match and set doesn't change the height and nothing moves
+        let completedSetsCount = this.getCompletedSetsCount();
+        const completedSetsCountArray = Array.from({length: completedSetsCount}, (_, i) => i);
+        if (this.active_set != completedSetsCount && this.getScore(this.active_set, 'a') + this.getScore(this.active_set, 'b') > 0) {
+            completedSetsCountArray.push(this.active_set - 1)
         }
+        // The set the statistics are about (null: the whole match)
+        const selectedSet = this.settings.match_stats_type === 'match' ? null
+            : this.settings.match_stats_type === 'active_set' ? this.active_set
+                : Number(this.settings.match_stats_type);
 
         // Build a map from set index to stats, so we can reference by set index directly
         const setsStats = {};
@@ -2695,11 +3455,9 @@ export class Scoreboard {
                 const match = id.match(/set_(\d+)$/);
                 if (match) {
                     const setNum = parseInt(match[1], 10);
-                    if (completedSetsCountArray.includes(setNum - 1)) {
-                        $(this).closest('.line_stat').show();
-                    } else {
-                        $(this).closest('.line_stat').hide();
-                    }
+                    const $line = $(this).closest('.line_stat');
+                    $line.toggle(completedSetsCountArray.includes(setNum - 1));
+                    $line.toggleClass('dimmed', selectedSet != null && setNum !== selectedSet);
                 }
             });
         });

@@ -1,127 +1,265 @@
 // import firebase config
-import { get, ref, update, set, remove, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-database.js";
-import { db, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase_config.js?v=3";
+import { get, ref, update, onValue, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+import { db, auth, signOut } from "./firebase_config.js?v=4";
+import { resolveCourt, watchAccount, login, withTimeout } from "./auth.js?v=4";
+import { Scoreboard } from "./Scoreboard.js?v=4";
+import { showToast } from "./toast.js?v=4";
 
-import { User } from "./User.js?v=3";
-import { Scoreboard } from "./Scoreboard.js?v=3";
-
+/**
+ * Theme registry.
+ *
+ * `brand_logo` is optional and overrides the federation logo in the top-right
+ * of the overlay headers (see setTheme() in Scoreboard.js); themes that omit
+ * it keep the Roundnet Germany badge that is hardcoded in display.html.
+ */
+// A new stream theme also goes into display.html's streamThemes (keeps the
+// page transparent while loading instead of the spectator board's dark).
 export const themes = {
-    'full': {
+    // The big board for spectators, opened from the overview, and the display
+    // without a stream theme (e.g. a screen at the court): one header back to
+    // the overview, plus the stream overlays (score history, statistics,
+    // preview) to open per viewer - see js/spectator.js. Replaces the old
+    // "full" theme; ?theme=full links show this one (see Scoreboard.setTheme()).
+    'spectator': {
         'html_structure': 'full',
-        'css_path': 'css/style-v3.css?v=3'
+        'css_path': 'css/style-spectator.css?v=4',
+        'spectator': true
     },
     'small': {
         'html_structure': 'vertical_score',
-        'css_path': 'css/style-v5.css?v=3'
+        'css_path': 'css/style-v5.css?v=4'
     },
     'rg': {
         'html_structure': 'vertical_score',
-        'css_path': 'css/style-v1.css?v=3'
+        'css_path': 'css/style-v1.css?v=4'
     },
     'tops': {
         'html_structure': 'horizontal_score',
-        'css_path': 'css/style-v2.css?v=3'
+        'css_path': 'css/style-v2.css?v=4'
     },
     'france': {
         'html_structure': 'vertical_score',
-        'css_path': 'css/style-v4-france.css?v=3'
+        'css_path': 'css/style-v4-france.css?v=4'
     },
     'eura': {
         'html_structure': 'vertical_score',
-        'css_path': 'css/style-v5-eura.css?v=3'
+        'css_path': 'css/style-v5-eura.css?v=4'
+    },
+    'irf': {
+        'html_structure': 'vertical_score',
+        'css_path': 'css/style-irf.css?v=4',
+        // The overlay headers run light in this theme, so the mark with its
+        // original black lettering is the one that reads there.
+        // img/irf_logo_white.png is the same mark with that lettering
+        // inverted, for a dark header.
+        'brand_logo': 'img/irf_logo_full.png',
+        // Fixed event mark, shown ahead of the event name. Two cuts of the
+        // same artwork, named for the ground they sit on: the board's strip
+        // is dark, the overlay headers are light, and the mark's white
+        // details vanish on the wrong one.
+        'event_logo': {
+            'dark_bg': 'img/irf_event_logo_dark_bg.png',
+            'light_bg': 'img/irf_event_logo_light_bg.png'
+        }
     },
 }
 
-// Debug: auf true setzen für Console-Logs (Auth/Daten-Flow); wird auch für Scoreboard exponiert
-const AUTH_DEBUG = true;
+/** Fallback for themes without their own `brand_logo` (matches display.html). */
+export const DEFAULT_BRAND_LOGO = 'img/rg_logo_white.png';
+
+// Debug: set to true for console logs of the auth/data flow; also exposed to Scoreboard
+const AUTH_DEBUG = false;
 if (typeof window !== 'undefined') window.AUTH_DEBUG = AUTH_DEBUG;
 
 // Initialize variables for global usage
 let loggedInUser;
 let scoreboard;
-let $banner, $logoutButton, $userString;
-/** Wird beim Form-Login gesetzt, damit onAuthStateChanged nicht doppelt startDataSync() auslöst. */
-let loginInProgressFromForm = false;
+let $logoutButton, $userString;
 
 // =========================================== Page Load ======================================= //
 
 $(document).ready(async function () {
-    $banner = $('.banner');
     $logoutButton = $('button#logout');
     $userString = $('header #username');
 
-    // Get URL parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlChannel = urlParams.get('channel');
-    const urlTheme = urlParams.get('theme');
-    
-    // Parse channel selection with fallback
-    const channelSelection = isNaN(parseInt(urlChannel, 10)) ? 1 : urlChannel;
-    const themeSelection = urlTheme;
+    // Just logged out (User.logout() reloads the page)
+    try {
+        if (sessionStorage.getItem('signed_out')) {
+            sessionStorage.removeItem('signed_out');
+            showToast("👋", "Logged out", 2000);
+        }
+    } catch { /* storage blocked */ }
 
     // Determine board type
     const type = $('html').attr('type') === 'output' ? 'output' : 'input';
 
+    // Get URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlChannel = parseInt(urlParams.get('channel'), 10);
+    const themeSelection = urlParams.get('theme');
+
+    // Internal channel number: ?org=&court= (resolved via orgs/<org>/courts)
+    // takes precedence over ?channel=. Without either, the display uses
+    // channel 1; the input panel picks the account's first court after login.
+    let channelSelection = isNaN(urlChannel) ? (type === 'output' ? 1 : null) : urlChannel;
+    const urlOrg = urlParams.get('org');
+    const urlCourt = urlParams.get('court');
+    if (urlOrg && urlCourt) {
+        const channel = await resolveCourt(urlOrg, urlCourt);
+        // For an invalid link, show nothing rather than silently someone else's match
+        channelSelection = channel;
+        if (channel == null) {
+            console.warn(`[Data] Court ${urlCourt} of "${urlOrg}" not found - not showing any match.`);
+            showToast("⚠️", `Court ${urlCourt} of "${urlOrg}" not found.`);
+        }
+    }
+
     // Create scoreboard immediately
     scoreboard = new Scoreboard(type, $('.scoreboard'), channelSelection, themeSelection);
+
+    // Spectator view: bar, overlay buttons and the shared login (for the input panel link)
+    if (type === 'output' && themes[scoreboard.theme]?.spectator) {
+        import("./spectator.js?v=4").then(({ initSpectator }) => initSpectator(scoreboard, {
+            org: urlOrg, court: urlCourt, channel: channelSelection,
+        }));
+    }
 
     // Wait for authentication and set user for input type
     if (type === 'input') {
         await handleAuthentication(scoreboard);
     }
-
-    // Close toast message
-    $('.banner_close_button').click(() => {
-        $banner.fadeOut(100);
-    });
 });
 
 // ========================================= Data Functions ===================================== //
 
-export async function readData(channel) {
-    if (AUTH_DEBUG) console.log("[Data] readData start, channel:", channel);
-    try {
-        const matchRef = ref(db, `match-${channel}`);
-        const matchData = await get(matchRef);
-        if (AUTH_DEBUG) console.log("[Data] readData ok, channel:", channel);
-        return matchData.val();
-    } catch (err) {
-        if (AUTH_DEBUG) console.warn("[Data] readData error, channel:", channel, err?.code || err?.message, err);
-        throw err;
-    }
+/**
+ * Live listener on match-<channel>: Firebase keeps a WebSocket connection open
+ * and only calls onData when something actually changed (plus once right away
+ * with the current state). Own writes also come back locally right away,
+ * without a round trip to the server.
+ * @returns {Function} Unsubscribe function that detaches the listener
+ */
+export function subscribeToMatch(channel, onData) {
+    if (AUTH_DEBUG) console.log("[Data] subscribeToMatch, channel:", channel);
+    return onValue(ref(db, `match-${channel}`), (snapshot) => {
+        onData(snapshot.val());
+    }, (err) => {
+        console.warn("[Data] subscribeToMatch error, channel:", channel, err?.code || err?.message, err);
+    });
 }
 
-// Kurzer Cache für users – vermeidet mehrfache langsame Reads und nutzt Preload
-const USERS_CACHE_TTL_MS = 60_000; // 1 Minute
-let _usersCache = { data: null, timestamp: 0 };
-
-async function getUsers(useCache = true) {
-    const now = Date.now();
-    if (useCache && _usersCache.data !== null && now - _usersCache.timestamp < USERS_CACHE_TTL_MS) {
-        if (AUTH_DEBUG) console.log("[Auth] getUsers aus Cache");
-        return _usersCache.data;
-    }
-    if (AUTH_DEBUG) console.log("[Auth] getUsers start (Netzwerk)");
-    const usersData = await get(ref(db, 'users'));
-    const val = usersData.val();
-    _usersCache = { data: val, timestamp: Date.now() };
-    if (AUTH_DEBUG) console.log("[Auth] getUsers ok");
-    return val;
-}
-
-/** Users im Hintergrund laden (z. B. wenn Login-Formular erscheint), damit der erste echte getUsers() schnell ist. */
-function preloadUsers() {
-    getUsers(false).catch(() => {});
-}
-
+/** Multi-path update at the root. Resolves to true if it was saved. */
 export async function writeData(newData) {
     try {
         await update(ref(db), newData);
         console.log("Data updated successfully.");
+        return true;
     } catch (error) {
         console.error("Error updating user data:", error);
+        if (error?.code === 'PERMISSION_DENIED') {
+            showToast("❌", "Not saved - this account has no write access to this court.");
+        }
+        return false;
     }
 }
+
+/** Events kept per match: everything before the last reset is dropped, and at most this many after it. */
+const EVENT_HISTORY_MAX = 1000;
+
+/** event_history as an array - Firebase hands back an object instead once indices have gaps. */
+export function normalizeEventHistory(value) {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (value && typeof value === 'object') {
+        return Object.keys(value).sort((a, b) => Number(a) - Number(b)).map((key) => value[key]).filter(Boolean);
+    }
+    return [];
+}
+
+/**
+ * Changes match-<channel>/event_history atomically: `mutate` gets the current
+ * list (from the server, re-run if another device wrote in between) and
+ * changes it in place. Two operators on the same court therefore never
+ * overwrite each other's events, unlike writing the whole list. Resolves to
+ * true if it was saved.
+ */
+export async function changeEventHistory(channel, mutate) {
+    try {
+        await runTransaction(ref(db, `match-${channel}/event_history`), (current) => {
+            const list = normalizeEventHistory(current);
+            mutate(list);
+            let lastReset = -1;
+            list.forEach((event, index) => { if (event.type === 'reset') lastReset = index; });
+            const kept = list.slice(Math.max(lastReset, 0));
+            return kept.slice(-EVENT_HISTORY_MAX);
+        });
+        return true;
+    } catch (error) {
+        console.error("Error updating the event history:", error);
+        return false;
+    }
+}
+
+/**
+ * Calls onChange('connecting' | 'online' | 'offline') whenever the connection
+ * to Firebase changes. Writes made while offline are kept and sent once it's
+ * back - but only as long as the tab stays open.
+ */
+/** A round trip slower than this (or a ping that doesn't answer in time) counts as a poor connection. */
+const POOR_RTT_MS = 1000;
+const PING_TIMEOUT_MS = 3000;
+const PING_INTERVAL_MS = 8000;
+
+export function watchConnection(onChange) {
+    let connected = false;
+    let wasConnected = false;
+    let poor = false;
+    let last = null;
+    const report = () => {
+        const state = connected ? (poor ? 'poor' : 'online') : (wasConnected || !navigator.onLine ? 'offline' : 'connecting');
+        if (state !== last) onChange(last = state);
+    };
+
+    // Firebase's own view: socket to the database up or not
+    onValue(ref(db, '.info/connected'), (snapshot) => {
+        connected = snapshot.val() === true;
+        if (connected) wasConnected = true;
+        report();
+    });
+    // The first "not connected" right after loading only means "not yet"
+    setTimeout(() => { wasConnected = true; report(); }, 5000);
+
+    // The browser notices a lost network faster than the socket does
+    window.addEventListener('offline', () => { connected = false; wasConnected = true; report(); });
+    window.addEventListener('online', report);
+
+    // Quality: time a tiny read now and then (orgs/__ping doesn't exist and
+    // nothing listens to it, so it always goes to the server), plus the
+    // browser's own estimate where there is one (Chrome)
+    const ping = async () => {
+        if (!connected) return;
+        const started = performance.now();
+        let rtt;
+        try {
+            await withTimeout(get(ref(db, 'orgs/__ping')), PING_TIMEOUT_MS);
+            rtt = performance.now() - started;
+        } catch {
+            rtt = Infinity;
+        }
+        const slowNetwork = ['slow-2g', '2g'].includes(navigator.connection?.effectiveType);
+        poor = rtt > POOR_RTT_MS || slowNetwork;
+        report();
+    };
+    setInterval(ping, PING_INTERVAL_MS);
+    navigator.connection?.addEventListener?.('change', ping);
+    report();
+}
+
+/** One-off read of a path, null if it doesn't exist. */
+export async function readData(path) {
+    return (await get(ref(db, path))).val();
+}
+
+export { serverTimestamp };
 
 // Shared timeout/medical/break timer, synced through match-<channel>/timer -
 // same node the LED scoreboard firmware and its manager server read/write
@@ -133,215 +271,138 @@ export async function writeData(newData) {
 // (this page's own output display, the LED board, the manager server)
 // computes "time remaining" against the same clock regardless of whose
 // device's local clock started it.
-export async function writeTimerState(channel, type) {
+// `team` ('a'/'b') marks which team called a timeout/medical; always written
+// (null deletes it) so a team from a previous timer never lingers. The LED
+// firmware and manager bridge only read `type`, and PUT the node without a
+// team - see Scoreboard.js's getActiveTimerTeam() for that fallback.
+export async function writeTimerState(channel, type, team = null) {
     try {
-        if (type) {
-            await update(ref(db), {
-                [`/match-${channel}/timer/type`]: type,
-                [`/match-${channel}/timer/started_at`]: serverTimestamp(),
-            });
-        } else {
-            await remove(ref(db, `match-${channel}/timer`));
-        }
+        // updated_at: the Playerzone hides a live game whose court hasn't changed for a while
+        await update(ref(db), type ? {
+            [`/match-${channel}/timer/type`]: type,
+            [`/match-${channel}/timer/team`]: team || null,
+            [`/match-${channel}/timer/started_at`]: serverTimestamp(),
+            [`/match-${channel}/updated_at`]: serverTimestamp(),
+        } : {
+            [`/match-${channel}/timer`]: null,
+            [`/match-${channel}/updated_at`]: serverTimestamp(),
+        });
         console.log("Timer state updated:", type || "(cleared)");
     } catch (error) {
         console.error("Error updating timer state:", error);
+        if (error?.code === 'PERMISSION_DENIED') {
+            showToast("❌", "Timer not saved - this account has no write access to this court.");
+        }
     }
 }
 
 // ========================================= Global Functions ===================================== //
 
+/** Shows/hides the login and locks the page behind it (no scrolling, clicking or tabbing into it). */
+function setAuthVisible(visible) {
+    $('#auth').toggle(visible);
+    document.documentElement.classList.toggle('auth_open', visible);
+    $('.wrapper.scoreboard').prop('inert', visible);
+}
+
 async function handleAuthentication(scoreboard) {
-    preloadUsers(); // Sofort starten, damit getUsers() später oft aus dem Cache kommt
-    return new Promise((resolve) => {
-        onAuthStateChanged(auth, async (firebaseUser) => {
-            if (AUTH_DEBUG) console.log("[Auth] onAuthStateChanged", firebaseUser ? "user=" + firebaseUser.email : "user=null", "loginInProgressFromForm=" + loginInProgressFromForm);
+    // Set on form login, only so that "Signed in as" is shown afterwards
+    let signedInViaForm = false;
 
-            if (firebaseUser) {
-                // Wenn gerade Form-Login läuft: UI-Update und startDataSync macht der Form-Handler (vermeidet Race + doppelte Aufrufe)
-                if (loginInProgressFromForm) {
-                    if (AUTH_DEBUG) console.log("[Auth] onAuthStateChanged: skip (Form-Login übernimmt)");
-                    return;
-                }
-                if (AUTH_DEBUG) console.log("[Auth] onAuthStateChanged: Session vorhanden, lade User-Daten…");
-                const users = await getUsers();
-                const dbUser = findUserByAccountMail(users, firebaseUser.email);
-                if (dbUser) {
-                    const authChannels = typeof dbUser.channels === 'string'
-                        ? dbUser.channels.split(',') : dbUser.channels;
-                    loggedInUser = new User(dbUser.key, authChannels, dbUser.display_name);
-                    scoreboard.user = loggedInUser;
-                    scoreboard.updateAvailableChannels();
-                    scoreboard.startDataSync();
-                    $('#auth').hide();
-                    $userString.html(dbUser.display_name);
-                    $logoutButton.html('Logout');
-                    if (AUTH_DEBUG) console.log("[Auth] onAuthStateChanged: eingeloggt (Session), startDataSync aufgerufen");
-                    resolve(loggedInUser);
-                } else {
-                    showToast("⚠️", "No account found for this email.");
-                    signOut(auth);
-                }
-            } else {
-                loggedInUser = null;
-                loginInProgressFromForm = false;
-                $('#auth').show();
-                preloadUsers(); // Users im Hintergrund laden, damit getUsers() beim Klick auf Login oft aus dem Cache kommt
-                if (AUTH_DEBUG) console.log("[Auth] onAuthStateChanged: kein User, Login-Formular angezeigt");
-
-                $('form#login').off('submit').on('submit', async function (e) {
-                    e.preventDefault();
-                    const $submitBtn = $('#auth #submit');
-                    const originalText = $submitBtn.text();
-                    $submitBtn.prop('disabled', true).addClass('is-loading').text('Signing in…');
-                    loginInProgressFromForm = true;
-                    if (AUTH_DEBUG) console.log("[Auth] Form Submit: Login start…");
-
-                    try {
-                        const usernameOrEmail = $('#auth #username').val().trim();
-                        const password = $('#auth #password').val();
-                        loggedInUser = await login(usernameOrEmail, password);
-
-                        if (loggedInUser) {
-                            $('#auth').hide();
-                            scoreboard.user = loggedInUser;
-                            scoreboard.updateAvailableChannels();
-                            scoreboard.startDataSync();
-                            $userString.html(loggedInUser.displayName);
-                            $logoutButton.html('Logout');
-                            if (AUTH_DEBUG) console.log("[Auth] Form Submit: Login OK, startDataSync aufgerufen");
-                            showToast("✅", `Signed in as ${loggedInUser.displayName}`, 2000);
-                            resolve(loggedInUser);
-                        }
-                    } finally {
-                        loginInProgressFromForm = false;
-                        $submitBtn.prop('disabled', false).removeClass('is-loading').text(originalText);
-                        if (AUTH_DEBUG) console.log("[Auth] Form Submit: Ende (loginInProgressFromForm=false)");
-                    }
-                });
+    // The form only signs in - loading the account and switching the UI happens
+    // in watchAccount(), whether the session is new or from an earlier visit
+    // (also one started on the overview - the session is shared, see auth.js).
+    $('form#login').on('submit', async function (e) {
+        e.preventDefault();
+        const $submitBtn = $('#auth #submit');
+        const originalText = $submitBtn.text();
+        $submitBtn.prop('disabled', true).addClass('is-loading').text('Signing in…');
+        // Set beforehand: watchAccount() often fires before login() returns
+        signedInViaForm = true;
+        try {
+            const error = await login($('#auth #email').val().trim(), $('#auth #password').val());
+            if (error) {
+                signedInViaForm = false;
+                showToast("❌", error);
             }
+        } finally {
+            $submitBtn.prop('disabled', false).removeClass('is-loading').text(originalText);
+        }
+    });
+
+    return new Promise((resolve) => {
+        watchAccount((user, reason) => {
+            if (AUTH_DEBUG) console.log("[Auth] watchAccount", user ? "user=" + user.email : reason);
+
+            if (reason === 'signed-out') {
+                // Also covers an expired/revoked session without reload: drop the previous user's courts
+                loggedInUser = null;
+                scoreboard.user = null;
+                scoreboard.updateAvailableChannels();
+                $userString.text('');
+                $('header #user_email').text('');
+                $('header #admin_tag').hide();
+                setAuthVisible(true);
+                scoreboard.setInputLoading(false);
+                return;
+            }
+
+            if (!user || user.courts.length === 0) {
+                showToast("⚠️", user
+                    ? "No courts are assigned to this account yet."
+                    : reason === 'error' ? "Couldn't load this account - please try again."
+                        : "This account isn't linked to an organisation yet.");
+                signOut(auth);
+                return;
+            }
+
+            loggedInUser = user;
+            scoreboard.user = user;
+            scoreboard.updateAvailableChannels();
+            scoreboard.startDataSync();
+            scoreboard.playerzonePicker?.start();
+            startConnectionStatus();
+            setAuthVisible(false);
+            $userString.text(user.displayName);
+            $('header #user_email').text(user.email);
+            $('header #admin_tag').toggle(user.isAdmin);
+            if (signedInViaForm) showToast("✅", `Signed in as ${user.displayName}`, 2000);
+            if (AUTH_DEBUG) console.log("[Auth] eingeloggt:", user.orgId, user.isAdmin ? "(admin)" : "", user.channels);
+            resolve(user);
         });
     });
 }
 
-/** Findet den DB-User anhand der Firebase-Auth-E-Mail (account_mail). */
-function findUserByAccountMail(users, email) {
-    if (!users || !email) return null;
-    for (const [key, val] of Object.entries(users)) {
-        if (val.account_mail === email)
-            return {
-                key,
-                channels: val.channels,
-                display_name: val.display_name || key
-            };
-    }
-    return null;
+/** Connection badge in the input panel's header: [icon, label, tooltip] per state. */
+const CONNECTION_STATES = {
+    connecting: ['wifi', 'Connecting…', 'Connecting to the database'],
+    online: ['wifi', 'Connected', 'Connected - changes are saved right away'],
+    poor: ['wifi_2_bar', 'Poor connection', 'Slow connection - changes may take a moment to be saved'],
+    offline: ['wifi_off', 'No connection', 'No connection - changes are saved once it is back, as long as this tab stays open'],
+};
+
+export function renderConnectionStatus(state) {
+    const [icon, label, title] = CONNECTION_STATES[state];
+    const $status = $('#connection_status');
+    $status.attr('data-state', state).attr('title', title).removeClass('hidden');
+    $status.find('.connection_icon').text(icon);
+    $status.find('.connection_label').text(label);
 }
 
-async function signUp(email, password) {
-    const users = await getUsers();
-    if (users && users[email]) {
-        showToast("❌", "Username already exists");
-        return null;
-    }
-
-    try {
-        await set(ref(db, `users/${email}`), {
-            email: email,
-            password: password // Store password (not hashed)
-        });
-        console.log(`User ${email} registered.`);
-    } catch (error) {
-        console.error("Error during registration:", error);
-        showToast("⚠️", "Registration failed: " + error.message);
-        throw error;
-    }
-}
-
-/** Max. Wartezeit für Firebase Auth (danach Abbruch mit Timeout-Meldung). */
-const AUTH_TIMEOUT_MS = 10_000;
-
-function withTimeout(promise, ms, timeoutMessage = 'Zeitüberschreitung') {
-    return Promise.race([
-        promise,
-        new Promise((_, reject) =>
-            setTimeout(() => reject(Object.assign(new Error(timeoutMessage), { code: 'auth/timeout' })), ms)
-        )
-    ]);
-}
-
-/**
- * Login per Firebase Auth (E-Mail + Passwort).
- * usernameOrEmail: E-Mail oder Username (DB-Key); bei Username wird account_mail aus der DB verwendet.
- */
-async function login(usernameOrEmail, password) {
-    const users = await getUsers();
-    let email;
-
-    if (usernameOrEmail.includes('@')) {
-        email = usernameOrEmail.trim();
-    } else {
-        const dbEntry = users && users[usernameOrEmail];
-        if (!dbEntry || !dbEntry.account_mail) {
-            showToast("❌", "User not found. Try your email address instead.");
-            return null;
-        }
-        email = dbEntry.account_mail.trim();
-    }
-
-    if (AUTH_DEBUG) console.log("[Auth] login: signInWithEmailAndPassword start, email=" + email);
-    try {
-        await withTimeout(
-            signInWithEmailAndPassword(auth, email, password),
-            AUTH_TIMEOUT_MS,
-            'Sign-in is taking too long.'
-        );
-        if (AUTH_DEBUG) console.log("[Auth] login: signInWithEmailAndPassword ok");
-    } catch (err) {
-        if (AUTH_DEBUG) console.warn("[Auth] login: signInWithEmailAndPassword error", err?.code, err?.message);
-        if (err.code === 'auth/timeout') {
-            showToast("⏱️", "Sign-in is taking too long. Please try again.");
-        } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-            showToast("❌", "Wrong email or password. Please try again.");
-        } else {
-            showToast("❌", err.message || "Sign-in failed.");
-        }
-        return null;
-    }
-
-    const dbUser = findUserByAccountMail(users, email);
-    if (!dbUser) {
-        showToast("⚠️", "No account found for this email.");
-        signOut(auth);
-        return null;
-    }
-
-    const authChannels = typeof dbUser.channels === 'string' ? dbUser.channels.split(',') : dbUser.channels;
-    return new User(dbUser.key, authChannels, dbUser.display_name);
-}
-
-export function showToast(emoji, message, duration) {
-    try {
-        // Set the animation-duration of the cooldown ring to the show duration
-        const showDuration = duration || 5000;
-        $banner.find('.icon').html(emoji);
-        $banner.find('.progress-ring_circle').css('animation-duration', `${showDuration / 1000}s`);
-        $banner.find('p').html(message);
-        $banner.fadeIn(100);
-        
-        // Fade out banner after the set show duration if not already closed manually
-        setTimeout(() => {
-            $banner.fadeOut(100);
-        }, showDuration);
-    } catch (error) {
-        console.log("Banner shown: " + message);
-    }
+/** Started once after login. */
+let connectionStatusStarted = false;
+function startConnectionStatus() {
+    if (connectionStatusStarted) return;
+    connectionStatusStarted = true;
+    watchConnection(renderConnectionStatus);
 }
 
 // ========================================= Helper Functions ===================================== //
 
-function isNumeric(value) {
-    return /^-?\d+$/.test(value);
+// The only easing the scoreboard uses (chart slide in/out) - defined here
+// instead of loading all of jQuery UI for it.
+if (typeof $ !== 'undefined' && !$.easing.easeOutCubic) {
+    $.easing.easeOutCubic = (p) => 1 - Math.pow(1 - p, 3);
 }
 
 export function rgb2hex(rgb) {

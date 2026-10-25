@@ -1,19 +1,21 @@
 <!DOCTYPE html>
-<html lang="en" type="input">
+<html lang="en" type="input" class="is-loading">
 
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scoreboards</title>
-    <link rel="stylesheet" href="css/base.css?v=3">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script type="module" src="js/firebase_config.js?v=3"></script>
-    <script type="module" src="js/main.js?v=3"></script>
+    <link rel="stylesheet" href="css/base.css?v=4">
+    <link rel="stylesheet" href="css/toast.css?v=4">
+    <link rel="stylesheet" href="css/whats-new.css?v=4">
+    <script type="module" src="js/whatsNew.js?v=4"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha384-vtXRMe3mGCbOeY7l30aIg8H9p3GdeSe4IFlP6G8JMa7o7lXvnz3GFKzPxzJdPfGK" crossorigin="anonymous"></script>
+    <script type="module" src="js/firebase_config.js?v=4"></script>
+    <script type="module" src="js/main.js?v=4"></script>
 
     <!-- <link rel="stylesheet" href="css/style-v1.css"> -->
-    <link rel="stylesheet" href="css/style_input.css?v=3">
+    <link rel="stylesheet" href="css/style_input.css?v=4">
 
 </head>
 
@@ -24,58 +26,57 @@
             <div class="inner">
                 <h3>Please Login</h3>
                 <form id="login">
-                    <label for="username">Username or email</label>
-                    <input type="text" name="username" id="username" placeholder="Username or email">
+                    <label for="email">Email</label>
+                    <input type="email" name="email" id="email" autocomplete="username">
                     <label for="password">Password</label>
-                    <input type="password" name="password" id="password" placeholder="Password">
-                    <button id="submit" type="submit">Login</button>
+                    <input type="password" name="password" id="password" autocomplete="current-password">
+                    <div class="auth_actions">
+                        <a class="auth_back" href="./">Just watching? See all matches</a>
+                        <button id="submit" type="submit">Login</button>
+                    </div>
                 </form>
             </div>
         </div>
     </div>
 
-    <div id="info_banner" class="banner" style="display:none">
-        <div class="info">
-            <span class="icon">👍</span>
-            <p>You can change your preference anytime using the cookie icon in the bottom right.</p>
-        </div>
-        <svg class="progress-ring banner_close_button" width="32" height="32">
-            <circle class="progress-ring_circle" stroke-width="2" fill="transparent" r="10" cx="16" cy="16" />
-            <line stroke="#222222" stroke-width="2" stroke-linecap="round" x1="19" y1="13" x2="13" y2="19">
-            </line>
-            <line stroke="#222222" stroke-width="2" stroke-linecap="round" x1="13" y1="13" x2="19" y2="19">
-            </line>
-        </svg>
+    <!-- Toast (js/toast.js, css/toast.css) - the same on the overview -->
+    <div id="toast" class="toast" role="status" aria-live="polite">
+        <span class="toast_icon" aria-hidden="true"></span>
+        <p class="toast_text"></p>
     </div>
 
 
     <div class="wrapper scoreboard">
         <div class="inner">
             <header>
-                <h1>Scoreboard</h1>
+                <!-- Input panel | Live matches - the overview (index.html) has the same pair the other way round -->
+                <nav class="header_left" aria-label="Pages">
+                    <h1>Input Panel <span class="page_spinner" role="status" aria-label="Loading"></span></h1>
+                    <a class="tab_link" href="./" title="All matches of every court">
+                        <i class="material-symbols-rounded" aria-hidden="true">grid_view</i>Live matches
+                    </a>
+                </nav>
                 <div class="header_right">
                     <div class="container">
                         <div class="setting_entry input_container horizontal">
-                            <span>Channel:</span>
-                            <select id="channel">
-                                <option value="1">1</option>
-                                <option value="2">2</option>
-                                <option value="3">3</option>
-                                <option value="4">4</option>
-                                <option value="5">5</option>
-                                <option value="6">6</option>
-                            </select>
+                            <span>Court:</span>
+                            <!-- Filled after login: one option per court, value = internal channel -->
+                            <select id="channel"></select>
                         </div>
+                        <span id="connection_status" class="connection_status hidden" data-state="connecting" role="status">
+                            <i class="material-symbols-rounded connection_icon" aria-hidden="true">wifi</i>
+                            <span class="connection_label"></span>
+                        </span>
                     </div>
                     <div class="container">
                         <div class="user">
-                            <!-- <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect width="40" height="40" rx="20" fill="var(--light-3)"/>
-                                <path d="M20 20C18.9 20 17.9583 19.6083 17.175 18.825C16.3917 18.0417 16 17.1 16 16C16 14.9 16.3917 13.9583 17.175 13.175C17.9583 12.3917 18.9 12 20 12C21.1 12 22.0417 12.3917 22.825 13.175C23.6083 13.9583 24 14.9 24 16C24 17.1 23.6083 18.0417 22.825 18.825C22.0417 19.6083 21.1 20 20 20ZM12 28V25.2C12 24.6333 12.1458 24.1125 12.4375 23.6375C12.7292 23.1625 13.1167 22.8 13.6 22.55C14.6333 22.0333 15.6833 21.6458 16.75 21.3875C17.8167 21.1292 18.9 21 20 21C21.1 21 22.1833 21.1292 23.25 21.3875C24.3167 21.6458 25.3667 22.0333 26.4 22.55C26.8833 22.8 27.2708 23.1625 27.5625 23.6375C27.8542 24.1125 28 24.6333 28 25.2V28H12ZM14 26H26V25.2C26 25.0167 25.9542 24.85 25.8625 24.7C25.7708 24.55 25.65 24.4333 25.5 24.35C24.6 23.9 23.6917 23.5625 22.775 23.3375C21.8583 23.1125 20.9333 23 20 23C19.0667 23 18.1417 23.1125 17.225 23.3375C16.3083 23.5625 15.4 23.9 14.5 24.35C14.35 24.4333 14.2292 24.55 14.1375 24.7C14.0458 24.85 14 25.0167 14 25.2V26ZM20 18C20.55 18 21.0208 17.8042 21.4125 17.4125C21.8042 17.0208 22 16.55 22 16C22 15.45 21.8042 14.9792 21.4125 14.5875C21.0208 14.1958 20.55 14 20 14C19.45 14 18.9792 14.1958 18.5875 14.5875C18.1958 14.9792 18 15.45 18 16C18 16.55 18.1958 17.0208 18.5875 17.4125C18.9792 17.8042 19.45 18 20 18Z" fill="#1C1B1F"/>
-                            </svg> -->
-                            <span id="username"></span>
+                            <div class="user_details">
+                                <span id="username"></span>
+                                <span id="user_email"></span>
+                            </div>
+                            <span id="admin_tag" style="display: none;">Admin</span>
                         </div>
-                        <button id="logout" class="primary">Logout</button>
+                        <button id="logout" class="account_logout" title="Log out" aria-label="Log out"><i class="material-symbols-rounded" aria-hidden="true">logout</i></button>
                     </div>
                 </div>
             </header>
@@ -86,44 +87,77 @@
                     <div class="inner">
                         <div class="input_container">
                             <label for="Occasion">Event Name</label>
-                            <input type="text" class="text" id="Occasion" value="Occasion" fb-data="tournament_name" placeholder="Event Name">
-                        </div>
-                        <div class="input_group">
-                            <div class="input_container">
-                                <label for="Game_Description">Game Description</label>
-                                <div class="input-with-trailing-icon">
-                                    <input type="text" class="text" id="Game_Description" value="" placeholder="e.g. Semifinal" fb-data="phase">
-                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
-                                </div>
+                            <div class="input-with-trailing-icon">
+                                <input type="text" class="text" id="Occasion" value="Occasion" fb-data="tournament_name" placeholder="Event Name">
+                                <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
                             </div>
-                            <div class="input_group">
-                                <div class="input_container">
-                                    <label for="Max_Sets">Game Mode</label>
-                                    <input type="text" id="Max_Sets" value="3" fb-data="game_settings.set_mode" placeholder="e.g. 1 Set, BO3">
-                                </div>
-                                <div class="input_container">
-                                    <label for="win_points">Win Score</label>
-                                    <input type="number" id="win_points" value="15" min="1" max="50" fb-data="game_settings.win_points">
-                                </div>
-                                <div class="input_container">
-                                    <label for="Hardcap">Hardcap</label>
-                                    <input type="number" id="Hardcap" value="21" min="1" max="100" fb-data="game_settings.hardcap">
-                                </div>
+                        </div>
+                        <div class="input_container">
+                            <label for="Game_Description">Game Description</label>
+                            <div class="input-with-trailing-icon">
+                                <input type="text" class="text" id="Game_Description" value="" placeholder="e.g. Semifinal" fb-data="phase">
+                                <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                            </div>
+                        </div>
+                        <div class="input_group game_settings_row">
+                            <div class="input_container">
+                                <label for="Max_Sets">Game Mode</label>
+                                <input type="text" id="Max_Sets" value="3" fb-data="game_settings.set_mode" placeholder="e.g. 1 Set, BO3">
+                            </div>
+                            <div class="input_container">
+                                <label for="win_points">Win Score</label>
+                                <input type="number" id="win_points" value="15" min="1" max="50" fb-data="game_settings.win_points">
+                            </div>
+                            <div class="input_container">
+                                <label for="Hardcap">Hardcap</label>
+                                <input type="number" id="Hardcap" value="21" min="1" max="100" fb-data="game_settings.hardcap">
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="container data_import">
+                <div class="container playerzone">
                     <div class="heading_w_icon">
-                        <i class="material-symbols-rounded">place_item</i>
-                        <h3>Import Data (JSON)</h3>
+                        <img class="pz_logo" src="img/pz_logo.png" alt="">
+                        <h3>Connect Playerzone Game</h3>
                     </div>
                     <div class="inner">
-                        <div class="input_container">
-                            <label for="Occasion">Data from Playerzone</label>
-                            <textarea type="text" class="text" id="Data_Import" value="" placeholder="Paste data here..."></textarea>
+                        <!-- Game currently linked to this court (match-<channel>/playerzone) -->
+                        <div class="pz_linked hidden">
+                            <div class="pz_linked_details">
+                                <span class="pz_linked_teams"></span>
+                                <span class="pz_linked_id"></span>
+                            </div>
+                            <button id="pz_end_game" class="small neutral" title="Remove this game from the Playerzone live view">End game</button>
                         </div>
-                        <button id="import_data" class="primary">Import Data</button>
+                        <!-- Dropdowns are built by PlayerzoneDropdown (js/playerzone.js) -->
+                        <div class="pz_field">
+                            <label for="pz_event_trigger">Tournament</label>
+                            <div class="pz_dropdown" id="pz_event"></div>
+                        </div>
+                        <div class="pz_field">
+                            <label for="pz_phase_trigger">Phase</label>
+                            <div class="pz_dropdown" id="pz_phase"></div>
+                        </div>
+                        <div class="pz_games_section hidden">
+                            <div class="pz_games_header">
+                                <button type="button" class="pz_games_toggle pz_games_title" aria-expanded="true">
+                                    <span>Games</span>
+                                    <span class="pz_games_count"></span>
+                                </button>
+                                <div class="pz_games_actions">
+                                    <button type="button" id="pz_reload" class="small neutral" title="Reload games"><i class="material-symbols-rounded">refresh</i></button>
+                                    <button type="button" class="pz_games_toggle pz_games_chevron small neutral" aria-expanded="true" title="Show / hide games"><i class="material-symbols-rounded">expand_more</i></button>
+                                </div>
+                            </div>
+                            <div class="pz_games"></div>
+                        </div>
+                        <div class="input_container pz_manual">
+                            <label for="pz_game_id">Or manually connect with PZ Game ID</label>
+                            <div class="pz_id_row">
+                                <input type="text" id="pz_game_id" inputmode="numeric" placeholder="e.g. 323752" autocomplete="off">
+                                <button id="pz_load_id" class="primary">Load</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -133,6 +167,10 @@
                     <div class="header_row">
                         <h3>Scores</h3>
                         <div class="set_counter_container">
+                            <!-- Countdown for a timer with no team button of its own (break between sets, or a
+                                 timeout started from the LED board/pedal) - hidden otherwise. Click to cancel,
+                                 like the team buttons. See Scoreboard.js's updateTimerDisplay(). -->
+                            <button id="other_timer" class="small neutral team_timer running hidden"><span class="timer_gauge"></span><span class="team_timer_name"></span><span class="team_timer_info"></span></button>
                             <div class="input_container horizontal">
                                 <label for="Set_Count">Active Set:</label>
                                 <input type="number" id="Set_Count" class="small" min="1" max="7" fb-data="active_set">
@@ -189,6 +227,20 @@
                                 </div>
                             </div>
                             <div class="points">
+                                <!-- Per-team timeouts - see Scoreboard.js's startTimer(team)/updateTeamTimerButtons().
+                                     "N left" and the running countdown + gauge are filled in by JS. Fixed widths so the
+                                     row never resizes while a countdown runs. Clicking the running one cancels it
+                                     (it shows "Cancel" on hover). -->
+                                <div class="team_timers">
+                                    <div class="team_timer_group">
+                                        <button class="small neutral team_timer" timer-type="timeout" team="a"><span class="timer_gauge"></span><i class="material-symbols-rounded team_timer_icon" aria-hidden="true">timer</i><span class="team_timer_name">Timeout</span><span class="team_timer_info"></span></button>
+                                        <button class="small negative team_timer" timer-type="medical" team="a"><span class="timer_gauge"></span><i class="material-symbols-rounded team_timer_icon" aria-hidden="true">medical_services</i><span class="team_timer_name">Medical</span><span class="team_timer_info"></span></button>
+                                    </div>
+                                    <div class="team_timer_group">
+                                        <button class="small neutral team_timer" timer-type="timeout" team="b"><span class="timer_gauge"></span><i class="material-symbols-rounded team_timer_icon" aria-hidden="true">timer</i><span class="team_timer_name">Timeout</span><span class="team_timer_info"></span></button>
+                                        <button class="small negative team_timer" timer-type="medical" team="b"><span class="timer_gauge"></span><i class="material-symbols-rounded team_timer_icon" aria-hidden="true">medical_services</i><span class="team_timer_name">Medical</span><span class="team_timer_info"></span></button>
+                                    </div>
+                                </div>
                                 <div class="group_score">
                                     <input type="number" class="counter score" id="A_Score_Team" value="0" min="0" fb-data="score.squad_score.team_a_score">
                                     <input type="number" class="counter score" id="B_Score_Team" value="0" min="0" fb-data="score.squad_score.team_b_score">
@@ -250,7 +302,7 @@
                             <div class="right">
                                 <div class="starting_players_container">
                                     <div class="starting_team_container">
-                                        <label>Starting Server:</label>
+                                        <label>Start Serve:</label>
                                         <div class="starting_team_sets">
                                             <div class="starting_team_selector set">
                                                 <select class="small" id="starting_server_1" fb-data="score.set_1.starting_server">
@@ -311,7 +363,7 @@
                                         </div>
                                     </div>
                                     <div class="starting_team_container">
-                                        <label>Starting Receiver:</label>
+                                        <label>Start Receive:</label>
                                         <div class="starting_team_sets">
                                             <div class="starting_team_selector set">
                                                 <select class="small" id="starting_receiver_1" fb-data="score.set_1.starting_receiver">
@@ -385,18 +437,24 @@
                     <h3>Display Options</h3>
                     <div class="inner">
                         
-                        <div class="setting_entry boolean">
-                            <label>Colors:</label>
-                            <label class="toggle-switch" for="Show_Color">
-                                <input type="checkbox" id="Show_Color" fb-data="admin_settings.show_color">
-                            </label>
-                        </div>
-
-                        <div class="setting_entry boolean">
-                            <label>Show as Flags:</label>
-                            <label class="toggle-switch" for="Show_Flag">
-                                <input type="checkbox" id="Show_Flag" fb-data="admin_settings.show_flag">
-                            </label>
+                        <div class="setting_entry boolean team_indicator">
+                            <label>Team Indicator:</label>
+                            <div class="right">
+                                <select id="Team_Indicator_Type" title="What to show next to the team names">
+                                    <option value="show_color">Color</option>
+                                    <option value="show_flag">Flag</option>
+                                    <option value="show_club_logo">Club Logos</option>
+                                    <option value="show_team_logo">Team Logo</option>
+                                </select>
+                                <label class="toggle-switch" for="Show_Team_Indicator">
+                                    <input type="checkbox" id="Show_Team_Indicator">
+                                </label>
+                                <!-- The stored settings - at most one is on, set by the select + toggle above -->
+                                <input type="checkbox" id="Show_Color" fb-data="admin_settings.show_color" hidden>
+                                <input type="checkbox" id="Show_Flag" fb-data="admin_settings.show_flag" hidden>
+                                <input type="checkbox" id="Show_Club_Logo" fb-data="admin_settings.show_club_logo" hidden>
+                                <input type="checkbox" id="Show_Team_Logo" fb-data="admin_settings.show_team_logo" hidden>
+                            </div>
                         </div>
 
                         <div class="setting_entry boolean">
@@ -408,9 +466,16 @@
             
                         <div class="setting_entry boolean">
                             <label>Squad Score:</label>
-                            <label class="toggle-switch" for="Show_Team_Score">
-                                <input type="checkbox" id="Show_Team_Score" fb-data="admin_settings.show_group_score">
-                            </label>
+                            <div class="right">
+                                <!-- Automatic: counted from the subgames of the linked Playerzone squad game -->
+                                <select id="Squad_Score_Mode" fb-data="admin_settings.group_score_mode" title="Type the squad score in, or count it from the squad game's subgames on the other courts">
+                                    <option value="manual">Manual</option>
+                                    <option value="auto">Automatic</option>
+                                </select>
+                                <label class="toggle-switch" for="Show_Team_Score">
+                                    <input type="checkbox" id="Show_Team_Score" fb-data="admin_settings.show_group_score">
+                                </label>
+                            </div>
                         </div>
             
                         <div class="setting_entry boolean">
@@ -467,16 +532,6 @@
                             </div>
                         </div>
 
-                        <div class="setting_entry boolean">
-                            <label>Timers:</label>
-                            <div class="right timer_buttons">
-                                <span class="timer_status hidden"></span>
-                                <button id="start_timeout" class="small neutral">Timeout</button>
-                                <button id="start_medical" class="small negative">Medical</button>
-                                <button id="cancel_timer" class="small destructive hidden">Cancel</button>
-                            </div>
-                        </div>
-
                     </div>
                 </div>
             </div>
@@ -488,11 +543,12 @@
                         <div class="setting_entry input_container">
                             <label>Theme:</label>
                             <select id="theme">
-                                <option value="full">Fullscreen</option>
+                                <option value="spectator">Spectator (big board)</option>
                                 <option value="rg">RoundnetGermany</option>
                                 <option value="france">Roundnet France</option>
                                 <option value="tops">TopsRoundnet</option>
                                 <option value="eura">EURA</option>
+                                <option value="irf">IRF Worlds</option>
                                 <option value="small">Secondary Board</option>
                             </select>
                         </div>
@@ -517,6 +573,20 @@
                                 <label for="Tournament_Logo">Tournament Logo URL</label>
                                 <div class="input-with-trailing-icon">
                                     <input type="text" class="text" id="Tournament_Logo" value="" placeholder="https://example.com/tournament-logo.png" fb-data="tournament_logo">
+                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                </div>
+                            </div>
+                            <div class="input_container">
+                                <label for="A_Team_Logo">Team A Logo URL</label>
+                                <div class="input-with-trailing-icon">
+                                    <input type="text" class="text" id="A_Team_Logo" value="" placeholder="https://example.com/team-a-logo.png" fb-data="teams_info.team_a.logo">
+                                    <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
+                                </div>
+                            </div>
+                            <div class="input_container">
+                                <label for="B_Team_Logo">Team B Logo URL</label>
+                                <div class="input-with-trailing-icon">
+                                    <input type="text" class="text" id="B_Team_Logo" value="" placeholder="https://example.com/team-b-logo.png" fb-data="teams_info.team_b.logo">
                                     <i class="material-symbols-rounded trailing-icon lock-icon" title="Lock field to prevent overwriting from manual data import">lock_open</i>
                                 </div>
                             </div>
