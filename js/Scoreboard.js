@@ -7,7 +7,8 @@ const TEAM_INDICATOR_MODES = ['show_color', 'show_flag', 'show_club_logo', 'show
 import { resolveFlag, getCountryList } from "./flags.js?v=4";
 import { historyScore, reconcileScore, recordSquadScore, cleanScoreEvents } from "./scoreHistory.js?v=4";
 // Timer durations and the set-mode convention are shared with the live overview
-import { TIMER_DURATIONS_MS, TIMER_LABELS, setModeToFormat, serveInfo, serveRotation } from "./matchStatus.js?v=4";
+import { TIMER_DURATIONS_MS, TIMER_LABELS, setModeToFormat, serveInfo, serveRotation, summarizeMatch } from "./matchStatus.js?v=4";
+import { validationStateOf, validationStatusOf, newNonce } from "./resultValidation.js?v=4";
 import { squadScoreFromResults } from "./squadGroups.js?v=4";
 import { AutoSquadScore } from "./autoSquadScore.js?v=4";
 // Compact variants for input.html's fixed-width Cancel button.
@@ -81,6 +82,9 @@ export class Scoreboard {
         this.$resetScoresButton = $('#reset_scores');
         this.$teamTimerButtons = $('button.team_timer[timer-type][team]');
         this.$otherTimerButton = $('#other_timer');
+        this.$validateResultButton = $('#validate_result');
+        this.$validationStatus = $('.result_validation_status');
+        this.resultValidation = null; // validationStateOf() of the latest data, see updateResultValidation()
         this.$timerWidget = $('.timer_widget');
         // Not the score history inside the statistics: updateScoreHistory() shows
         // its sets by the statistics type - toggled here by the active set as well,
@@ -259,6 +263,7 @@ export class Scoreboard {
                 this.remoteActiveSet = Number(data?.active_set) || null;
                 this.updatePlayerzoneLink(data);
                 this.updateAutoSquadScore();
+                this.updateResultValidation(data);
             }
             this.sanitizeStartingSelections();
             this.requestRender();
@@ -735,6 +740,9 @@ export class Scoreboard {
             this.resetScores();
         });
 
+        // End-of-match validation, see updateResultValidation()
+        this.$validateResultButton.click(() => this.validateResult());
+
         // Shared timer buttons - see writeTimerState() in main.js for the
         // RTDB side of this. Fixed durations (TIMER_DURATIONS_MS above)
         // match the LED board's own hardcoded ones, so no duration is sent.
@@ -784,6 +792,8 @@ export class Scoreboard {
      * ("Reset Scores & New Game", also offered when loading another PZ game)
      * ============================================================================== */
     resetScores() {
+        // A validation of the previous game doesn't hold for the next one
+        if (this.canWriteChannel()) writeData({ [`match-${this.channel}/result_validated`]: null });
         let $elems = $('[fb-data*="score"]:not(select)');
         $elems.val(0);
         this.active_set = 1;
@@ -874,6 +884,43 @@ export class Scoreboard {
     }
 
     /** True if the signed-in account may write the selected court. */
+    /**
+     * End-of-match validation (js/resultValidation.js): once the match is
+     * over, "Validate Result" writes the final score as result_validated -
+     * the same node the LED boards write when the players hold a pedal on
+     * their "OK? / HOLD" screen - and the tournament app's answer
+     * (rfc_result) is shown underneath.
+     */
+    updateResultValidation(data) {
+        const state = validationStateOf(data, summarizeMatch(data, Date.now()).matchOver);
+        this.resultValidation = state;
+        this.$validateResultButton.toggleClass('hidden', !state.canValidate);
+        const status = validationStatusOf(state, {
+            a: data?.teams_info?.team_a?.name,
+            b: data?.teams_info?.team_b?.name,
+        });
+        this.$validationStatus
+            .toggleClass('hidden', !status)
+            .removeClass('pending positive negative')
+            .addClass(status?.tone || '')
+            .text(status?.text || '');
+    }
+
+    async validateResult() {
+        if (!this.canWriteChannel()) {
+            showToast("❌", "You don't have access to this court");
+            return;
+        }
+        const state = this.resultValidation;
+        if (!state?.canValidate) return;
+        const score = state.sets.map(([a, b]) => `${a}-${b}`).join(', ');
+        if (!confirm(`Validate the final score ${score} with both teams? It is then sent to the tournament app.`)) return;
+        const saved = await writeData({
+            [`match-${this.channel}/result_validated`]: { nonce: newNonce(), sets: state.sets, at: serverTimestamp() },
+        });
+        if (!saved) showToast("❌", "The result could not be validated");
+    }
+
     canWriteChannel() {
         return !!(this.user && this.channel && this.user.channels.includes(Number(this.channel)));
     }

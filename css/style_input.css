@@ -1386,6 +1386,23 @@ select.small {
   height: auto;
 }
 
+/* End-of-match validation, above the reset button (js/resultValidation.js).
+   display:none instead of .hidden's collapse, see .timer_buttons .hidden. */
+.result_validation {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.result_validation .hidden {
+  display: none;
+}
+.result_validation_status {
+  font-size: .85rem;
+  text-align: center;
+}
+.result_validation_status.positive { color: var(--ui-success); }
+.result_validation_status.negative { color: var(--ui-error); }
+
 .setting_entry.boolean {
   display: flex;
   flex-direction: row;

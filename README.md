@@ -99,6 +99,9 @@ Im Input-Panel unter *Display Options → Squad Score* zwischen *Manual* und *Au
 npm run test:unit
 ```
 
+### Ergebnis bestätigen
+Ist ein Match vorbei, zeigt das Input-Panel über *Reset Scores* den Button **Validate Result**: Beide Teams bestätigen den Endstand, der dann als `match-<kanal>/result_validated` = `{ nonce, sets: [[a, b], …], at }` geschrieben wird – derselbe Knoten, den die LED-Scoreboards schreiben (Pedal halten auf „OK? / HOLD“ oder Button im Board-Portal). RoundnetFranceConnect (Turnier-App des französischen Verbands) trägt genau diesen Stand ein und antwortet in `match-<kanal>/rfc_result` = `{ nonce, status: "recorded" | "rejected", message?, next?: { team_a, team_b } }` (`next` = Court des nächsten Matches jedes Teams); das Panel zeigt die Antwort zur gleichen `nonce` unter dem Button. Eine Bestätigung gilt nur für genau den Stand, für den sie gegeben wurde – nach einer Korrektur erscheint der Button wieder, *Reset Scores* löscht sie. Logik in `js/resultValidation.js`, Tests in `npm run test:unit`.
+
 ### Regeln deployen
 Die Regeln liegen in [`database.rules.json`](database.rules.json). Entweder in der Console unter *Realtime Database → Rules* einfügen oder per CLI:
 
