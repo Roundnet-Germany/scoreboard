@@ -1418,26 +1418,6 @@ select#Squad_Score_Mode {
   flex-grow: 1;
 }
 
-/* .hidden (base.css) collapses via max-width/max-height:0, which relies on
-   the element being able to shrink below its content size - true for a
-   block element, but NOT for a flex item, which defaults to min-width:auto
-   (content-based) unless overridden. min-width:auto beats max-width:0 in
-   the flex sizing algorithm, so #cancel_timer/.timer_status - flex items
-   inside .timer_buttons - kept their full content width and a reserved gap
-   even while "hidden" (invisible via opacity:0, but still occupying space),
-   which is what made the visible buttons stop short of the same right edge
-   the toggle switches above reach. display:none sidesteps the whole
-   min-width:auto quirk by removing the item from flex layout entirely. */
-.timer_buttons .hidden {
-  display: none;
-}
-
-.timer_status {
-  font-size: .85rem;
-  font-weight: 600;
-  color: var(--secondary);
-}
-
 .output .output_entry {
   max-width: 300px;
 }
@@ -1684,4 +1664,216 @@ select#Squad_Score_Mode {
 #auth .auth_back {
   font-size: 0.9rem;
   color: #00000099;
+}
+
+/* Per-team Timeout/Medical buttons (Scoreboard.js's
+   updateTeamTimerButtons()) - a column right of the +1/-1 buttons in the
+   Scores card, one stacked Timeout/Medical pair per team row (the row
+   already says which team, so no name/stripe here). Timer type on the
+   left, countdown or "N left" on the right, and a gauge (.timer_gauge) in
+   the team's color filling the button left to right as the running timer
+   elapses. Everything is fixed-width on purpose - buttons, the countdown
+   column (tabular digits) and the Cancel button - so the card never
+   resizes while a countdown runs. .used (no timeout left this set) only
+   greys the button out; it stays clickable so an operator can still
+   correct things. */
+.points .team_timers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.points .team_timers .team_timer_group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-grow: 1;
+  width: 120px;
+}
+
+.team_timer {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex: 1 1 0px;
+  min-height: 0px;
+}
+
+.team_timer .timer_gauge {
+  position: absolute;
+  top: 0px;
+  bottom: 0px;
+  left: 0px;
+  width: 0%;
+  background-color: var(--A_Color, #cccccc);
+  opacity: .35;
+  pointer-events: none;
+}
+
+.team_timer[team="b"] .timer_gauge {
+  background-color: var(--B_Color, #cccccc);
+}
+
+/* Animate only while running: the width is updated every 250ms (syncTimerTicker()),
+   a matching linear transition turns those steps into a smooth fill. */
+.team_timer.running .timer_gauge {
+  transition: width .3s linear;
+}
+
+.team_timer .team_timer_icon,
+.team_timer .team_timer_name,
+.team_timer .team_timer_info {
+  position: relative; /* above the gauge */
+}
+
+/* Icon instead of the name - compact layout only, see below */
+.team_timer .team_timer_icon {
+  display: none;
+  font-size: 16px;
+}
+
+.team_timer .team_timer_name {
+  min-width: 0px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team_timer .team_timer_info {
+  flex: none;
+  min-width: 34px;
+  text-align: right;
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+  opacity: .7;
+}
+
+.team_timer.running .team_timer_info {
+  font-size: .9rem;
+  font-weight: 700;
+  opacity: 1;
+}
+
+.team_timer.used {
+  opacity: .45;
+}
+
+/* No separate Cancel button: the running button swaps its label and
+   countdown for "Cancel" (the gauge keeps filling behind it), and clicking
+   it then cancels - see Scoreboard.js's $teamTimerButtons handler.
+   - mouse: on hover, but not while .fresh - the pointer is still on the
+     button that was just clicked to start the timer (cleared on mouseleave)
+   - touch: no hover (a tap leaves :hover stuck), the first tap sets
+     .confirm_cancel ("Cancel?") for a few seconds, the second one cancels */
+.team_timer.running::after {
+  position: absolute;
+  inset: 0px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--ui-error);
+}
+
+.team_timer.running.confirm_cancel > .team_timer_icon,
+.team_timer.running.confirm_cancel > .team_timer_name,
+.team_timer.running.confirm_cancel > .team_timer_info {
+  visibility: hidden;
+}
+
+.team_timer.running.confirm_cancel::after {
+  content: 'Cancel?';
+}
+
+.team_timer.running.confirm_cancel {
+  opacity: 1; /* not the generic button:hover fade - keep the gauge readable */
+  box-shadow: inset 0px 0px 0px 2px var(--ui-error);
+}
+
+@media (hover: hover) {
+  .team_timer.running:not(.fresh):hover > .team_timer_icon,
+  .team_timer.running:not(.fresh):hover > .team_timer_name,
+  .team_timer.running:not(.fresh):hover > .team_timer_info {
+    visibility: hidden;
+  }
+
+  .team_timer.running:not(.fresh):hover::after {
+    content: 'Cancel';
+  }
+
+  .team_timer.running:not(.fresh):hover {
+    opacity: 1;
+    box-shadow: inset 0px 0px 0px 2px var(--ui-error);
+  }
+
+  .team_timer.running.fresh:hover {
+    opacity: 1;
+  }
+}
+
+/* Break / board-started timer (no team button of its own) - same look as
+   a running team button, in the Scores header left of Active Set, only
+   present while such a timer runs. */
+#other_timer {
+  flex: none;
+  width: 110px;
+  margin-right: 8px;
+}
+
+#other_timer.hidden {
+  display: none;
+}
+
+#other_timer .timer_gauge {
+  background-color: var(--secondary);
+}
+
+/* Phones, upright and sideways (landscape phones are wider than 600px but
+   never taller than ~500px - tablets keep the full buttons): an icon
+   instead of "Timeout"/"Medical" with the countdown or "N left" under it,
+   so the column takes as little room from the player names as possible.
+   The full label stays in the tooltip (updateTeamTimerButtons()). */
+@media only screen and (max-width: 600px) and (pointer: coarse),
+       only screen and (max-height: 500px) and (pointer: coarse) {
+  .points .team_timers .team_timer_group {
+    width: 44px;
+  }
+
+  .team_timer {
+    flex-direction: column;
+    justify-content: center;
+    gap: 0px;
+    padding: 1px 2px 2px 2px;
+    font-size: .7rem;
+    line-height: 1.1;
+  }
+
+  .team_timer .team_timer_icon {
+    display: block;
+  }
+
+  .team_timer .team_timer_name {
+    display: none;
+  }
+
+  .team_timer.running::after {
+    font-size: .6rem;
+  }
+
+  .team_timer .team_timer_info {
+    min-width: 0px;
+    text-align: center;
+    font-size: .65rem;
+  }
+
+  .team_timer.running .team_timer_info {
+    font-size: .75rem;
+  }
+
+  #other_timer {
+    width: 76px;
+  }
 }

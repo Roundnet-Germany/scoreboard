@@ -84,6 +84,13 @@ describe('timer', () => {
     assert.equal(s.timer.remainingMs, 40_000);
   });
 
+  test('a timeout/medical names the team that called it, a break none', () => {
+    assert.equal(summarizeMatch(match({ timer: { type: 'timeout', team: 'b', started_at: NOW - 20_000 } }), NOW).timer.team, 'b');
+    assert.equal(summarizeMatch(match({ timer: { type: 'medical', team: 'a', started_at: NOW - 20_000 } }), NOW).timer.team, 'a');
+    assert.equal(summarizeMatch(match({ timer: { type: 'timeout', started_at: NOW - 20_000 } }), NOW).timer.team, null);
+    assert.equal(summarizeMatch(match({ timer: { type: 'break', team: 'a', started_at: NOW - 20_000 } }), NOW).timer.team, null);
+  });
+
   test('an expired timer is gone', () => {
     assert.equal(summarizeMatch(match({ timer: { type: 'timeout', started_at: NOW - 61_000 } }), NOW).timer, null);
   });
